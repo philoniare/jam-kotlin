@@ -1,9 +1,20 @@
-import io.forge.jam.parseBitmaskFast
-import io.forge.jam.parseBitmaskSlow
+package io.forge.jam.pvm
+
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import kotlin.test.assertNotEquals
 
 class ProgramBlobTest {
+
+    @Test
+    fun testUByteArrayStartsWith() {
+        val v = ubyteArrayOf(10u, 40u, 30u)
+        assert(v.startsWith(ubyteArrayOf(10u)))
+        assert(v.startsWith(ubyteArrayOf(10u, 40u))) // true
+        assertNotEquals(v.startsWith(ubyteArrayOf(50u)), true) // false
+        assertNotEquals(v.startsWith(ubyteArrayOf(10u, 50u)), true) // false
+        assert(v.startsWith(ubyteArrayOf())) // true, empty slice
+    }
 
     @Test
     fun testParseBitmask() {

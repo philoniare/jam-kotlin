@@ -1,4 +1,4 @@
-package io.forge.jam
+package io.forge.jam.pvm
 
 const val ADDRESS_SPACE_SIZE: ULong = 0x100000000UL
 

@@ -6,6 +6,5 @@ plugins {
 dependencies {
     implementation(kotlin("stdlib"))
     testImplementation(kotlin("test"))
-    implementation(project(":jam-core"))
 }
 

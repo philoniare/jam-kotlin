@@ -1,4 +1,4 @@
-package io.forge.jam
+package io.forge.jam.pvm
 
 import org.junit.jupiter.api.assertDoesNotThrow
 import kotlin.test.Test
@@ -37,7 +37,6 @@ class AbiTest {
     @Test
     fun testMemoryMapMaxReadOnlyData() {
         val maxSize = (ADDRESS_SPACE_SIZE - VM_MAX_PAGE_SIZE.toULong() * 4UL).toUInt()
-        println("MaxSize: $maxSize")
         val map = MemoryMap.new(0x4000U, maxSize, 0U, 0U).getOrThrow()
         assertEquals(0x10000U, map.roDataAddress())
         assertEquals(maxSize, map.roDataSize)
