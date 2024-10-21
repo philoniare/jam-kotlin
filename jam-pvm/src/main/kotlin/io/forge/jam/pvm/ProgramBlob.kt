@@ -1,10 +1,5 @@
 package io.forge.jam.pvm
 
-import java.nio.ByteBuffer
-import java.nio.charset.CharsetDecoder
-import java.nio.charset.CodingErrorAction
-import kotlin.reflect.KMutableProperty0
-
 typealias LookupEntry = Int
 
 const val EMPTY_LOOKUP_ENTRY: LookupEntry = 0
@@ -279,87 +274,87 @@ fun chunkToULong(chunk: ByteArray): ULong {
     return result
 }
 
-class EnumVisitor<I : InstructionSet>(
-    private val instructionSet: I
-) {
-    fun dispatch(
-        opcodeValue: Int,
-        chunk: ByteArray,
-        offset: Int,
-        skip: Int
-    ): Instruction {
-        val opcode = Opcode.fromInt(opcodeValue)
-        if (opcode == Opcode.INVALID) {
-            return Instruction.Invalid(opcodeValue)
-        }
-
-        val chunkULong = chunkToULong(chunk)
-
-        return when (opcode) {
-            Opcode.TRAP -> Instruction.Trap
-            Opcode.FALLTHROUGH -> Instruction.Fallthrough
-
-            // args: reg, imm
-            Opcode.JUMP_INDIRECT,
-            Opcode.LOAD_IMM,
-            Opcode.LOAD_U8,
-            Opcode.LOAD_I8,
-            Opcode.LOAD_U16,
-            Opcode.LOAD_I16,
-            Opcode.LOAD_U32,
-            Opcode.STORE_U8,
-            Opcode.STORE_U16,
-            Opcode.STORE_U32 -> {
-                val (reg, imm) = readArgsRegImm(chunkULong, skip)
-                Instruction.RegImmInstruction(opcode, reg, imm)
-            }
-
-            // args: reg, imm, offset
-            Opcode.LOAD_IMM_AND_JUMP,
-            Opcode.BRANCH_EQ_IMM,
-            Opcode.BRANCH_NOT_EQ_IMM,
-            Opcode.BRANCH_LESS_UNSIGNED_IMM,
-            Opcode.BRANCH_LESS_SIGNED_IMM,
-            Opcode.BRANCH_GREATER_OR_EQUAL_UNSIGNED_IMM,
-            Opcode.BRANCH_GREATER_OR_EQUAL_SIGNED_IMM,
-            Opcode.BRANCH_LESS_OR_EQUAL_SIGNED_IMM,
-            Opcode.BRANCH_LESS_OR_EQUAL_UNSIGNED_IMM,
-            Opcode.BRANCH_GREATER_SIGNED_IMM,
-            Opcode.BRANCH_GREATER_UNSIGNED_IMM -> {
-                val (reg, imm1, imm2) = readArgsRegImmOffset(chunkULong, offset, skip)
-                Instruction.RegImmOffsetInstruction(opcode, reg, imm1, imm2)
-            }
-
-            // args: reg, imm, imm
-            Opcode.STORE_IMM_INDIRECT_U8,
-            Opcode.STORE_IMM_INDIRECT_U16,
-            Opcode.STORE_IMM_INDIRECT_U32 -> {
-                val (reg, imm1, imm2) = readArgsRegImm2(chunkULong, skip)
-                Instruction.RegImmImmInstruction(opcode, reg, imm1, imm2)
-            }
-
-            // ... Add cases for other instruction formats
-
-            else -> Instruction.Invalid(opcodeValue)
-        }
-    }
-}
-
-fun <I : InstructionSet> parseInstruction(
-    instructionSet: I,
-    code: ByteArray,
-    bitmask: ByteArray,
-    offset: UInt
-): Triple<UInt, Instruction, Boolean> {
-    val codeLength = code.size
-    val visitor = EnumVisitor(instructionSet)
-
-    return if (offset.toInt() + 32 <= codeLength) {
-        visitorStepFast(code, bitmask, offset, visitor)
-    } else {
-        visitorStepSlow(code, bitmask, offset, visitor)
-    }
-}
+//class EnumVisitor<I : InstructionSet>(
+//    private val instructionSet: I
+//) {
+//    fun dispatch(
+//        opcodeValue: Int,
+//        chunk: ByteArray,
+//        offset: Int,
+//        skip: Int
+//    ): Instruction {
+//        val opcode = Opcode.fromInt(opcodeValue)
+//        if (opcode == Opcode.INVALID) {
+//            return Instruction.Invalid(opcodeValue)
+//        }
+//
+//        val chunkULong = chunkToULong(chunk)
+//
+//        return when (opcode) {
+//            Opcode.TRAP -> Instruction.Trap
+//            Opcode.FALLTHROUGH -> Instruction.Fallthrough
+//
+//            // args: reg, imm
+//            Opcode.JUMP_INDIRECT,
+//            Opcode.LOAD_IMM,
+//            Opcode.LOAD_U8,
+//            Opcode.LOAD_I8,
+//            Opcode.LOAD_U16,
+//            Opcode.LOAD_I16,
+//            Opcode.LOAD_U32,
+//            Opcode.STORE_U8,
+//            Opcode.STORE_U16,
+//            Opcode.STORE_U32 -> {
+//                val (reg, imm) = readArgsRegImm(chunkULong, skip)
+//                Instruction.RegImmInstruction(opcode, reg, imm)
+//            }
+//
+//            // args: reg, imm, offset
+//            Opcode.LOAD_IMM_AND_JUMP,
+//            Opcode.BRANCH_EQ_IMM,
+//            Opcode.BRANCH_NOT_EQ_IMM,
+//            Opcode.BRANCH_LESS_UNSIGNED_IMM,
+//            Opcode.BRANCH_LESS_SIGNED_IMM,
+//            Opcode.BRANCH_GREATER_OR_EQUAL_UNSIGNED_IMM,
+//            Opcode.BRANCH_GREATER_OR_EQUAL_SIGNED_IMM,
+//            Opcode.BRANCH_LESS_OR_EQUAL_SIGNED_IMM,
+//            Opcode.BRANCH_LESS_OR_EQUAL_UNSIGNED_IMM,
+//            Opcode.BRANCH_GREATER_SIGNED_IMM,
+//            Opcode.BRANCH_GREATER_UNSIGNED_IMM -> {
+//                val (reg, imm1, imm2) = readArgsRegImmOffset(chunkULong, offset, skip)
+//                Instruction.RegImmOffsetInstruction(opcode, reg, imm1, imm2)
+//            }
+//
+//            // args: reg, imm, imm
+//            Opcode.STORE_IMM_INDIRECT_U8,
+//            Opcode.STORE_IMM_INDIRECT_U16,
+//            Opcode.STORE_IMM_INDIRECT_U32 -> {
+//                val (reg, imm1, imm2) = readArgsRegImm2(chunkULong, skip)
+//                Instruction.RegImmImmInstruction(opcode, reg, imm1, imm2)
+//            }
+//
+//            // ... Add cases for other instruction formats
+//
+//            else -> Instruction.Invalid(opcodeValue)
+//        }
+//    }
+//}
+//
+//fun <I : InstructionSet> parseInstruction(
+//    instructionSet: I,
+//    code: ByteArray,
+//    bitmask: ByteArray,
+//    offset: UInt
+//): Triple<UInt, Instruction, Boolean> {
+//    val codeLength = code.size
+//    val visitor = EnumVisitor(instructionSet)
+//
+//    return if (offset.toInt() + 32 <= codeLength) {
+//        visitorStepFast(code, bitmask, offset, visitor)
+//    } else {
+//        visitorStepSlow(code, bitmask, offset, visitor)
+//    }
+//}
 
 
 class JumpTable(
@@ -529,22 +524,22 @@ sealed class SourceLocation {
     data class PathAndLine(val path: String, val line: UInt) : SourceLocation()
     data class Full(val path: String, val line: UInt, val column: UInt) : SourceLocation()
 
-    fun getPath(): String = when (this) {
-        is Path -> this.path
-        is PathAndLine -> this.path
-        is Full -> this.path
-    }
-
-    fun getLine(): UInt? = when (this) {
-        is Path -> null
-        is PathAndLine -> this.line
-        is Full -> this.line
-    }
-
-    fun getColumn(): UInt? = when (this) {
-        is Full -> this.column
-        else -> null
-    }
+//    fun getPath(): String = when (this) {
+//        is Path -> this.path
+//        is PathAndLine -> this.path
+//        is Full -> this.path
+//    }
+//
+//    fun getLine(): UInt? = when (this) {
+//        is Path -> null
+//        is PathAndLine -> this.line
+//        is Full -> this.line
+//    }
+//
+//    fun getColumn(): UInt? = when (this) {
+//        is Full -> this.column
+//        else -> null
+//    }
 
     override fun toString(): String = when (this) {
         is Path -> path
@@ -838,36 +833,77 @@ enum class Opcode(val value: Int) {
 
 interface InstructionVisitor<T> {
     // Instructions with args: none
-    fun visitTrap(): T
-    fun visitFallthrough(): T
+    fun trap(): T
+    fun fallthrough(): T
 
     // Instructions with args: reg, imm
-    fun visitJumpIndirect(reg: Int, imm: Int): T
-    fun visitLoadImm(reg: Int, imm: Int): T
-    fun visitLoadU8(reg: Int, imm: Int): T
-    fun visitLoadI8(reg: Int, imm: Int): T
-    fun visitLoadU16(reg: Int, imm: Int): T
-    fun visitLoadI16(reg: Int, imm: Int): T
-    fun visitLoadU32(reg: Int, imm: Int): T
-    fun visitLoadI32(reg: Int, imm: Int): T
-    fun visitLoadU64(reg: Int, imm: Int): T
-    fun visitStoreU8(reg: Int, imm: Int): T
-    fun visitStoreU16(reg: Int, imm: Int): T
-    fun visitStoreU32(reg: Int, imm: Int): T
-    fun visitStoreU64(reg: Int, imm: Int): T
+    fun jumpIndirect(reg: Int, imm: Int): T
+    fun loadImm(reg: Int, imm: Int): T
+    fun loadU8(reg: Int, imm: Int): T
+    fun loadI8(reg: Int, imm: Int): T
+    fun loadU16(reg: Int, imm: Int): T
+    fun loadI16(reg: Int, imm: Int): T
+    fun loadU32(reg: Int, imm: Int): T
+    fun loadI32(reg: Int, imm: Int): T
+    fun loadU64(reg: Int, imm: Int): T
+    fun storeU8(reg: Int, imm: Int): T
+    fun storeU16(reg: Int, imm: Int): T
+    fun storeU32(reg: Int, imm: Int): T
+    fun storeU64(reg: Int, imm: Int): T
 
-    // Instructions with args: reg, imm, offset
-    fun visitLoadImmAndJump(reg: Int, imm: Int, offset: Int): T
-    fun visitBranchEqImm(reg: Int, imm: Int, offset: Int): T
-    fun visitBranchNotEqImm(reg: Int, imm: Int, offset: Int): T
-    fun visitBranchLessUnsignedImm(reg: Int, imm: Int, offset: Int): T
-    fun visitBranchLessSignedImm(reg: Int, imm: Int, offset: Int): T
-    fun visitBranchGreaterOrEqualUnsignedImm(reg: Int, imm: Int, offset: Int): T
-    fun visitBranchGreaterOrEqualSignedImm(reg: Int, imm: Int, offset: Int): T
-    fun visitBranchLessOrEqualSignedImm(reg: Int, imm: Int, offset: Int): T
-    fun visitBranchLessOrEqualUnsignedImm(reg: Int, imm: Int, offset: Int): T
-    fun visitBranchGreaterSignedImm(reg: Int, imm: Int, offset: Int): T
-    fun visitBranchGreaterUnsignedImm(reg: Int, imm: Int, offset: Int): T
+    // Instructions with args: reg, imm1, imm2
+    fun loadImmAndJump(reg: Int, imm: Int, imm2: Int): T
+    fun branchEqImm(reg: Int, imm1: Int, imm2: Int): T
+    fun branchNotEqImm(reg: Int, imm1: Int, imm2: Int): T
+    fun branchLessUnsignedImm(reg: Int, imm1: Int, imm2: Int): T
+    fun branchLessSignedImm(reg: Int, imm1: Int, imm2: Int): T
+    fun branchGreaterOrEqualUnsignedImm(reg: Int, imm1: Int, imm2: Int): T
+    fun branchGreaterOrEqualSignedImm(reg: Int, imm1: Int, imm2: Int): T
+    fun branchLessOrEqualSignedImm(reg: Int, imm1: Int, imm2: Int): T
+    fun branchLessOrEqualUnsignedImm(reg: Int, imm1: Int, imm2: Int): T
+    fun branchGreaterSignedImm(reg: Int, imm1: Int, imm2: Int): T
+    fun branchGreaterUnsignedImm(reg: Int, imm1: Int, imm2: Int): T
+
+    fun storeImmIndirectU8(reg: Int, imm1: Int, imm2: Int): T
+    fun storeImmIndirectU16(reg: Int, imm1: Int, imm2: Int): T
+    fun storeImmIndirectU32(reg: Int, imm1: Int, imm2: Int): T
+    fun storeImmIndirectU64(reg: Int, imm1: Int, imm2: Int): T
+    fun storeIndirectU8(reg1: Int, reg2: Int, imm: Int): T
+    fun storeIndirectU16(reg1: Int, reg2: Int, imm: Int): T
+    fun storeIndirectU32(reg1: Int, reg2: Int, imm: Int): T
+    fun storeIndirectU64(reg1: Int, reg2: Int, imm: Int): T
+
+    fun loadIndirectU8(reg1: Int, reg2: Int, imm: Int): T
+    fun loadIndirectI8(reg1: Int, reg2: Int, imm: Int): T
+    fun loadIndirectU16(reg1: Int, reg2: Int, imm: Int): T
+    fun loadIndirectI16(reg1: Int, reg2: Int, imm: Int): T
+    fun loadIndirectU32(reg1: Int, reg2: Int, imm: Int): T
+    fun loadIndirectI32(reg1: Int, reg2: Int, imm: Int): T
+    fun loadIndirectU64(reg1: Int, reg2: Int, imm: Int): T
+
+    fun addImm(reg1: Int, reg2: Int, imm: Int): T
+    fun add64Imm(reg1: Int, reg2: Int, imm: Int): T
+    fun andImm(reg1: Int, reg2: Int, imm: Int): T
+    fun and64Imm(reg1: Int, reg2: Int, imm: Int): T
+    fun xorImm(reg1: Int, reg2: Int, imm: Int): T
+    fun xor64Imm(reg1: Int, reg2: Int, imm: Int): T
+    fun orImm(reg1: Int, reg2: Int, imm: Int): T
+    fun or64Imm(reg1: Int, reg2: Int, imm: Int): T
+    fun mulImm(reg1: Int, reg2: Int, imm: Int): T
+    fun mul64Imm(reg1: Int, reg2: Int, imm: Int): T
+
+    fun mulUpperSignedSignedImm(reg1: Int, reg2: Int, imm: Int): T
+    fun mulUpperSignedSignedImm64(reg1: Int, reg2: Int, imm: Int): T
+
+
+    // Instructions with args: reg, reg, reg
+    fun visitAdd(dest: Int, src1: Int, src2: Int): T
+    fun visitSub(dest: Int, src1: Int, src2: Int): T
+    fun visitAnd(dest: Int, src1: Int, src2: Int): T
+    fun visitOr(dest: Int, src1: Int, src2: Int): T
+    fun visitXor(dest: Int, src1: Int, src2: Int): T
+    fun visitMul(dest: Int, src1: Int, src2: Int): T
+
 
     // Instructions with args: reg, reg
     fun visitMoveReg(dest: Int, src: Int): T
@@ -879,13 +915,6 @@ interface InstructionVisitor<T> {
     // Instructions with args: offset
     fun visitJump(offset: Int): T
 
-    // Instructions with args: reg, reg, reg
-    fun visitAdd(dest: Int, src1: Int, src2: Int): T
-    fun visitSub(dest: Int, src1: Int, src2: Int): T
-    fun visitAnd(dest: Int, src1: Int, src2: Int): T
-    fun visitOr(dest: Int, src1: Int, src2: Int): T
-    fun visitXor(dest: Int, src1: Int, src2: Int): T
-    fun visitMul(dest: Int, src1: Int, src2: Int): T
 
     // ... Continue adding methods for all other instructions
 
@@ -910,162 +939,162 @@ interface ParsingVisitor<T> {
     fun visitInvalid(offset: Int, argsLength: Int): T
 }
 
-data class ParsedInstruction(
-    val kind: Instruction,
-    val offset: ProgramCounter,
-    val nextOffset: ProgramCounter
-) {
-    override fun toString(): String {
-        return String.format("%7d: %s", offset, kind)
-    }
-
-    fun <T> visit(visitor: InstructionVisitor<T>): T {
-        return kind.visit(visitor)
-    }
-}
+//data class ParsedInstruction(
+//    val kind: Instruction,
+//    val offset: ProgramCounter,
+//    val nextOffset: ProgramCounter
+//) {
+//    override fun toString(): String {
+//        return String.format("%7d: %s", offset, kind)
+//    }
+//
+//    fun <T> visit(visitor: InstructionVisitor<T>): T {
+//        return kind.visit(visitor)
+//    }
+//}
 
 sealed class Instruction {
     // Instructions with args: none
     object Trap : Instruction() {
-        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.visitTrap()
+        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.trap()
         override fun opcode(): Opcode = Opcode.TRAP
     }
 
     object Fallthrough : Instruction() {
-        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.visitFallthrough()
+        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.fallthrough()
         override fun opcode(): Opcode = Opcode.FALLTHROUGH
     }
 
     // Instructions with args: reg, imm
     data class JumpIndirect(val reg: Int, val imm: Int) : Instruction() {
-        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.visitJumpIndirect(reg, imm)
+        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.jumpIndirect(reg, imm)
         override fun opcode(): Opcode = Opcode.JUMP_INDIRECT
     }
 
     data class LoadImm(val reg: Int, val imm: Int) : Instruction() {
-        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.visitLoadImm(reg, imm)
+        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.loadImm(reg, imm)
         override fun opcode(): Opcode = Opcode.LOAD_IMM
     }
 
     data class LoadU8(val reg: Int, val imm: Int) : Instruction() {
-        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.visitLoadU8(reg, imm)
+        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.loadU8(reg, imm)
         override fun opcode(): Opcode = Opcode.LOAD_U8
     }
 
     data class LoadI8(val reg: Int, val imm: Int) : Instruction() {
-        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.visitLoadI8(reg, imm)
+        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.loadI8(reg, imm)
         override fun opcode(): Opcode = Opcode.LOAD_I8
     }
 
     data class LoadU16(val reg: Int, val imm: Int) : Instruction() {
-        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.visitLoadU16(reg, imm)
+        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.loadU16(reg, imm)
         override fun opcode(): Opcode = Opcode.LOAD_U16
     }
 
     data class LoadI16(val reg: Int, val imm: Int) : Instruction() {
-        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.visitLoadI16(reg, imm)
+        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.loadI16(reg, imm)
         override fun opcode(): Opcode = Opcode.LOAD_I16
     }
 
     data class LoadU32(val reg: Int, val imm: Int) : Instruction() {
-        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.visitLoadU32(reg, imm)
+        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.loadU32(reg, imm)
         override fun opcode(): Opcode = Opcode.LOAD_U32
     }
 
     data class LoadI32(val reg: Int, val imm: Int) : Instruction() {
-        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.visitLoadI32(reg, imm)
+        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.loadI32(reg, imm)
         override fun opcode(): Opcode = Opcode.LOAD_I32
     }
 
     data class LoadU64(val reg: Int, val imm: Int) : Instruction() {
-        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.visitLoadU64(reg, imm)
+        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.loadU64(reg, imm)
         override fun opcode(): Opcode = Opcode.LOAD_U64
     }
 
     data class StoreU8(val reg: Int, val imm: Int) : Instruction() {
-        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.visitStoreU8(reg, imm)
+        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.storeU8(reg, imm)
         override fun opcode(): Opcode = Opcode.STORE_U8
     }
 
     data class StoreU16(val reg: Int, val imm: Int) : Instruction() {
-        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.visitStoreU16(reg, imm)
+        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.storeU16(reg, imm)
         override fun opcode(): Opcode = Opcode.STORE_U16
     }
 
     data class StoreU32(val reg: Int, val imm: Int) : Instruction() {
-        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.visitStoreU32(reg, imm)
+        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.storeU32(reg, imm)
         override fun opcode(): Opcode = Opcode.STORE_U32
     }
 
     data class StoreU64(val reg: Int, val imm: Int) : Instruction() {
-        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.visitStoreU64(reg, imm)
+        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.storeU64(reg, imm)
         override fun opcode(): Opcode = Opcode.STORE_U64
     }
 
     // Instructions with args: reg, imm, offset
     data class LoadImmAndJump(val reg: Int, val imm: Int, val offset: Int) : Instruction() {
-        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.visitLoadImmAndJump(reg, imm, offset)
+        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.loadImmAndJump(reg, imm, offset)
         override fun opcode(): Opcode = Opcode.LOAD_IMM_AND_JUMP
     }
 
     data class BranchEqImm(val reg: Int, val imm: Int, val offset: Int) : Instruction() {
-        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.visitBranchEqImm(reg, imm, offset)
+        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.branchEqImm(reg, imm, offset)
         override fun opcode(): Opcode = Opcode.BRANCH_EQ_IMM
     }
 
     data class BranchNotEqImm(val reg: Int, val imm: Int, val offset: Int) : Instruction() {
-        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.visitBranchNotEqImm(reg, imm, offset)
+        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.branchNotEqImm(reg, imm, offset)
         override fun opcode(): Opcode = Opcode.BRANCH_NOT_EQ_IMM
     }
 
     data class BranchLessUnsignedImm(val reg: Int, val imm: Int, val offset: Int) : Instruction() {
-        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.visitBranchLessUnsignedImm(reg, imm, offset)
+        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.branchLessUnsignedImm(reg, imm, offset)
         override fun opcode(): Opcode = Opcode.BRANCH_LESS_UNSIGNED_IMM
     }
 
     data class BranchLessSignedImm(val reg: Int, val imm: Int, val offset: Int) : Instruction() {
-        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.visitBranchLessSignedImm(reg, imm, offset)
+        override fun <T> visit(visitor: InstructionVisitor<T>): T = visitor.branchLessSignedImm(reg, imm, offset)
         override fun opcode(): Opcode = Opcode.BRANCH_LESS_SIGNED_IMM
     }
 
     data class BranchGreaterOrEqualUnsignedImm(val reg: Int, val imm: Int, val offset: Int) : Instruction() {
         override fun <T> visit(visitor: InstructionVisitor<T>): T =
-            visitor.visitBranchGreaterOrEqualUnsignedImm(reg, imm, offset)
+            visitor.branchGreaterOrEqualUnsignedImm(reg, imm, offset)
 
         override fun opcode(): Opcode = Opcode.BRANCH_GREATER_OR_EQUAL_UNSIGNED_IMM
     }
 
     data class BranchGreaterOrEqualSignedImm(val reg: Int, val imm: Int, val offset: Int) : Instruction() {
         override fun <T> visit(visitor: InstructionVisitor<T>): T =
-            visitor.visitBranchGreaterOrEqualSignedImm(reg, imm, offset)
+            visitor.branchGreaterOrEqualSignedImm(reg, imm, offset)
 
         override fun opcode(): Opcode = Opcode.BRANCH_GREATER_OR_EQUAL_SIGNED_IMM
     }
 
     data class BranchLessOrEqualSignedImm(val reg: Int, val imm: Int, val offset: Int) : Instruction() {
         override fun <T> visit(visitor: InstructionVisitor<T>): T =
-            visitor.visitBranchLessOrEqualSignedImm(reg, imm, offset)
+            visitor.branchLessOrEqualSignedImm(reg, imm, offset)
 
         override fun opcode(): Opcode = Opcode.BRANCH_LESS_OR_EQUAL_SIGNED_IMM
     }
 
     data class BranchLessOrEqualUnsignedImm(val reg: Int, val imm: Int, val offset: Int) : Instruction() {
         override fun <T> visit(visitor: InstructionVisitor<T>): T =
-            visitor.visitBranchLessOrEqualUnsignedImm(reg, imm, offset)
+            visitor.branchLessOrEqualUnsignedImm(reg, imm, offset)
 
         override fun opcode(): Opcode = Opcode.BRANCH_LESS_OR_EQUAL_UNSIGNED_IMM
     }
 
     data class BranchGreaterSignedImm(val reg: Int, val imm: Int, val offset: Int) : Instruction() {
         override fun <T> visit(visitor: InstructionVisitor<T>): T =
-            visitor.visitBranchGreaterSignedImm(reg, imm, offset)
+            visitor.branchGreaterSignedImm(reg, imm, offset)
 
         override fun opcode(): Opcode = Opcode.BRANCH_GREATER_SIGNED_IMM
     }
 
     data class BranchGreaterUnsignedImm(val reg: Int, val imm: Int, val offset: Int) : Instruction() {
         override fun <T> visit(visitor: InstructionVisitor<T>): T =
-            visitor.visitBranchGreaterUnsignedImm(reg, imm, offset)
+            visitor.branchGreaterUnsignedImm(reg, imm, offset)
 
         override fun opcode(): Opcode = Opcode.BRANCH_GREATER_UNSIGNED_IMM
     }
@@ -1124,7 +1153,6 @@ sealed class Instruction {
         override fun opcode(): Opcode = Opcode.MUL
     }
 
-    // ... Continue adding other instructions with their respective visit methods
 
     // Invalid instruction
     data class Invalid(val value: Int) : Instruction() {
@@ -1136,882 +1164,882 @@ sealed class Instruction {
     abstract fun opcode(): Opcode
 }
 
-class ProgramParts(
-    var is64Bit: Boolean = false,
-    var roDataSize: UInt = 0u,
-    var rwDataSize: UInt = 0u,
-    var stackSize: UInt = 0u,
-
-    var roData: ByteArray = ByteArray(0),
-    var rwData: ByteArray = ByteArray(0),
-    var codeAndJumpTable: ByteArray = ByteArray(0),
-    var importOffsets: ByteArray = ByteArray(0),
-    var importSymbols: ByteArray = ByteArray(0),
-    var exports: ByteArray = ByteArray(0),
-
-    var debugStrings: ByteArray = ByteArray(0),
-    var debugLineProgramRanges: ByteArray = ByteArray(0),
-    var debugLinePrograms: ByteArray = ByteArray(0)
-) {
-    companion object {
-        @Throws(ProgramParseError::class)
-        fun fromBytes(blob: ByteArray): ProgramParts {
-            if (!blob.startsWith(BLOB_MAGIC)) {
-                throw ProgramParseError.other("blob doesn't start with the expected magic bytes")
-            }
-
-            val reader = Reader(blob, BLOB_MAGIC.size)
-
-            val is64Bit = when (val blobVersion = reader.readByte()) {
-                BLOB_VERSION_V1_32 -> false
-                BLOB_VERSION_V1_64 -> true
-                else -> throw ProgramParseError.unsupportedVersion(blobVersion)
-            }
-
-            val blobLenBytes = reader.readBytes(BLOB_LEN_SIZE)
-            val blobLen = blobLenBytes.toULongLE()
-            if (blobLen != blob.size.toULong()) {
-                throw ProgramParseError.other("blob size doesn't match the blob length metadata")
-            }
-
-            val parts = ProgramParts(is64Bit = is64Bit)
-
-            var section = reader.readByte()
-            if (section == SECTION_MEMORY_CONFIG) {
-                val sectionLength = reader.readVarInt()
-                val position = reader.position
-                parts.roDataSize = reader.readVarInt()
-                parts.rwDataSize = reader.readVarInt()
-                parts.stackSize = reader.readVarInt()
-                if (position + sectionLength.toInt() != reader.position) {
-                    throw ProgramParseError.other("the memory config section contains more data than expected")
-                }
-                section = reader.readByte()
-            }
-
-            parts.roData = reader.readSectionAsBytes(::section, SECTION_RO_DATA)
-            parts.rwData = reader.readSectionAsBytes(::section, SECTION_RW_DATA)
-
-            if (section == SECTION_IMPORTS) {
-                val sectionLength = reader.readVarInt()
-                val sectionStart = reader.position
-                val importCount = reader.readVarInt()
-                if (importCount > VM_MAXIMUM_IMPORT_COUNT) {
-                    throw ProgramParseError.other("too many imports")
-                }
-
-                val importOffsetsSize = importCount.toInt().times(4)
-                if (importOffsetsSize < 0) {
-                    throw ProgramParseError.other("the imports section is invalid")
-                }
-
-                parts.importOffsets = reader.readBytes(importOffsetsSize)
-                val importSymbolsSize = sectionLength.toInt() - (reader.position - sectionStart)
-                if (importSymbolsSize < 0) {
-                    throw ProgramParseError.other("the imports section is invalid")
-                }
-
-                parts.importSymbols = reader.readBytes(importSymbolsSize)
-                section = reader.readByte()
-            }
-
-            parts.exports = reader.readSectionAsBytes(::section, SECTION_EXPORTS)
-            parts.codeAndJumpTable = reader.readSectionAsBytes(::section, SECTION_CODE_AND_JUMP_TABLE)
-            parts.debugStrings = reader.readSectionAsBytes(::section, SECTION_OPT_DEBUG_STRINGS)
-            parts.debugLinePrograms = reader.readSectionAsBytes(::section, SECTION_OPT_DEBUG_LINE_PROGRAMS)
-            parts.debugLineProgramRanges = reader.readSectionAsBytes(::section, SECTION_OPT_DEBUG_LINE_PROGRAM_RANGES)
-
-            while ((section.toInt() and 0b10000000) != 0) {
-                // We don't know this section, but it's optional, so just skip it.
-                val sectionLength = reader.readVarInt()
-                reader.skip(sectionLength.toInt())
-                section = reader.readByte()
-            }
-
-            if (section != SECTION_END_OF_FILE) {
-                throw ProgramParseError.unexpectedSection(reader.position - 1, section)
-            }
-
-            return parts
-        }
-    }
-}
-
-fun getBitForOffset(bitmask: ByteArray, codeLength: Int, offset: UInt): Boolean {
-    if (offset.toInt() >= codeLength) {
-        return false
-    }
-    val index = (offset.toInt() shr 3)
-    val shift = (offset.toInt() and 7)
-    val byte = bitmask.getOrNull(index) ?: return false
-    return ((byte.toInt() shr shift) and 1) == 1
-}
-
-fun findNextOffsetUnbounded(bitmask: ByteArray, codeLength: UInt, offset: UInt): UInt {
-    var currentOffset = offset
-    while (true) {
-        val index = (currentOffset.toInt() shr 3)
-        if (index >= bitmask.size) {
-            break
-        }
-        val byte = bitmask[index].toInt() and 0xFF
-        val shift = currentOffset.toInt() and 7
-        val mask = byte shr shift
-        if (mask == 0) {
-            currentOffset += (8 - shift).toUInt()
-        } else {
-            currentOffset += Integer.numberOfTrailingZeros(mask)
-            break
-        }
-    }
-    return minOf(codeLength, currentOffset)
-}
-
-fun parseBitmaskSlow(bitmask: ByteArray, codeLength: Int, offset: UInt): Pair<UInt, Boolean> {
-    var skip = 0u
-    var currentOffset = offset
-    while (currentOffset.toInt() + skip.toInt() + 1 < codeLength) {
-        val nextOffset = currentOffset + skip + 1u
-        if (!getBitForOffset(bitmask, codeLength, nextOffset)) {
-            skip += 1u
-        } else {
-            break
-        }
-    }
-    val isNextInstructionInvalid = !getBitForOffset(bitmask, codeLength, currentOffset + skip + 1u)
-    return Pair(skip, isNextInstructionInvalid)
-}
-
-fun parseBitmaskFast(bitmask: ByteArray, offset: UInt): UInt? {
-    // For fast parsing, we can read 3 bytes from the bitmask starting at (offset >> 3)
-    val index = offset.toInt() shr 3
-    if (index + 2 >= bitmask.size) {
-        return null
-    }
-
-    val b0 = bitmask[index].toInt() and 0xFF
-    val b1 = bitmask[index + 1].toInt() and 0xFF
-    val b2 = bitmask[index + 2].toInt() and 0xFF
-
-    val shift = offset.toInt() and 7
-    val bits = ((b2 shl 16) or (b1 shl 8) or b0) ushr shift
-    val mask = bits and 0xFFFFFF
-
-    val skip = Integer.numberOfTrailingZeros(mask).toUInt()
-    return skip
-}
-
-fun <I : InstructionSet> visitorStepSlow(
-    code: ByteArray,
-    bitmask: ByteArray,
-    offset: UInt,
-    visitor: EnumVisitor<I>
-): Triple<UInt, Instruction, Boolean> {
-    if (offset.toInt() >= code.size) {
-        // No more code to read, return invalid instruction
-        return Triple(offset + 1u, Instruction.Invalid, true)
-    }
-
-    val codeLength = code.size
-    require(getBitForOffset(bitmask, codeLength, offset)) { "bit at $offset is zero" }
-
-    val (skip, isNextInstructionInvalid) = parseBitmaskSlow(bitmask, codeLength, offset)
-
-    val chunkSize = minOf(17, codeLength - offset.toInt())
-    val chunk = code.copyOfRange(offset.toInt(), offset.toInt() + chunkSize)
-
-    val opcode = chunk[0].toInt() and 0xFF
-
-    // Prepare the arguments chunk (t)
-    val t = ByteArray(16) { 0 }
-    val dataLength = chunk.size - 1
-    if (dataLength > 0) {
-        System.arraycopy(chunk, 1, t, 0, dataLength)
-    }
-
-    val instruction = visitor.dispatch(opcode, t, offset, skip)
-
-    var isNextInvalid = isNextInstructionInvalid
-    val nextOffset = offset + skip + 1u
-
-    if (isNextInvalid && nextOffset.toInt() >= codeLength) {
-        // This is the last instruction
-        if (!instruction.canFallthrough()) {
-            isNextInvalid = false
-        }
-    }
-
-    return Triple(nextOffset, instruction, isNextInvalid)
-}
-
-fun <I : InstructionSet> visitorStepFast(
-    code: ByteArray,
-    bitmask: ByteArray,
-    offset: UInt,
-    visitor: EnumVisitor<I>
-): Triple<UInt, Instruction, Boolean> {
-    val codeLength = code.size
-    require(getBitForOffset(bitmask, codeLength, offset)) { "bit at $offset is zero" }
-    require(offset.toInt() + 32 <= codeLength) { "Not enough code for fast path" }
-
-    val chunk = code.copyOfRange(offset.toInt(), offset.toInt() + 32)
-    val opcode = chunk[0].toInt() and 0xFF
-
-    val skip = parseBitmaskFast(bitmask, offset) ?: throw IllegalStateException("Invalid bitmask at offset $offset")
-
-    val t = ByteArray(16) { 0 }
-    System.arraycopy(chunk, 1, t, 0, 16)
-
-    val instruction = visitor.dispatch(opcode, t, offset, skip)
-
-    val nextOffset = offset + skip + 1u
-    val isNextInstructionInvalid = skip == 24u && !getBitForOffset(bitmask, codeLength, nextOffset)
-
-    return Triple(nextOffset, instruction, isNextInstructionInvalid)
-}
-
-interface InstructionSet {
-    fun opcodeFromByte(byte: UByte): Opcode?
-    fun createInstruction(opcode: Opcode): Instruction
-}
-
-class Instructions<I : InstructionSet>(
-    private val instructionSet: I,
-    private val code: ByteArray,
-    private val bitmask: ByteArray,
-    private var offset: UInt,
-    private var invalidOffset: UInt?,
-    private val isBounded: Boolean,
-    private var isDone: Boolean
-) : Iterator<ParsedInstruction> {
-
-    companion object {
-        fun <I : InstructionSet> newBounded(
-            instructionSet: I,
-            code: ByteArray,
-            bitmask: ByteArray,
-            offset: UInt
-        ): Instructions<I> {
-            return Instructions(instructionSet, code, bitmask, offset, null, true, false).apply {
-                initialize()
-            }
-        }
-
-        fun <I : InstructionSet> newUnbounded(
-            instructionSet: I,
-            code: ByteArray,
-            bitmask: ByteArray,
-            offset: UInt
-        ): Instructions<I> {
-            return Instructions(instructionSet, code, bitmask, offset, null, false, false).apply {
-                initialize()
-            }
-        }
-    }
-
-    private fun initialize() {
-        require(code.size <= UInt.MAX_VALUE.toLong())
-        require(bitmask.size == (code.size + 7) / 8)
-
-        val isValid = getBitForOffset(bitmask, code.size, offset)
-        if (isValid) {
-            invalidOffset = null
-        } else if (isBounded) {
-            isDone = true
-            offset = minOf(offset + 1u, code.size.toUInt())
-            invalidOffset = offset - 1u
-        } else {
-            val nextOffset = findNextOffsetUnbounded(bitmask, code.size.toUInt(), offset)
-            invalidOffset = offset
-            offset = nextOffset
-        }
-    }
-
-    fun offset(): UInt {
-        return invalidOffset ?: offset
-    }
-
-    fun <T> visit(visitor: InstructionVisitor<T>): T? {
-        return if (hasNext()) {
-            val nextInstruction = next()
-            nextInstruction.visit(visitor)
-        } else {
-            null
-        }
-    }
-
-    override fun hasNext(): Boolean {
-        return !isDone && (invalidOffset != null || offset.toInt() < code.size)
-    }
-
-    override fun next(): ParsedInstruction {
-        invalidOffset?.let { invalidOffset ->
-            this.invalidOffset = null
-            return ParsedInstruction(
-                kind = Instruction.Invalid,
-                offset = ProgramCounter(invalidOffset),
-                nextOffset = ProgramCounter(offset),
-            )
-        }
-
-        if (isDone || offset.toInt() >= code.size) {
-            throw NoSuchElementException()
-        }
-
-        val currentOffset = offset
-        val isValid = getBitForOffset(bitmask, code.size, offset)
-        require(isValid) { "bit at $offset is zero" }
-
-        val (nextOffset, instruction, isNextInstructionInvalid) =
-            parseInstruction(instructionSet, code, bitmask, offset)
-        require(nextOffset > offset)
-
-        if (!isNextInstructionInvalid) {
-            offset = nextOffset
-            if (offset.toInt() != code.size) {
-                require(getBitForOffset(bitmask, code.size, offset)) { "bit at $offset is zero" }
-            }
-        } else {
-            if (nextOffset.toInt() == code.size) {
-                offset = code.size.toUInt() + 1u
-            } else if (isBounded) {
-                isDone = true
-                offset = if (instruction.canFallthrough()) {
-                    code.size.toUInt()
-                } else {
-                    nextOffset
-                }
-            } else {
-                offset = findNextOffsetUnbounded(bitmask, code.size.toUInt(), nextOffset)
-                if (offset.toInt() != code.size) {
-                    require(getBitForOffset(bitmask, code.size, offset)) { "bit at $offset is zero" }
-                }
-            }
-
-            if (instruction.canFallthrough()) {
-                invalidOffset = nextOffset
-            }
-        }
-
-        return ParsedInstruction(
-            kind = instruction,
-            offset = ProgramCounter(currentOffset),
-            nextOffset = ProgramCounter(nextOffset)
-        )
-    }
-}
-
-class ProgramBlob private constructor(
-    val roDataSize: Int,
-    val rwDataSize: Int,
-    val stackSize: Int,
-
-    val roData: UByteArray,
-    val rwData: UByteArray,
-    val exports: UByteArray,
-    val importSymbols: UByteArray,
-    val importOffsets: UByteArray,
-    val code: UByteArray,
-    val jumpTable: UByteArray,
-    val jumpTableEntrySize: UByte,
-    val bitmask: UByteArray,
-
-    val debugStrings: UByteArray,
-    val debugLineProgramRanges: UByteArray,
-    val debugLinePrograms: UByteArray
-) {
-
-    companion object {
-        fun parse(bytes: UByteArray): ProgramBlob {
-            val parts = ProgramParts.fromBytes(bytes)
-            return fromParts(parts)
-        }
-
-        fun fromParts(parts: ProgramParts): ProgramBlob {
-            val blob = ProgramBlob(
-                roDataSize = parts.roDataSize,
-                rwDataSize = parts.rwDataSize,
-                stackSize = parts.stackSize,
-
-                roData = parts.roData,
-                rwData = parts.rwData,
-                exports = parts.exports,
-                importSymbols = parts.importSymbols,
-                importOffsets = parts.importOffsets,
-                code = parts.codeAndJumpTable,
-                jumpTable = UByteArray(0), // Assuming this is populated somewhere in real usage
-                jumpTableEntrySize = 0u,   // Assuming this is set somewhere in real usage
-                bitmask = UByteArray(0),   // Assuming this is set somewhere in real usage
-
-                debugStrings = parts.debugStrings,
-                debugLineProgramRanges = parts.debugLineProgramRanges,
-                debugLinePrograms = parts.debugLinePrograms
-            )
-
-            // Additional logic here similar to your Rust code...
-
-            return blob
-        }
-    }
-
-    fun roData(): UByteArray = roData
-    fun roDataSize(): Int = roDataSize
-    fun rwData(): UByteArray = rwData
-    fun rwDataSize(): Int = rwDataSize
-    fun stackSize(): Int = stackSize
-    fun code(): UByteArray = code
-    fun bitmask(): UByteArray = bitmask
-
-    fun imports(): Imports {
-        return Imports(importOffsets, importSymbols)
-    }
-
-    fun exports(): Iterator<ProgramExport<UByteArray>> {
-        return object : Iterator<ProgramExport<UByteArray>> {
-            private var state: State = State.Uninitialized
-            private val reader = Reader(exports, 0)
-
-            override fun hasNext(): Boolean {
-                return when (state) {
-                    State.Uninitialized -> reader.readVarInt() != null
-                    State.Pending -> true
-                    State.Finished -> false
-                }
-            }
-
-            override fun next(): ProgramExport<UByteArray>? {
-                val remaining = when (val currentState = state) {
-                    State.Uninitialized -> reader.readVarInt()
-                    State.Pending -> currentState.remaining
-                    State.Finished -> return null
-                }
-
-                if (remaining == 0) return null
-
-                val targetCodeOffset = reader.readVarInt()
-                val symbol = reader.readBytesWithLength()
-                state = State.Pending(remaining - 1)
-
-                return ProgramExport(targetCodeOffset, ProgramSymbol(symbol))
-            }
-        }
-    }
-
-    fun instructions(): Instructions {
-        return Instructions.new(code, bitmask, 0)
-    }
-
-    fun instructionsAt(offset: Int): Instructions? {
-        return if (bitmask[offset shr 3].toInt() and (1 shl (offset and 7)) == 0) {
-            null
-        } else {
-            Instructions.new(code, bitmask, offset)
-        }
-    }
-
-    fun jumpTable(): JumpTable {
-        return JumpTable(jumpTable, jumpTableEntrySize.toInt())
-    }
-
-    fun getDebugString(offset: Int): String {
-        val reader = Reader(debugStrings, offset)
-        return reader.readStringWithLength()
-    }
-
-    fun getDebugLineProgramAt(nthInstruction: Int): LineProgram? {
-        if (debugLineProgramRanges.isEmpty() || debugLinePrograms.isEmpty()) {
-            return null
-        }
-
-        if (debugLinePrograms[0] != VERSION_DEBUG_LINE_PROGRAM_V1) {
-            throw ProgramParseError(ProgramParseErrorKind.Other("Unsupported debug line program version"))
-        }
-
-        val entrySize = 12
-        if (debugLineProgramRanges.size % entrySize != 0) {
-            throw ProgramParseError(ProgramParseErrorKind.Other("Invalid size for debug function ranges section"))
-        }
-
-        val offset = binarySearch(debugLineProgramRanges, entrySize) { xs ->
-            val begin = xs.copyOfRange(0, 4).toInt()
-            when {
-                nthInstruction < begin -> Ordering.Greater
-                nthInstruction >= xs.copyOfRange(4, 8).toInt() -> Ordering.Less
-                else -> Ordering.Equal
-            }
-        }
-
-        val infoOffset = debugLineProgramRanges.copyOfRange(offset + 8, offset + 12).toInt()
-        val reader = Reader(debugLinePrograms, infoOffset)
-        return LineProgram(
-            entryIndex = offset / entrySize,
-            regionCounter = 0,
-            blob = this,
-            reader = reader,
-            isFinished = false,
-            programCounter = debugLineProgramRanges.copyOfRange(offset, offset + 4).toInt(),
-            stack = Array(16) { LineProgramFrame() },
-            stackDepth = 0,
-            mutationDepth = 0
-        )
-    }
-
-    @Throws(ProgramParseError::class)
-    fun getDebugLineProgramAt(programCounter: ProgramCounter): LineProgram? {
-        val pc = programCounter.value
-        if (debugLineProgramRanges.isEmpty() || debugLinePrograms.isEmpty()) {
-            return null
-        }
-
-        if (debugLinePrograms[0] != VERSION_DEBUG_LINE_PROGRAM_V1) {
-            throw ProgramParseError("The debug line programs section has an unsupported version")
-        }
-
-        val ENTRY_SIZE = 12
-        val slice = debugLineProgramRanges
-        if (slice.size % ENTRY_SIZE != 0) {
-            throw ProgramParseError("The debug function ranges section has an invalid size")
-        }
-
-        val offset = binarySearch(slice, ENTRY_SIZE) { xs ->
-            val begin = xs.readUInt32LE(0)
-            if (pc < begin) {
-                1
-            } else {
-                val end = xs.readUInt32LE(4)
-                if (pc >= end) {
-                    -1
-                } else {
-                    0
-                }
-            }
-        }
-
-        if (offset < 0) {
-            return null
-        }
-
-        val xs = slice.copyOfRange(offset, offset + ENTRY_SIZE)
-        val indexBegin = xs.readUInt32LE(0)
-        val indexEnd = xs.readUInt32LE(4)
-        val infoOffset = xs.readUInt32LE(8)
-
-        if (pc < indexBegin || pc >= indexEnd) {
-            throw ProgramParseError("Binary search for function debug info failed")
-        }
-
-        val reader = ByteArrayReader(debugLinePrograms)
-        reader.position = infoOffset.toInt()
-
-        return LineProgram(
-            entryIndex = offset / ENTRY_SIZE,
-            regionCounter = 0,
-            blob = this,
-            reader = reader,
-            isFinished = false,
-            programCounter = indexBegin,
-            stack = Array(16) { LineProgramFrame() },
-            stackDepth = 0,
-            mutationDepth = 0
-        )
-    }
-}
-
-data class Imports(
-    val offsets: UByteArray,
-    val symbols: UByteArray
-)
-
-data class ProgramCounter(val value: UInt) {
-    override fun toString(): String = value.toString()
-}
-
-class ProgramExport<T : AsBytes>(
-    private val programCounter: ProgramCounter,
-    private val symbol: ProgramSymbol<T>
-) {
-    companion object {
-        fun <T : AsBytes> new(programCounter: ProgramCounter, symbol: ProgramSymbol<T>): ProgramExport<T> {
-            return ProgramExport(programCounter, symbol)
-        }
-    }
-
-    fun getProgramCounter(): ProgramCounter = programCounter
-
-    fun getSymbol(): ProgramSymbol<T> = symbol
-
-    override fun equals(other: Any?): Boolean {
-        return when (other) {
-            is String -> symbol.asBytes().contentEquals(other.toByteArray(Charsets.UTF_8))
-            is ProgramExport<*> -> programCounter == other.programCounter && symbol == other.symbol
-            else -> false
-        }
-    }
-
-    override fun hashCode(): Int {
-        return 31 * programCounter.hashCode() + symbol.hashCode()
-    }
-
-    override fun toString(): String {
-        return "ProgramExport(programCounter=$programCounter, symbol=$symbol)"
-    }
-}
-
-interface AsBytes {
-    fun asBytes(): ByteArray
-}
-
-class ProgramSymbol<T : AsBytes>(private val value: T) : AsBytes {
-    fun intoInner(): T = value
-
-    override fun asBytes(): ByteArray = value.asBytes()
-
-    override fun equals(other: Any?): Boolean {
-        val bytes = asBytes()
-        return when (other) {
-            is String -> bytes.contentEquals(other.toByteArray(Charsets.UTF_8))
-            is ProgramSymbol<*> -> bytes.contentEquals(other.asBytes())
-            else -> false
-        }
-    }
-
-    override fun hashCode(): Int = asBytes().contentHashCode()
-
-    override fun toString(): String {
-        val bytes = asBytes()
-        return if (bytes.isValidUtf8()) {
-            val ident = bytes.toString(Charsets.UTF_8)
-            "'$ident'"
-        } else {
-            "0x" + bytes.joinToString("") { "%02x".format(it) }
-        }
-    }
-}
-
-fun ByteArray.isValidUtf8(): Boolean {
-    val decoder: CharsetDecoder = Charsets.UTF_8.newDecoder()
-    decoder.onMalformedInput(CodingErrorAction.REPORT)
-    decoder.onUnmappableCharacter(CodingErrorAction.REPORT)
-    return try {
-        decoder.decode(ByteBuffer.wrap(this))
-        true
-    } catch (e: Exception) {
-        false
-    }
-}
-
-class Reader(val blob: ByteArray, var position: Int = 0) {
-    @Throws(ProgramParseError::class)
-    fun readByte(): UByte {
-        if (position >= blob.size) {
-            throw ProgramParseError.unexpectedEndOfFile(position, 1, 0)
-        }
-        return blob[position++].toUByte()
-    }
-
-    @Throws(ProgramParseError::class)
-    fun readBytes(length: Int): ByteArray {
-        if (position + length > blob.size) {
-            throw ProgramParseError.unexpectedEndOfFile(position, length, blob.size - position)
-        }
-        val result = blob.copyOfRange(position, position + length)
-        position += length
-        return result
-    }
-
-    @Throws(ProgramParseError::class)
-    fun readVarInt(): UInt {
-        val offset = position
-        var result = 0u
-        var shift = 0
-        while (true) {
-            if (position >= blob.size) {
-                throw ProgramParseError.failedToReadVarint(offset)
-            }
-            val byte = readByte().toUInt()
-            result = result or ((byte and 0x7Fu) shl shift)
-            if ((byte and 0x80u) == 0u) {
-                break
-            }
-            shift += 7
-            if (shift >= 32) {
-                throw ProgramParseError.other("VarInt is too long")
-            }
-        }
-        return result
-    }
-
-    @Throws(ProgramParseError::class)
-    fun skip(count: Int) {
-        if (position + count > blob.size) {
-            throw ProgramParseError.unexpectedEndOfFile(position, count, blob.size - position)
-        }
-        position += count
-    }
-
-    @Throws(ProgramParseError::class)
-    fun readStringWithLength(): String {
-        val offset = position
-        val length = readVarInt().toInt()
-        val bytes = readBytes(length)
-        return bytes.toString(Charsets.UTF_8)
-    }
-
-    @Throws(ProgramParseError::class)
-    fun readSectionAsBytes(sectionRef: KMutableProperty0<UByte>, expectedSection: UByte): ByteArray {
-        if (sectionRef.get() != expectedSection) {
-            return ByteArray(0)
-        }
-        val sectionLength = readVarInt().toInt()
-        val bytes = readBytes(sectionLength)
-        sectionRef.set(readByte())
-        return bytes
-    }
-}
-
-enum class FrameKind {
-    Enter,
-    Call,
-    Line
-}
-
-data class LineProgramFrame(
-    var kind: FrameKind? = null,
-    var namespaceOffset: Int = 0,
-    var functionNameOffset: Int = 0,
-    var pathOffset: Int = 0,
-    var line: Int = 0,
-    var column: Int = 0
-)
-
-data class RegionInfo(
-    val entryIndex: Int,
-    val blob: ProgramBlob,
-    val range: IntRange,
-    val frames: List<LineProgramFrame>
-) {
-    fun entryIndex(): Int = entryIndex
-
-    fun instructionRange(): IntRange = range
-
-    fun frames(): Iterator<FrameInfo> {
-        return frames.map { FrameInfo(blob, it) }.iterator()
-    }
-}
-
-// FrameInfo.kt
-
-class FrameInfo(
-    private val blob: ProgramBlob,
-    private val inner: LineProgramFrame
-) {
-    @Throws(ProgramParseError::class)
-    fun namespace(): String? {
-        val namespace = blob.getDebugString(inner.namespaceOffset)
-        return if (namespace.isEmpty()) null else namespace
-    }
-
-    @Throws(ProgramParseError::class)
-    fun functionNameWithoutNamespace(): String? {
-        val functionName = blob.getDebugString(inner.functionNameOffset)
-        return if (functionName.isEmpty()) null else functionName
-    }
-
-    fun pathDebugStringOffset(): UInt? =
-        if (inner.pathOffset == 0U) null else inner.pathOffset
-
-    @Throws(ProgramParseError::class)
-    fun path(): String? {
-        val path = blob.getDebugString(inner.pathOffset)
-        return if (path.isEmpty()) null else path
-    }
-
-    fun line(): UInt? = if (inner.line == 0U) null else inner.line
-
-    fun column(): UInt? = if (inner.column == 0U) null else inner.column
-
-    fun kind(): FrameKind = inner.kind ?: FrameKind.Line
-
-    @Throws(ProgramParseError::class)
-    fun fullName(): String {
-        val prefix = namespace() ?: ""
-        val suffix = functionNameWithoutNamespace() ?: ""
-        return if (prefix.isNotEmpty()) "$prefix::$suffix" else suffix
-    }
-
-    @Throws(ProgramParseError::class)
-    fun location(): SourceLocation? {
-        val path = path() ?: return null
-        val line = line()
-        val column = column()
-        return when {
-            line != null && column != null -> SourceLocation.Full(path, line, column)
-            line != null -> SourceLocation.PathAndLine(path, line)
-            else -> SourceLocation.Path(path)
-        }
-    }
-}
-
-
-class LineProgram(
-    private val entryIndex: Int,
-    private var regionCounter: Int,
-    private val blob: ProgramBlob,
-    private val reader: ByteArrayReader,
-    private var isFinished: Boolean,
-    private var programCounter: UInt,
-    private val stack: Array<LineProgramFrame>,
-    private var stackDepth: UInt,
-    private var mutationDepth: UInt
-) {
-    @Throws(ProgramParseError::class)
-    fun run(): RegionInfo? {
-        if (isFinished) return null
-
-        val INSTRUCTION_LIMIT_PER_REGION = 512
-
-        for (i in 0 until INSTRUCTION_LIMIT_PER_REGION) {
-            val byte = reader.readByte() ?: throw ProgramParseError("Unexpected end of program")
-            val opcode = LineProgramOp.fromByte(byte)
-                ?: throw ProgramParseError("Found an unrecognized line program opcode")
-
-            val (count, depth) = when (opcode) {
-                LineProgramOp.FinishProgram -> return null
-                LineProgramOp.SetMutationDepth -> {
-                    mutationDepth = reader.readVarInt()
-                    continue
-                }
-
-                LineProgramOp.SetKindEnter -> {
-                    stack.getOrNull(mutationDepth.toInt())?.kind = FrameKind.Enter
-                    continue
-                }
-                // Handle other opcodes...
-                LineProgramOp.FinishInstruction -> Pair(1U, stackDepth)
-                LineProgramOp.FinishMultipleInstructions -> {
-                    val cnt = reader.readVarInt()
-                    Pair(cnt, stackDepth)
-                }
-
-                else -> continue
-            }
-
-            val range = programCounter until (programCounter + count)
-            programCounter += count
-
-            val frames = stack.sliceArray(0 until minOf(depth.toInt(), stack.size))
-            isFinished = false
-
-            val regionInfo = RegionInfo(
-                entryIndex = regionCounter,
-                blob = blob,
-                range = range,
-                frames = frames
-            )
-            regionCounter += 1
-            return regionInfo
-        }
-
-        throw ProgramParseError("Found a line program with too many instructions")
-    }
-}
+//class ProgramParts(
+//    var is64Bit: Boolean = false,
+//    var roDataSize: UInt = 0u,
+//    var rwDataSize: UInt = 0u,
+//    var stackSize: UInt = 0u,
+//
+//    var roData: ByteArray = ByteArray(0),
+//    var rwData: ByteArray = ByteArray(0),
+//    var codeAndJumpTable: ByteArray = ByteArray(0),
+//    var importOffsets: ByteArray = ByteArray(0),
+//    var importSymbols: ByteArray = ByteArray(0),
+//    var exports: ByteArray = ByteArray(0),
+//
+//    var debugStrings: ByteArray = ByteArray(0),
+//    var debugLineProgramRanges: ByteArray = ByteArray(0),
+//    var debugLinePrograms: ByteArray = ByteArray(0)
+//) {
+//    companion object {
+//        @Throws(ProgramParseError::class)
+//        fun fromBytes(blob: ByteArray): ProgramParts {
+//            if (!blob.startsWith(BLOB_MAGIC)) {
+//                throw ProgramParseError.other("blob doesn't start with the expected magic bytes")
+//            }
+//
+//            val reader = Reader(blob, BLOB_MAGIC.size)
+//
+//            val is64Bit = when (val blobVersion = reader.readByte()) {
+//                BLOB_VERSION_V1_32 -> false
+//                BLOB_VERSION_V1_64 -> true
+//                else -> throw ProgramParseError.unsupportedVersion(blobVersion)
+//            }
+//
+//            val blobLenBytes = reader.readBytes(BLOB_LEN_SIZE)
+//            val blobLen = blobLenBytes.toULongLE()
+//            if (blobLen != blob.size.toULong()) {
+//                throw ProgramParseError.other("blob size doesn't match the blob length metadata")
+//            }
+//
+//            val parts = ProgramParts(is64Bit = is64Bit)
+//
+//            var section = reader.readByte()
+//            if (section == SECTION_MEMORY_CONFIG) {
+//                val sectionLength = reader.readVarInt()
+//                val position = reader.position
+//                parts.roDataSize = reader.readVarInt()
+//                parts.rwDataSize = reader.readVarInt()
+//                parts.stackSize = reader.readVarInt()
+//                if (position + sectionLength.toInt() != reader.position) {
+//                    throw ProgramParseError.other("the memory config section contains more data than expected")
+//                }
+//                section = reader.readByte()
+//            }
+//
+//            parts.roData = reader.readSectionAsBytes(::section, SECTION_RO_DATA)
+//            parts.rwData = reader.readSectionAsBytes(::section, SECTION_RW_DATA)
+//
+//            if (section == SECTION_IMPORTS) {
+//                val sectionLength = reader.readVarInt()
+//                val sectionStart = reader.position
+//                val importCount = reader.readVarInt()
+//                if (importCount > VM_MAXIMUM_IMPORT_COUNT) {
+//                    throw ProgramParseError.other("too many imports")
+//                }
+//
+//                val importOffsetsSize = importCount.toInt().times(4)
+//                if (importOffsetsSize < 0) {
+//                    throw ProgramParseError.other("the imports section is invalid")
+//                }
+//
+//                parts.importOffsets = reader.readBytes(importOffsetsSize)
+//                val importSymbolsSize = sectionLength.toInt() - (reader.position - sectionStart)
+//                if (importSymbolsSize < 0) {
+//                    throw ProgramParseError.other("the imports section is invalid")
+//                }
+//
+//                parts.importSymbols = reader.readBytes(importSymbolsSize)
+//                section = reader.readByte()
+//            }
+//
+//            parts.exports = reader.readSectionAsBytes(::section, SECTION_EXPORTS)
+//            parts.codeAndJumpTable = reader.readSectionAsBytes(::section, SECTION_CODE_AND_JUMP_TABLE)
+//            parts.debugStrings = reader.readSectionAsBytes(::section, SECTION_OPT_DEBUG_STRINGS)
+//            parts.debugLinePrograms = reader.readSectionAsBytes(::section, SECTION_OPT_DEBUG_LINE_PROGRAMS)
+//            parts.debugLineProgramRanges = reader.readSectionAsBytes(::section, SECTION_OPT_DEBUG_LINE_PROGRAM_RANGES)
+//
+//            while ((section.toInt() and 0b10000000) != 0) {
+//                // We don't know this section, but it's optional, so just skip it.
+//                val sectionLength = reader.readVarInt()
+//                reader.skip(sectionLength.toInt())
+//                section = reader.readByte()
+//            }
+//
+//            if (section != SECTION_END_OF_FILE) {
+//                throw ProgramParseError.unexpectedSection(reader.position - 1, section)
+//            }
+//
+//            return parts
+//        }
+//    }
+//}
+//
+//fun getBitForOffset(bitmask: ByteArray, codeLength: Int, offset: UInt): Boolean {
+//    if (offset.toInt() >= codeLength) {
+//        return false
+//    }
+//    val index = (offset.toInt() shr 3)
+//    val shift = (offset.toInt() and 7)
+//    val byte = bitmask.getOrNull(index) ?: return false
+//    return ((byte.toInt() shr shift) and 1) == 1
+//}
+//
+//fun findNextOffsetUnbounded(bitmask: ByteArray, codeLength: UInt, offset: UInt): UInt {
+//    var currentOffset = offset
+//    while (true) {
+//        val index = (currentOffset.toInt() shr 3)
+//        if (index >= bitmask.size) {
+//            break
+//        }
+//        val byte = bitmask[index].toInt() and 0xFF
+//        val shift = currentOffset.toInt() and 7
+//        val mask = byte shr shift
+//        if (mask == 0) {
+//            currentOffset += (8 - shift).toUInt()
+//        } else {
+//            currentOffset += Integer.numberOfTrailingZeros(mask)
+//            break
+//        }
+//    }
+//    return minOf(codeLength, currentOffset)
+//}
+//
+//fun parseBitmaskSlow(bitmask: ByteArray, codeLength: Int, offset: UInt): Pair<UInt, Boolean> {
+//    var skip = 0u
+//    var currentOffset = offset
+//    while (currentOffset.toInt() + skip.toInt() + 1 < codeLength) {
+//        val nextOffset = currentOffset + skip + 1u
+//        if (!getBitForOffset(bitmask, codeLength, nextOffset)) {
+//            skip += 1u
+//        } else {
+//            break
+//        }
+//    }
+//    val isNextInstructionInvalid = !getBitForOffset(bitmask, codeLength, currentOffset + skip + 1u)
+//    return Pair(skip, isNextInstructionInvalid)
+//}
+//
+//fun parseBitmaskFast(bitmask: ByteArray, offset: UInt): UInt? {
+//    // For fast parsing, we can read 3 bytes from the bitmask starting at (offset >> 3)
+//    val index = offset.toInt() shr 3
+//    if (index + 2 >= bitmask.size) {
+//        return null
+//    }
+//
+//    val b0 = bitmask[index].toInt() and 0xFF
+//    val b1 = bitmask[index + 1].toInt() and 0xFF
+//    val b2 = bitmask[index + 2].toInt() and 0xFF
+//
+//    val shift = offset.toInt() and 7
+//    val bits = ((b2 shl 16) or (b1 shl 8) or b0) ushr shift
+//    val mask = bits and 0xFFFFFF
+//
+//    val skip = Integer.numberOfTrailingZeros(mask).toUInt()
+//    return skip
+//}
+//
+//fun <I : InstructionSet> visitorStepSlow(
+//    code: ByteArray,
+//    bitmask: ByteArray,
+//    offset: UInt,
+//    visitor: EnumVisitor<I>
+//): Triple<UInt, Instruction, Boolean> {
+//    if (offset.toInt() >= code.size) {
+//        // No more code to read, return invalid instruction
+//        return Triple(offset + 1u, Instruction.Invalid, true)
+//    }
+//
+//    val codeLength = code.size
+//    require(getBitForOffset(bitmask, codeLength, offset)) { "bit at $offset is zero" }
+//
+//    val (skip, isNextInstructionInvalid) = parseBitmaskSlow(bitmask, codeLength, offset)
+//
+//    val chunkSize = minOf(17, codeLength - offset.toInt())
+//    val chunk = code.copyOfRange(offset.toInt(), offset.toInt() + chunkSize)
+//
+//    val opcode = chunk[0].toInt() and 0xFF
+//
+//    // Prepare the arguments chunk (t)
+//    val t = ByteArray(16) { 0 }
+//    val dataLength = chunk.size - 1
+//    if (dataLength > 0) {
+//        System.arraycopy(chunk, 1, t, 0, dataLength)
+//    }
+//
+//    val instruction = visitor.dispatch(opcode, t, offset, skip)
+//
+//    var isNextInvalid = isNextInstructionInvalid
+//    val nextOffset = offset + skip + 1u
+//
+//    if (isNextInvalid && nextOffset.toInt() >= codeLength) {
+//        // This is the last instruction
+//        if (!instruction.canFallthrough()) {
+//            isNextInvalid = false
+//        }
+//    }
+//
+//    return Triple(nextOffset, instruction, isNextInvalid)
+//}
+//
+//fun <I : InstructionSet> visitorStepFast(
+//    code: ByteArray,
+//    bitmask: ByteArray,
+//    offset: UInt,
+//    visitor: EnumVisitor<I>
+//): Triple<UInt, Instruction, Boolean> {
+//    val codeLength = code.size
+//    require(getBitForOffset(bitmask, codeLength, offset)) { "bit at $offset is zero" }
+//    require(offset.toInt() + 32 <= codeLength) { "Not enough code for fast path" }
+//
+//    val chunk = code.copyOfRange(offset.toInt(), offset.toInt() + 32)
+//    val opcode = chunk[0].toInt() and 0xFF
+//
+//    val skip = parseBitmaskFast(bitmask, offset) ?: throw IllegalStateException("Invalid bitmask at offset $offset")
+//
+//    val t = ByteArray(16) { 0 }
+//    System.arraycopy(chunk, 1, t, 0, 16)
+//
+//    val instruction = visitor.dispatch(opcode, t, offset, skip)
+//
+//    val nextOffset = offset + skip + 1u
+//    val isNextInstructionInvalid = skip == 24u && !getBitForOffset(bitmask, codeLength, nextOffset)
+//
+//    return Triple(nextOffset, instruction, isNextInstructionInvalid)
+//}
+//
+//interface InstructionSet {
+//    fun opcodeFromByte(byte: UByte): Opcode?
+//    fun createInstruction(opcode: Opcode): Instruction
+//}
+//
+//class Instructions<I : InstructionSet>(
+//    private val instructionSet: I,
+//    private val code: ByteArray,
+//    private val bitmask: ByteArray,
+//    private var offset: UInt,
+//    private var invalidOffset: UInt?,
+//    private val isBounded: Boolean,
+//    private var isDone: Boolean
+//) : Iterator<ParsedInstruction> {
+//
+//    companion object {
+//        fun <I : InstructionSet> newBounded(
+//            instructionSet: I,
+//            code: ByteArray,
+//            bitmask: ByteArray,
+//            offset: UInt
+//        ): Instructions<I> {
+//            return Instructions(instructionSet, code, bitmask, offset, null, true, false).apply {
+//                initialize()
+//            }
+//        }
+//
+//        fun <I : InstructionSet> newUnbounded(
+//            instructionSet: I,
+//            code: ByteArray,
+//            bitmask: ByteArray,
+//            offset: UInt
+//        ): Instructions<I> {
+//            return Instructions(instructionSet, code, bitmask, offset, null, false, false).apply {
+//                initialize()
+//            }
+//        }
+//    }
+//
+//    private fun initialize() {
+//        require(code.size <= UInt.MAX_VALUE.toLong())
+//        require(bitmask.size == (code.size + 7) / 8)
+//
+//        val isValid = getBitForOffset(bitmask, code.size, offset)
+//        if (isValid) {
+//            invalidOffset = null
+//        } else if (isBounded) {
+//            isDone = true
+//            offset = minOf(offset + 1u, code.size.toUInt())
+//            invalidOffset = offset - 1u
+//        } else {
+//            val nextOffset = findNextOffsetUnbounded(bitmask, code.size.toUInt(), offset)
+//            invalidOffset = offset
+//            offset = nextOffset
+//        }
+//    }
+//
+//    fun offset(): UInt {
+//        return invalidOffset ?: offset
+//    }
+//
+//    fun <T> visit(visitor: InstructionVisitor<T>): T? {
+//        return if (hasNext()) {
+//            val nextInstruction = next()
+//            nextInstruction.visit(visitor)
+//        } else {
+//            null
+//        }
+//    }
+//
+//    override fun hasNext(): Boolean {
+//        return !isDone && (invalidOffset != null || offset.toInt() < code.size)
+//    }
+//
+//    override fun next(): ParsedInstruction {
+//        invalidOffset?.let { invalidOffset ->
+//            this.invalidOffset = null
+//            return ParsedInstruction(
+//                kind = Instruction.Invalid,
+//                offset = ProgramCounter(invalidOffset),
+//                nextOffset = ProgramCounter(offset),
+//            )
+//        }
+//
+//        if (isDone || offset.toInt() >= code.size) {
+//            throw NoSuchElementException()
+//        }
+//
+//        val currentOffset = offset
+//        val isValid = getBitForOffset(bitmask, code.size, offset)
+//        require(isValid) { "bit at $offset is zero" }
+//
+//        val (nextOffset, instruction, isNextInstructionInvalid) =
+//            parseInstruction(instructionSet, code, bitmask, offset)
+//        require(nextOffset > offset)
+//
+//        if (!isNextInstructionInvalid) {
+//            offset = nextOffset
+//            if (offset.toInt() != code.size) {
+//                require(getBitForOffset(bitmask, code.size, offset)) { "bit at $offset is zero" }
+//            }
+//        } else {
+//            if (nextOffset.toInt() == code.size) {
+//                offset = code.size.toUInt() + 1u
+//            } else if (isBounded) {
+//                isDone = true
+//                offset = if (instruction.canFallthrough()) {
+//                    code.size.toUInt()
+//                } else {
+//                    nextOffset
+//                }
+//            } else {
+//                offset = findNextOffsetUnbounded(bitmask, code.size.toUInt(), nextOffset)
+//                if (offset.toInt() != code.size) {
+//                    require(getBitForOffset(bitmask, code.size, offset)) { "bit at $offset is zero" }
+//                }
+//            }
+//
+//            if (instruction.canFallthrough()) {
+//                invalidOffset = nextOffset
+//            }
+//        }
+//
+//        return ParsedInstruction(
+//            kind = instruction,
+//            offset = ProgramCounter(currentOffset),
+//            nextOffset = ProgramCounter(nextOffset)
+//        )
+//    }
+//}
+//
+//class ProgramBlob private constructor(
+//    val roDataSize: Int,
+//    val rwDataSize: Int,
+//    val stackSize: Int,
+//
+//    val roData: UByteArray,
+//    val rwData: UByteArray,
+//    val exports: UByteArray,
+//    val importSymbols: UByteArray,
+//    val importOffsets: UByteArray,
+//    val code: UByteArray,
+//    val jumpTable: UByteArray,
+//    val jumpTableEntrySize: UByte,
+//    val bitmask: UByteArray,
+//
+//    val debugStrings: UByteArray,
+//    val debugLineProgramRanges: UByteArray,
+//    val debugLinePrograms: UByteArray
+//) {
+//
+//    companion object {
+//        fun parse(bytes: UByteArray): ProgramBlob {
+//            val parts = ProgramParts.fromBytes(bytes)
+//            return fromParts(parts)
+//        }
+//
+//        fun fromParts(parts: ProgramParts): ProgramBlob {
+//            val blob = ProgramBlob(
+//                roDataSize = parts.roDataSize,
+//                rwDataSize = parts.rwDataSize,
+//                stackSize = parts.stackSize,
+//
+//                roData = parts.roData,
+//                rwData = parts.rwData,
+//                exports = parts.exports,
+//                importSymbols = parts.importSymbols,
+//                importOffsets = parts.importOffsets,
+//                code = parts.codeAndJumpTable,
+//                jumpTable = UByteArray(0), // Assuming this is populated somewhere in real usage
+//                jumpTableEntrySize = 0u,   // Assuming this is set somewhere in real usage
+//                bitmask = UByteArray(0),   // Assuming this is set somewhere in real usage
+//
+//                debugStrings = parts.debugStrings,
+//                debugLineProgramRanges = parts.debugLineProgramRanges,
+//                debugLinePrograms = parts.debugLinePrograms
+//            )
+//
+//            // Additional logic here similar to your Rust code...
+//
+//            return blob
+//        }
+//    }
+//
+//    fun roData(): UByteArray = roData
+//    fun roDataSize(): Int = roDataSize
+//    fun rwData(): UByteArray = rwData
+//    fun rwDataSize(): Int = rwDataSize
+//    fun stackSize(): Int = stackSize
+//    fun code(): UByteArray = code
+//    fun bitmask(): UByteArray = bitmask
+//
+//    fun imports(): Imports {
+//        return Imports(importOffsets, importSymbols)
+//    }
+//
+//    fun exports(): Iterator<ProgramExport<UByteArray>> {
+//        return object : Iterator<ProgramExport<UByteArray>> {
+//            private var state: State = State.Uninitialized
+//            private val reader = Reader(exports, 0)
+//
+//            override fun hasNext(): Boolean {
+//                return when (state) {
+//                    State.Uninitialized -> reader.readVarInt() != null
+//                    State.Pending -> true
+//                    State.Finished -> false
+//                }
+//            }
+//
+//            override fun next(): ProgramExport<UByteArray>? {
+//                val remaining = when (val currentState = state) {
+//                    State.Uninitialized -> reader.readVarInt()
+//                    State.Pending -> currentState.remaining
+//                    State.Finished -> return null
+//                }
+//
+//                if (remaining == 0) return null
+//
+//                val targetCodeOffset = reader.readVarInt()
+//                val symbol = reader.readBytesWithLength()
+//                state = State.Pending(remaining - 1)
+//
+//                return ProgramExport(targetCodeOffset, ProgramSymbol(symbol))
+//            }
+//        }
+//    }
+//
+//    fun instructions(): Instructions {
+//        return Instructions.new(code, bitmask, 0)
+//    }
+//
+//    fun instructionsAt(offset: Int): Instructions? {
+//        return if (bitmask[offset shr 3].toInt() and (1 shl (offset and 7)) == 0) {
+//            null
+//        } else {
+//            Instructions.new(code, bitmask, offset)
+//        }
+//    }
+//
+//    fun jumpTable(): JumpTable {
+//        return JumpTable(jumpTable, jumpTableEntrySize.toInt())
+//    }
+//
+//    fun getDebugString(offset: Int): String {
+//        val reader = Reader(debugStrings, offset)
+//        return reader.readStringWithLength()
+//    }
+//
+//    fun getDebugLineProgramAt(nthInstruction: Int): LineProgram? {
+//        if (debugLineProgramRanges.isEmpty() || debugLinePrograms.isEmpty()) {
+//            return null
+//        }
+//
+//        if (debugLinePrograms[0] != VERSION_DEBUG_LINE_PROGRAM_V1) {
+//            throw ProgramParseError(ProgramParseErrorKind.Other("Unsupported debug line program version"))
+//        }
+//
+//        val entrySize = 12
+//        if (debugLineProgramRanges.size % entrySize != 0) {
+//            throw ProgramParseError(ProgramParseErrorKind.Other("Invalid size for debug function ranges section"))
+//        }
+//
+//        val offset = binarySearch(debugLineProgramRanges, entrySize) { xs ->
+//            val begin = xs.copyOfRange(0, 4).toInt()
+//            when {
+//                nthInstruction < begin -> Ordering.Greater
+//                nthInstruction >= xs.copyOfRange(4, 8).toInt() -> Ordering.Less
+//                else -> Ordering.Equal
+//            }
+//        }
+//
+//        val infoOffset = debugLineProgramRanges.copyOfRange(offset + 8, offset + 12).toInt()
+//        val reader = Reader(debugLinePrograms, infoOffset)
+//        return LineProgram(
+//            entryIndex = offset / entrySize,
+//            regionCounter = 0,
+//            blob = this,
+//            reader = reader,
+//            isFinished = false,
+//            programCounter = debugLineProgramRanges.copyOfRange(offset, offset + 4).toInt(),
+//            stack = Array(16) { LineProgramFrame() },
+//            stackDepth = 0,
+//            mutationDepth = 0
+//        )
+//    }
+//
+//    @Throws(ProgramParseError::class)
+//    fun getDebugLineProgramAt(programCounter: ProgramCounter): LineProgram? {
+//        val pc = programCounter.value
+//        if (debugLineProgramRanges.isEmpty() || debugLinePrograms.isEmpty()) {
+//            return null
+//        }
+//
+//        if (debugLinePrograms[0] != VERSION_DEBUG_LINE_PROGRAM_V1) {
+//            throw ProgramParseError("The debug line programs section has an unsupported version")
+//        }
+//
+//        val ENTRY_SIZE = 12
+//        val slice = debugLineProgramRanges
+//        if (slice.size % ENTRY_SIZE != 0) {
+//            throw ProgramParseError("The debug function ranges section has an invalid size")
+//        }
+//
+//        val offset = binarySearch(slice, ENTRY_SIZE) { xs ->
+//            val begin = xs.readUInt32LE(0)
+//            if (pc < begin) {
+//                1
+//            } else {
+//                val end = xs.readUInt32LE(4)
+//                if (pc >= end) {
+//                    -1
+//                } else {
+//                    0
+//                }
+//            }
+//        }
+//
+//        if (offset < 0) {
+//            return null
+//        }
+//
+//        val xs = slice.copyOfRange(offset, offset + ENTRY_SIZE)
+//        val indexBegin = xs.readUInt32LE(0)
+//        val indexEnd = xs.readUInt32LE(4)
+//        val infoOffset = xs.readUInt32LE(8)
+//
+//        if (pc < indexBegin || pc >= indexEnd) {
+//            throw ProgramParseError("Binary search for function debug info failed")
+//        }
+//
+//        val reader = ByteArrayReader(debugLinePrograms)
+//        reader.position = infoOffset.toInt()
+//
+//        return LineProgram(
+//            entryIndex = offset / ENTRY_SIZE,
+//            regionCounter = 0,
+//            blob = this,
+//            reader = reader,
+//            isFinished = false,
+//            programCounter = indexBegin,
+//            stack = Array(16) { LineProgramFrame() },
+//            stackDepth = 0,
+//            mutationDepth = 0
+//        )
+//    }
+//}
+//
+//data class Imports(
+//    val offsets: UByteArray,
+//    val symbols: UByteArray
+//)
+//
+//data class ProgramCounter(val value: UInt) {
+//    override fun toString(): String = value.toString()
+//}
+//
+//class ProgramExport<T : AsBytes>(
+//    private val programCounter: ProgramCounter,
+//    private val symbol: ProgramSymbol<T>
+//) {
+//    companion object {
+//        fun <T : AsBytes> new(programCounter: ProgramCounter, symbol: ProgramSymbol<T>): ProgramExport<T> {
+//            return ProgramExport(programCounter, symbol)
+//        }
+//    }
+//
+//    fun getProgramCounter(): ProgramCounter = programCounter
+//
+//    fun getSymbol(): ProgramSymbol<T> = symbol
+//
+//    override fun equals(other: Any?): Boolean {
+//        return when (other) {
+//            is String -> symbol.asBytes().contentEquals(other.toByteArray(Charsets.UTF_8))
+//            is ProgramExport<*> -> programCounter == other.programCounter && symbol == other.symbol
+//            else -> false
+//        }
+//    }
+//
+//    override fun hashCode(): Int {
+//        return 31 * programCounter.hashCode() + symbol.hashCode()
+//    }
+//
+//    override fun toString(): String {
+//        return "ProgramExport(programCounter=$programCounter, symbol=$symbol)"
+//    }
+//}
+//
+//interface AsBytes {
+//    fun asBytes(): ByteArray
+//}
+//
+//class ProgramSymbol<T : AsBytes>(private val value: T) : AsBytes {
+//    fun intoInner(): T = value
+//
+//    override fun asBytes(): ByteArray = value.asBytes()
+//
+//    override fun equals(other: Any?): Boolean {
+//        val bytes = asBytes()
+//        return when (other) {
+//            is String -> bytes.contentEquals(other.toByteArray(Charsets.UTF_8))
+//            is ProgramSymbol<*> -> bytes.contentEquals(other.asBytes())
+//            else -> false
+//        }
+//    }
+//
+//    override fun hashCode(): Int = asBytes().contentHashCode()
+//
+//    override fun toString(): String {
+//        val bytes = asBytes()
+//        return if (bytes.isValidUtf8()) {
+//            val ident = bytes.toString(Charsets.UTF_8)
+//            "'$ident'"
+//        } else {
+//            "0x" + bytes.joinToString("") { "%02x".format(it) }
+//        }
+//    }
+//}
+//
+//fun ByteArray.isValidUtf8(): Boolean {
+//    val decoder: CharsetDecoder = Charsets.UTF_8.newDecoder()
+//    decoder.onMalformedInput(CodingErrorAction.REPORT)
+//    decoder.onUnmappableCharacter(CodingErrorAction.REPORT)
+//    return try {
+//        decoder.decode(ByteBuffer.wrap(this))
+//        true
+//    } catch (e: Exception) {
+//        false
+//    }
+//}
+//
+//class Reader(val blob: ByteArray, var position: Int = 0) {
+//    @Throws(ProgramParseError::class)
+//    fun readByte(): UByte {
+//        if (position >= blob.size) {
+//            throw ProgramParseError.unexpectedEndOfFile(position, 1, 0)
+//        }
+//        return blob[position++].toUByte()
+//    }
+//
+//    @Throws(ProgramParseError::class)
+//    fun readBytes(length: Int): ByteArray {
+//        if (position + length > blob.size) {
+//            throw ProgramParseError.unexpectedEndOfFile(position, length, blob.size - position)
+//        }
+//        val result = blob.copyOfRange(position, position + length)
+//        position += length
+//        return result
+//    }
+//
+//    @Throws(ProgramParseError::class)
+//    fun readVarInt(): UInt {
+//        val offset = position
+//        var result = 0u
+//        var shift = 0
+//        while (true) {
+//            if (position >= blob.size) {
+//                throw ProgramParseError.failedToReadVarint(offset)
+//            }
+//            val byte = readByte().toUInt()
+//            result = result or ((byte and 0x7Fu) shl shift)
+//            if ((byte and 0x80u) == 0u) {
+//                break
+//            }
+//            shift += 7
+//            if (shift >= 32) {
+//                throw ProgramParseError.other("VarInt is too long")
+//            }
+//        }
+//        return result
+//    }
+//
+//    @Throws(ProgramParseError::class)
+//    fun skip(count: Int) {
+//        if (position + count > blob.size) {
+//            throw ProgramParseError.unexpectedEndOfFile(position, count, blob.size - position)
+//        }
+//        position += count
+//    }
+//
+//    @Throws(ProgramParseError::class)
+//    fun readStringWithLength(): String {
+//        val offset = position
+//        val length = readVarInt().toInt()
+//        val bytes = readBytes(length)
+//        return bytes.toString(Charsets.UTF_8)
+//    }
+//
+//    @Throws(ProgramParseError::class)
+//    fun readSectionAsBytes(sectionRef: KMutableProperty0<UByte>, expectedSection: UByte): ByteArray {
+//        if (sectionRef.get() != expectedSection) {
+//            return ByteArray(0)
+//        }
+//        val sectionLength = readVarInt().toInt()
+//        val bytes = readBytes(sectionLength)
+//        sectionRef.set(readByte())
+//        return bytes
+//    }
+//}
+//
+//enum class FrameKind {
+//    Enter,
+//    Call,
+//    Line
+//}
+//
+//data class LineProgramFrame(
+//    var kind: FrameKind? = null,
+//    var namespaceOffset: Int = 0,
+//    var functionNameOffset: Int = 0,
+//    var pathOffset: Int = 0,
+//    var line: Int = 0,
+//    var column: Int = 0
+//)
+//
+//data class RegionInfo(
+//    val entryIndex: Int,
+//    val blob: ProgramBlob,
+//    val range: IntRange,
+//    val frames: List<LineProgramFrame>
+//) {
+//    fun entryIndex(): Int = entryIndex
+//
+//    fun instructionRange(): IntRange = range
+//
+//    fun frames(): Iterator<FrameInfo> {
+//        return frames.map { FrameInfo(blob, it) }.iterator()
+//    }
+//}
+//
+//// FrameInfo.kt
+//
+//class FrameInfo(
+//    private val blob: ProgramBlob,
+//    private val inner: LineProgramFrame
+//) {
+//    @Throws(ProgramParseError::class)
+//    fun namespace(): String? {
+//        val namespace = blob.getDebugString(inner.namespaceOffset)
+//        return if (namespace.isEmpty()) null else namespace
+//    }
+//
+//    @Throws(ProgramParseError::class)
+//    fun functionNameWithoutNamespace(): String? {
+//        val functionName = blob.getDebugString(inner.functionNameOffset)
+//        return if (functionName.isEmpty()) null else functionName
+//    }
+//
+//    fun pathDebugStringOffset(): UInt? =
+//        if (inner.pathOffset == 0U) null else inner.pathOffset
+//
+//    @Throws(ProgramParseError::class)
+//    fun path(): String? {
+//        val path = blob.getDebugString(inner.pathOffset)
+//        return if (path.isEmpty()) null else path
+//    }
+//
+//    fun line(): UInt? = if (inner.line == 0U) null else inner.line
+//
+//    fun column(): UInt? = if (inner.column == 0U) null else inner.column
+//
+//    fun kind(): FrameKind = inner.kind ?: FrameKind.Line
+//
+//    @Throws(ProgramParseError::class)
+//    fun fullName(): String {
+//        val prefix = namespace() ?: ""
+//        val suffix = functionNameWithoutNamespace() ?: ""
+//        return if (prefix.isNotEmpty()) "$prefix::$suffix" else suffix
+//    }
+//
+//    @Throws(ProgramParseError::class)
+//    fun location(): SourceLocation? {
+//        val path = path() ?: return null
+//        val line = line()
+//        val column = column()
+//        return when {
+//            line != null && column != null -> SourceLocation.Full(path, line, column)
+//            line != null -> SourceLocation.PathAndLine(path, line)
+//            else -> SourceLocation.Path(path)
+//        }
+//    }
+//}
+//
+//
+//class LineProgram(
+//    private val entryIndex: Int,
+//    private var regionCounter: Int,
+//    private val blob: ProgramBlob,
+//    private val reader: ByteArrayReader,
+//    private var isFinished: Boolean,
+//    private var programCounter: UInt,
+//    private val stack: Array<LineProgramFrame>,
+//    private var stackDepth: UInt,
+//    private var mutationDepth: UInt
+//) {
+//    @Throws(ProgramParseError::class)
+//    fun run(): RegionInfo? {
+//        if (isFinished) return null
+//
+//        val INSTRUCTION_LIMIT_PER_REGION = 512
+//
+//        for (i in 0 until INSTRUCTION_LIMIT_PER_REGION) {
+//            val byte = reader.readByte() ?: throw ProgramParseError("Unexpected end of program")
+//            val opcode = LineProgramOp.fromByte(byte)
+//                ?: throw ProgramParseError("Found an unrecognized line program opcode")
+//
+//            val (count, depth) = when (opcode) {
+//                LineProgramOp.FinishProgram -> return null
+//                LineProgramOp.SetMutationDepth -> {
+//                    mutationDepth = reader.readVarInt()
+//                    continue
+//                }
+//
+//                LineProgramOp.SetKindEnter -> {
+//                    stack.getOrNull(mutationDepth.toInt())?.kind = FrameKind.Enter
+//                    continue
+//                }
+//                // Handle other opcodes...
+//                LineProgramOp.FinishInstruction -> Pair(1U, stackDepth)
+//                LineProgramOp.FinishMultipleInstructions -> {
+//                    val cnt = reader.readVarInt()
+//                    Pair(cnt, stackDepth)
+//                }
+//
+//                else -> continue
+//            }
+//
+//            val range = programCounter until (programCounter + count)
+//            programCounter += count
+//
+//            val frames = stack.sliceArray(0 until minOf(depth.toInt(), stack.size))
+//            isFinished = false
+//
+//            val regionInfo = RegionInfo(
+//                entryIndex = regionCounter,
+//                blob = blob,
+//                range = range,
+//                frames = frames
+//            )
+//            regionCounter += 1
+//            return regionInfo
+//        }
+//
+//        throw ProgramParseError("Found a line program with too many instructions")
+//    }
+//}
