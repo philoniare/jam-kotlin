@@ -1,13 +1,20 @@
 package io.forge.jam.core
 
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class AssuranceExtrinsic(
+    @Serializable(with = ByteArrayHexSerializer::class)
     val anchor: ByteArray,        // 32-byte anchor (hash)
+    @Serializable(with = ByteArrayHexSerializer::class)
     val bitfield: ByteArray,      // Bitfield indicating core assurance
+    @SerialName("validator_index")
     val validatorIndex: Int,      // Validator index (encoded as two bytes)
+    @Serializable(with = ByteArrayHexSerializer::class)
     val signature: ByteArray      // Ed25519 signature of the assurance
-) {
-    // Method to encode the extrinsic into a binary format
-    fun encode(): ByteArray {
+) : Encodable {
+    override fun encode(): ByteArray {
         // Encode validatorIndex as 2 bytes (little-endian)
         val validatorIndexBytes = ByteArray(2)
         validatorIndexBytes[0] = (validatorIndex and 0xFF).toByte()
