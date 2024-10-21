@@ -5,10 +5,10 @@ fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
 
 // Convert hex string to ByteArray
 fun String.hexToBytes(): ByteArray {
-    val hex = this.removePrefix("0x")
-    val len = hex.length
+    val len = length
     require(len % 2 == 0) { "Hex string must have even length" }
     return ByteArray(len / 2) { i ->
-        hex.substring(2 * i, 2 * i + 2).toInt(16).toByte()
+        substring(2 * i, 2 * i + 2).toInt(16).toByte()
     }
 }
+

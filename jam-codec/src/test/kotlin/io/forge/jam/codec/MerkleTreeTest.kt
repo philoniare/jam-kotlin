@@ -2,7 +2,7 @@ package io.forge.jam.core
 
 import merkle
 import org.junit.jupiter.api.Assertions.assertEquals
-import kotlin.test.Test
+import org.junit.jupiter.api.Test
 
 class MerkleTreeTest {
     @Test
