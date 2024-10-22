@@ -1,15 +1,19 @@
 package io.forge.jam.core
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class EpochMark(
+    @Serializable(with = ByteArrayHexSerializer::class)
     val entropy: ByteArray,
+    @Serializable(with = ByteArrayListHexSerializer::class)
     val validators: List<ByteArray>
-) {
-    fun encode(): ByteArray {
-        val entropyBytes = entropy
-        val validatorsCountBytes = validators.size.toLEBytes(4)
-        val validatorsBytes = validators.fold(byteArrayOf()) { acc, validator ->
-            acc + validator
-        }
-        return entropyBytes + validatorsCountBytes + validatorsBytes
+) : Encodable {
+    override fun encode(): ByteArray {
+        val validatorsBytes =
+            validators.fold(byteArrayOf()) { acc, validator ->
+                acc + validator
+            }
+        return entropy + validatorsBytes
     }
 }
