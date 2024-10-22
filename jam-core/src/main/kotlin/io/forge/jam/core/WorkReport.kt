@@ -1,22 +1,29 @@
 package io.forge.jam.core
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class Report(
+data class WorkReport(
+    @SerialName("package_spec")
     val packageSpec: PackageSpec,
     val context: Context,
-    val coreIndex: Int,
+    @SerialName("core_index")
+    val coreIndex: Long,
+    @SerialName("authorizer_hash")
+    @Serializable(with = ByteArrayHexSerializer::class)
     val authorizerHash: ByteArray,
+    @SerialName("auth_output")
+    @Serializable(with = ByteArrayHexSerializer::class)
     val authOutput: ByteArray,
     val results: List<WorkResult>
 ) : Encodable {
     override fun encode(): ByteArray {
         val packageSpecBytes = packageSpec.encode()
         val contextBytes = context.encode()
-        val coreIndexBytes = coreIndex.toLEBytes()
+        val coreIndexBytes = encodeFixedWidthInteger(coreIndex, 2, false)
         val authorizerHashBytes = authorizerHash
-        val authOutputLengthBytes = authOutput.size.toLEBytes()
+        val authOutputLengthBytes = encodeFixedWidthInteger(authOutput.size, 1, false)
         val authOutputBytes = authOutput
         val resultsBytes = encodeList(results)
         return packageSpecBytes + contextBytes + coreIndexBytes + authorizerHashBytes + authOutputLengthBytes + authOutputBytes + resultsBytes

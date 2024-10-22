@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class Guarantee(
-    val report: Report,
+    val report: WorkReport,
     val slot: Int,
     val signatures: List<GuaranteeSignature>
 ) : Encodable {
