@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class Vote(
     val vote: Boolean,
-    val index: Int,
+    val index: Long,
     @Serializable(with = ByteArrayHexSerializer::class)
     val signature: ByteArray
 ) : Encodable {

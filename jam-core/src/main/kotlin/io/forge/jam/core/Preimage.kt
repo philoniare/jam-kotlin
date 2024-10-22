@@ -4,14 +4,13 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class Preimage(
-    val requester: Int,
+    val requester: Long,
     @Serializable(with = ByteArrayHexSerializer::class)
     val blob: ByteArray
 ) : Encodable {
     override fun encode(): ByteArray {
-        val requesterBytes = encodeCompactInteger(requester)
-        val blobLengthBytes = encodeCompactInteger(blob.size)
+        val requesterBytes = encodeFixedWidthInteger(requester)
         val blobBytes = blob
-        return requesterBytes + blobLengthBytes + blobBytes
+        return requesterBytes + blobBytes
     }
 }

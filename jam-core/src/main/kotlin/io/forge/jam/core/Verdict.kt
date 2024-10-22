@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 data class Verdict(
     @Serializable(with = ByteArrayHexSerializer::class)
     val target: ByteArray,
-    val age: Int,
+    val age: Long,
     val votes: List<Vote>
 ) : Encodable {
     override fun encode(): ByteArray {
