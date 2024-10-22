@@ -10,8 +10,8 @@ data class Vote(
     val signature: ByteArray
 ) : Encodable {
     override fun encode(): ByteArray {
-        val voteByte = byteArrayOf(vote.toByte())
-        val indexBytes = index.toLEBytes()
+        val voteByte = byteArrayOf(if (vote) 1.toByte() else 0.toByte())
+        val indexBytes = encodeCompactInteger(index)
         val signatureBytes = signature
         return voteByte + indexBytes + signatureBytes
     }
