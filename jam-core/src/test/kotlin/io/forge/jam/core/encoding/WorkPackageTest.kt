@@ -1,19 +1,19 @@
 package io.forge.jam.core.encoding
 
-import io.forge.jam.core.WorkItem
+import io.forge.jam.core.WorkPackage
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 
-class WorkItemTest {
+class WorkPackageTest {
     @Test
-    fun testEncodeWorkItem() {
+    fun testEncodeWorkPackage() {
         // Load JSON data from resources using the class loader
-        val (inputWorkItem, expectedOutputBytes) = TestFileLoader.loadTestData<WorkItem>("work_item")
+        val (inputWorkPackage, expectedOutputBytes) = TestFileLoader.loadTestData<WorkPackage>("work_package")
 
         // Compare the concatenated encoded bytes with the expected output bytes
         assertContentEquals(
             expectedOutputBytes,
-            inputWorkItem.encode(),
+            inputWorkPackage.encode(),
             "Encoded bytes do not match expected output"
         )
     }
