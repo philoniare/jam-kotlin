@@ -11,8 +11,8 @@ data class Verdict(
 ) : Encodable {
     override fun encode(): ByteArray {
         val targetBytes = target
-        val ageBytes = encodeCompactInteger(age)
-        val votesBytes = encodeList(votes)
+        val ageBytes = encodeFixedWidthInteger(age, 4, false)
+        val votesBytes = encodeList(votes, false)
         return targetBytes + ageBytes + votesBytes
     }
 }

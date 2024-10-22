@@ -9,7 +9,7 @@ data class Dispute(
     val faults: List<Fault>
 ) : Encodable {
     override fun encode(): ByteArray {
-        val verdictsBytes = encodeList(verdicts, false)
+        val verdictsBytes = encodeList(verdicts)
         val culpritsBytes = encodeList(culprits)
         val faultsBytes = encodeList(faults)
         return verdictsBytes + culpritsBytes + faultsBytes

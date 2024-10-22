@@ -34,7 +34,7 @@ fun <T : Encodable> encodeList(list: List<T>, includeLength: Boolean = true): By
         acc + item.encode()
     }
     if (includeLength) {
-        val lengthBytes = encodeCompactInteger(list.size.toLong())
+        val lengthBytes = encodeFixedWidthInteger(list.size, 1, false)
         return lengthBytes + itemsBytes
     } else {
         return itemsBytes

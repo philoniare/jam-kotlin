@@ -11,8 +11,7 @@ class DisputeTest {
         val (inputDispute, expectedOutputBytes) = TestFileLoader.loadTestData<Dispute>("disputes_extrinsic")
 
         // Process each assurance
-        val versionByte = byteArrayOf(0x02)
-        val encodedDispute = versionByte + inputDispute.encode()
+        val encodedDispute = inputDispute.encode()
 
         // Compare the concatenated encoded bytes with the expected output bytes
         assertContentEquals(

@@ -11,7 +11,7 @@ data class Vote(
 ) : Encodable {
     override fun encode(): ByteArray {
         val voteByte = byteArrayOf(if (vote) 1.toByte() else 0.toByte())
-        val indexBytes = encodeCompactInteger(index)
+        val indexBytes = encodeFixedWidthInteger(index, 2, false)
         val signatureBytes = signature
         return voteByte + indexBytes + signatureBytes
     }
