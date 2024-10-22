@@ -12,8 +12,6 @@ class TestFileLoader {
          * @return The JSON data as a string.
          */
         fun loadJsonData(filename: String): String {
-            println("Current working directory: ${System.getProperty("user.dir")}")
-
             val jsonInputStream: InputStream = this::class.java.getResourceAsStream("/$filename.json")
                 ?: throw IllegalArgumentException("File not found: $filename.json")
 

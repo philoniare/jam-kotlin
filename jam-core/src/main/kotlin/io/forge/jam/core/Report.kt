@@ -9,7 +9,7 @@ data class Report(
     val coreIndex: Int,
     val authorizerHash: ByteArray,
     val authOutput: ByteArray,
-    val results: List<Result>
+    val results: List<WorkResult>
 ) : Encodable {
     override fun encode(): ByteArray {
         val packageSpecBytes = packageSpec.encode()

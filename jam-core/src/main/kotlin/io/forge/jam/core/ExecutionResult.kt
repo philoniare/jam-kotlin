@@ -3,20 +3,17 @@ package io.forge.jam.core
 import kotlinx.serialization.Serializable
 
 @Serializable
-sealed class ExecutionResult : Encodable {
-    data class Ok(val data: ByteArray) : ExecutionResult() {
-        override fun encode(): ByteArray {
-            val tag = byteArrayOf(0x00)
-            val dataLengthBytes = data.size.toLEBytes()
-            val dataBytes = data
-            return tag + dataLengthBytes + dataBytes
-        }
-    }
-
-    object Panic : ExecutionResult() {
-        override fun encode(): ByteArray {
-            val tag = byteArrayOf(0x01)
-            return tag
+data class ExecutionResult(
+    @Serializable(with = ByteArrayHexSerializer::class)
+    val ok: ByteArray? = null,
+    val panic: Boolean? = null,
+) : Encodable {
+    override fun encode(): ByteArray {
+        if (ok != null) {
+            val lengthBytes = encodeFixedWidthInteger(ok.size, 1, false)
+            return byteArrayOf(0) + lengthBytes + ok
+        } else {
+            return byteArrayOf(2)
         }
     }
 }
