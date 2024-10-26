@@ -9,6 +9,13 @@ data class EpochMark(
     @Serializable(with = ByteArrayListHexSerializer::class)
     val validators: List<ByteArray>
 ) : Encodable {
+    override fun toString(): String {
+        return "EpochMark(" +
+            "entropy=${entropy.toHex()}, " +
+            "validators=[${validators.joinToString(",") { it.toHex() }}]" +
+            ")"
+    }
+
     override fun encode(): ByteArray {
         val validatorsBytes =
             validators.fold(byteArrayOf()) { acc, validator ->

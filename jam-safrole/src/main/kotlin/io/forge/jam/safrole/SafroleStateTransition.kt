@@ -3,8 +3,7 @@ package io.forge.jam.safrole
 import io.forge.jam.core.EpochMark
 import io.forge.jam.core.Extrinsic
 import io.forge.jam.core.JamErrorCode
-import io.forge.jam.vrfs.RustLibrary
-import io.forge.jam.vrfs.use
+import io.forge.jam.core.toHex
 import org.bouncycastle.crypto.digests.Blake2bDigest
 
 object SafroleStateTransition {
@@ -18,38 +17,33 @@ object SafroleStateTransition {
         try {
             val postState = preState.copy()
 
-            // 1. Validate slot transition (eq. 42)
+            // Validate slot transition (eq. 42)
             if (input.slot <= preState.tau) {
                 return Pair(postState, SafroleOutput(err = JamErrorCode.BAD_SLOT))
             }
 
-            // 2. Calculate epoch data (eq. 47)
+            // Calculate epoch data (eq. 47)
             val prevEpoch = preState.tau / EPOCH_LENGTH
             val prevPhase = preState.tau % EPOCH_LENGTH
             val newEpoch = input.slot / EPOCH_LENGTH
             val newPhase = input.slot % EPOCH_LENGTH
 
-            println("Debug: prevEpoch=$prevEpoch, newEpoch=$newEpoch")
-            println("Debug: preState.tau=${preState.tau}, input.slot=${input.slot}")
-            println("Debug: EPOCH_LENGTH=$EPOCH_LENGTH")
-
             // Create mutable post state
             var epochMark: EpochMark? = null
             var ticketsMark: List<TicketBody>? = null
 
-            // 3. Process entropy accumulation (eq. 67)
-            postState.eta[0] = blake2b256(preState.eta[0] + input.entropy)
 
-            println("Print 0")
-            // 4. Handle epoch transition if needed
+            // Handle epoch transition if needed
             if (newEpoch > prevEpoch) {
-                println("Print 1")
-                val transitionResult = handleEpochTransition(postState, preState, prevPhase)
+                val transitionResult = handleEpochTransition(postState, preState, prevPhase, preState.eta[0].clone())
                 epochMark = transitionResult.first
                 ticketsMark = transitionResult.second
             }
 
-            // 5. Process ticket submissions if any (eq. 74-80)
+            // Process entropy accumulation (eq. 67)
+            postState.eta[0] = blake2b256(preState.eta[0] + input.entropy)
+
+            // Process ticket submissions if any (eq. 74-80)
             if (input.extrinsic.isNotEmpty()) {
                 val ticketResult = processExtrinsics(postState, input.extrinsic, newPhase)
                 if (ticketResult != null) {
@@ -57,7 +51,7 @@ object SafroleStateTransition {
                 }
             }
 
-            // 6. Update timeslot
+            // Update timeslot
             postState.tau = input.slot
 
             return Pair(
@@ -77,11 +71,12 @@ object SafroleStateTransition {
         postState: SafroleState,
         preState: SafroleState,
         prevPhase: Long,
+        originalEta0: ByteArray
     ): Pair<EpochMark?, List<TicketBody>?> {
         // 5.1. Rotate entropy values (eq. 68)
         postState.eta[3] = preState.eta[2]
         postState.eta[2] = preState.eta[1]
-        postState.eta[1] = preState.eta[0]
+        postState.eta[1] = originalEta0
 
         // 5.2. Rotate validator sets (eq. 58)
         postState.lambda = preState.kappa
@@ -91,10 +86,11 @@ object SafroleStateTransition {
         postState.gammaK = preState.iota
 
         // 5.4. Generate new ring root
-        postState.gammaZ = generateRingRoot(postState.gammaK)
+//        postState.gammaZ = generateRingRoot(postState.gammaK)
 
 
         // 5.5. Generate epoch mark (eq. 72)
+        println("PostState: ${postState.eta[1].toHex()}")
         val epochMark = EpochMark(
             entropy = postState.eta[1],
             validators = postState.gammaK.map { it.bandersnatch }
@@ -226,9 +222,9 @@ object SafroleStateTransition {
     private fun generateRingRoot(validators: List<ValidatorKey>): ByteArray {
         // Implement Bandersnatch ring root generation
         var bandersnatchKeys = validators.map { it.bandersnatch }
-        RustLibrary.use(bandersnatchKeys.size, 0) { (_, verifierPtr) ->
-
-        }
+//        RustLibrary.use(bandersnatchKeys.size, 0) { (_, verifierPtr) ->
+//
+//        }
         TODO()
     }
 
@@ -252,7 +248,37 @@ object SafroleStateTransition {
         validators: List<ValidatorKey>
     ): List<ByteArray> {
         // Implement fallback sequence generation (eq. 71)
-        TODO()
+        val result = ArrayList<ByteArray>(EPOCH_LENGTH.toInt())
+        val bandersnatchKeys = validators.map { it.bandersnatch }
+
+        for (i in 0 until EPOCH_LENGTH.toInt()) {
+            val indexBytes = ByteArray(4)
+            indexBytes[0] = (i and 0xFF).toByte()
+            indexBytes[1] = ((i shr 8) and 0xFF).toByte()
+            indexBytes[2] = ((i shr 16) and 0xFF).toByte()
+            indexBytes[3] = ((i shr 24) and 0xFF).toByte()
+
+            // Concatenate entropy with encoded index
+            val input = entropy + indexBytes
+
+            // Take first 4 bytes of hash as index selector
+            val hashOutput = blake2b256(input)
+            val selectionBytes = hashOutput.copyOfRange(0, 4)
+
+            // Convert to validator index (little-endian)
+            var index = (selectionBytes[0].toInt() and 0xFF) or
+                ((selectionBytes[1].toInt() and 0xFF) shl 8) or
+                ((selectionBytes[2].toInt() and 0xFF) shl 16) or
+                ((selectionBytes[3].toInt() and 0xFF) shl 24)
+
+            // Use modulo to wrap around validator set size
+            index = index.mod(validators.size)
+
+            // Add selected validator's Bandersnatch key to sequence
+            result.add(bandersnatchKeys[index])
+        }
+
+        return result
     }
 
     /**

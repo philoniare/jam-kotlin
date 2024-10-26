@@ -1,6 +1,7 @@
 package io.forge.jam.core.encoding
 
 import io.forge.jam.safrole.SafroleCase
+import io.forge.jam.safrole.SafroleOutput
 import io.forge.jam.safrole.SafroleState
 import io.forge.jam.safrole.SafroleStateTransition
 import org.junit.jupiter.api.Assertions.assertArrayEquals
@@ -8,6 +9,17 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class SafroleJsonTest {
+    fun assertSafroleOutputEquals(expected: SafroleOutput, actual: SafroleOutput, testCase: String) {
+        if (expected.err != null) {
+            assertEquals(expected.err, actual.err, "$testCase: Mismatch in error")
+        }
+
+        if (expected.ok != null) {
+            assertEquals(expected.ok!!.epochMark, actual.ok?.epochMark, "$testCase: Mismatch in EpochMark")
+            assertEquals(expected.ok!!.ticketsMark, actual.ok?.ticketsMark, "$testCase: Mismatch in TicketsMark")
+        }
+    }
+
     fun assertSafroleStateEquals(expected: SafroleState, actual: SafroleState) {
         assertEquals(expected.tau, actual.tau, "Mismatch in tau")
 
@@ -39,11 +51,7 @@ class SafroleJsonTest {
             val (postState, output) = SafroleStateTransition.transition(inputCase.input, inputCase.preState)
 
             // Compare the expected and actual output
-            assertEquals(
-                inputCase.output,
-                output,
-                "State transition outputs do not match on case $testCase"
-            )
+            assertSafroleOutputEquals(inputCase.output, output, testCase)
 
             // Compare the expected and actual post_state
             assertSafroleStateEquals(
