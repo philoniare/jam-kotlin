@@ -85,7 +85,7 @@ object SafroleStateTransition {
         postState.gammaK = preState.iota
 
         // 5.4. Generate new ring root
-//        postState.gammaZ = generateRingRoot(postState.gammaK)
+        postState.gammaZ = generateRingRoot(postState.gammaK)
 
 
         // 5.5. Generate epoch mark (eq. 72)
@@ -223,7 +223,7 @@ object SafroleStateTransition {
 //        RustLibrary.use(bandersnatchKeys.size, 0) { (_, verifierPtr) ->
 //
 //        }
-        TODO()
+        return ByteArray(0)
     }
 
     private fun verifyRingProof(

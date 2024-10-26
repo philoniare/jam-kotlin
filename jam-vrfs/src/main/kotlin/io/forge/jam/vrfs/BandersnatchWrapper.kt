@@ -65,7 +65,10 @@ object RustLibrary {
     external fun destroyProver(proverPtr: Long)
 
     @JvmStatic
-    external fun createVerifier(ringSize: Int, keys: List<ByteArray>): Long
+    external fun getVerifierCommitment(verifierPtr: Long): ByteArray?
+
+    @JvmStatic
+    external fun createVerifier(ringSize: Int, keys: ByteArray): Long
 
     @JvmStatic
     external fun destroyVerifier(verifierPtr: Long)
@@ -95,8 +98,9 @@ fun RustLibrary.use(
     proverKeyIndex: Int,
     block: (Pair<Long, Long>) -> Unit
 ) {
+    val concatenatedKeys: ByteArray = publicKeys.flatMap { it.toList() }.toByteArray()
     val proverPtr = createProver(ringSize, proverKeyIndex)
-    val verifierPtr = createVerifier(ringSize, publicKeys)
+    val verifierPtr = createVerifier(ringSize, concatenatedKeys)
     try {
         block(Pair(proverPtr, verifierPtr))
     } finally {

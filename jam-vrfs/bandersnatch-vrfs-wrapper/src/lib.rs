@@ -3,7 +3,7 @@ use ark_ec_vrfs::{prelude::ark_serialize, suites::bandersnatch::edwards::RingCon
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use bandersnatch::{IetfProof, Input, Output, Public, RingProof, Secret};
 use jni::objects::{JByteArray, JClass};
-use jni::sys::{jbyteArray, jint, jlong, jobjectArray};
+use jni::sys::{jbyteArray, jint, jlong};
 use jni::JNIEnv;
 use std::sync::OnceLock;
 
@@ -211,28 +211,86 @@ pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_destroyProver(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_createVerifier(
-    mut env: JNIEnv,
+pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_getVerifierCommitment(
+    env: JNIEnv,
     _class: JClass,
-    ring_size: jint,
-    keys: jobjectArray,
-) -> jlong {
-    let mut pub_keys = Vec::with_capacity(ring_size as usize);
-
-    for i in 0..ring_size {
-        let byte_array = env.get_object_array_element(keys, i).unwrap();
-        let byte_array = env.auto_local(byte_array);
-        let bytes = env.convert_byte_array(byte_array.as_obj()).unwrap();
-        pub_keys.push(bytes.to_vec());
+    verifier_ptr: jlong,
+) -> jbyteArray {
+    if verifier_ptr == 0 {
+        return throw_exception(env, "Null verifier pointer");
     }
 
-    // Initialize the ring
-    let ring: Vec<_> = pub_keys.iter().map(|key| Public::deserialize_compressed(key).unwrap()).collect();
+    unsafe {
+        let verifier = &*(verifier_ptr as *mut Verifier);
 
-    // Create the Verifier
+        let mut buf = Vec::new();
+        if verifier.commitment.serialize_compressed(&mut buf).is_err() {
+            return throw_exception(env, "Failed to serialize commitment");
+        }
+
+        match env.byte_array_from_slice(&buf) {
+            Ok(array) => array.into_raw(),
+            Err(e) => throw_exception(env, &format!("Failed to create output array: {}", e)),
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_createVerifier(
+    env: JNIEnv,
+    _class: JClass,
+    ring_size: jint,
+    keys: JByteArray,
+) -> jlong {
+    // Step 1: Convert the JByteArray to a Rust Vec<u8>
+    let key_bytes = match env.convert_byte_array(keys) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            eprintln!("Failed to convert byte array: {:?}", e);
+            return 0; // Return 0 or handle the error as appropriate
+        }
+    };
+
+    // Step 2: Determine the size of each public key
+    // This example assumes each public key is 32 bytes. Adjust as needed.
+    const PUBLIC_KEY_SIZE: usize = 32;
+
+    // Step 3: Validate the total length of the byte array
+    let expected_length = (ring_size as usize) * PUBLIC_KEY_SIZE;
+    if key_bytes.len() != expected_length {
+        eprintln!(
+            "Invalid key bytes length: expected {}, got {}",
+            expected_length,
+            key_bytes.len()
+        );
+        return 0; // Return 0 or handle the error as appropriate
+    }
+
+    // Step 4: Split the byte array into individual keys
+    let mut pub_keys = Vec::with_capacity(ring_size as usize);
+    for i in 0..ring_size as usize {
+        let start = i * PUBLIC_KEY_SIZE;
+        let end = start + PUBLIC_KEY_SIZE;
+        let key_slice = &key_bytes[start..end];
+        pub_keys.push(key_slice.to_vec());
+    }
+
+    // Step 5: Deserialize each public key
+    let mut ring = Vec::with_capacity(ring_size as usize);
+    for key in pub_keys.iter() {
+        match Public::deserialize_compressed(&mut &key[..]) {
+            Ok(public_key) => ring.push(public_key),
+            Err(e) => {
+                eprintln!("Failed to deserialize public key: {}", e);
+                return 0; // Return 0 or handle the error as appropriate
+            }
+        }
+    }
+
+    // Step 6: Create the Verifier
     let verifier = Verifier::new(ring);
 
-    // Return a raw pointer to the Verifier
+    // Step 7: Return a raw pointer to the Verifier as jlong
     Box::into_raw(Box::new(verifier)) as jlong
 }
 
@@ -254,7 +312,6 @@ fn throw_exception(mut env: JNIEnv, message: &str) -> jbyteArray {
     std::ptr::null_mut()
 }
 
-// Example usage in a JNI function:
 #[no_mangle]
 pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_proverRingVrfSign(
     env: JNIEnv,
@@ -294,7 +351,6 @@ pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_proverRingVrfSign(
     }
 }
 
-// Similar pattern for verifierRingVrfVerify:
 #[no_mangle]
 pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_verifierRingVrfVerify(
     env: JNIEnv,
