@@ -3,7 +3,6 @@ package io.forge.jam.safrole
 import io.forge.jam.core.EpochMark
 import io.forge.jam.core.Extrinsic
 import io.forge.jam.core.JamErrorCode
-import io.forge.jam.core.toHex
 import org.bouncycastle.crypto.digests.Blake2bDigest
 
 object SafroleStateTransition {
@@ -90,7 +89,6 @@ object SafroleStateTransition {
 
 
         // 5.5. Generate epoch mark (eq. 72)
-        println("PostState: ${postState.eta[1].toHex()}")
         val epochMark = EpochMark(
             entropy = postState.eta[1],
             validators = postState.gammaK.map { it.bandersnatch }
@@ -247,34 +245,30 @@ object SafroleStateTransition {
         entropy: ByteArray,
         validators: List<ValidatorKey>
     ): List<ByteArray> {
-        // Implement fallback sequence generation (eq. 71)
         val result = ArrayList<ByteArray>(EPOCH_LENGTH.toInt())
         val bandersnatchKeys = validators.map { it.bandersnatch }
 
         for (i in 0 until EPOCH_LENGTH.toInt()) {
+            // Little-endian encode the index i
             val indexBytes = ByteArray(4)
             indexBytes[0] = (i and 0xFF).toByte()
             indexBytes[1] = ((i shr 8) and 0xFF).toByte()
             indexBytes[2] = ((i shr 16) and 0xFF).toByte()
             indexBytes[3] = ((i shr 24) and 0xFF).toByte()
 
-            // Concatenate entropy with encoded index
+            // Generate slot-specific entropy
             val input = entropy + indexBytes
-
-            // Take first 4 bytes of hash as index selector
             val hashOutput = blake2b256(input)
             val selectionBytes = hashOutput.copyOfRange(0, 4)
 
-            // Convert to validator index (little-endian)
-            var index = (selectionBytes[0].toInt() and 0xFF) or
-                ((selectionBytes[1].toInt() and 0xFF) shl 8) or
-                ((selectionBytes[2].toInt() and 0xFF) shl 16) or
-                ((selectionBytes[3].toInt() and 0xFF) shl 24)
+            // Convert to unsigned integer
+            val unsignedValue = (selectionBytes[0].toLong() and 0xFF) or
+                ((selectionBytes[1].toLong() and 0xFF) shl 8) or
+                ((selectionBytes[2].toLong() and 0xFF) shl 16) or
+                ((selectionBytes[3].toLong() and 0xFF) shl 24)
 
-            // Use modulo to wrap around validator set size
-            index = index.mod(validators.size)
+            val index = (unsignedValue % validators.size).toInt()
 
-            // Add selected validator's Bandersnatch key to sequence
             result.add(bandersnatchKeys[index])
         }
 

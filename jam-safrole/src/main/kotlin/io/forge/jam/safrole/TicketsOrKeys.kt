@@ -16,7 +16,7 @@ data class TicketsOrKeys(
     }
 
     override fun toString(): String {
-        val keyHex = keys?.joinToString(",") { it.toHex() } ?: "null"
+        val keyHex = keys?.joinToString(",\n") { it.toHex() } ?: "null"
         val ticketsString = tickets?.joinToString(",") ?: "null"
         return "TicketsOrKeys(keys=$keyHex, tickets=$ticketsString)"
     }
