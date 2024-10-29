@@ -18,9 +18,12 @@ val libSuffix = when {
 }
 
 val nativeLibName = "${libPrefix}bandersnatch_vrfs_wrapper.$libSuffix"
-val rustProjectDir = project.projectDir.resolve("bandersnatch-vrfs-wrapper")
-val nativeLibs = project.parent?.buildDir?.resolve("native-libs")
-    ?: project.buildDir.resolve("native-libs")
+val rustProjectDir = File(project.projectDir.parent)
+    .resolve("jam-vrfs")
+    .resolve("bandersnatch-vrfs-wrapper")
+val nativeLibs = File(project.projectDir.parent)
+    .resolve("build")
+    .resolve("native-libs")
 val osName = when {
     os.isMacOsX -> "mac"
     os.isLinux -> "linux"
@@ -30,8 +33,6 @@ val osName = when {
 
 tasks.register<Copy>("copyNativeLib") {
     dependsOn("buildRust")
-
-    println("Folder: ${nativeLibs.resolve(osName)}")
 
     from(rustProjectDir.resolve("target/release/$nativeLibName"))
     into(nativeLibs.resolve(osName))
@@ -48,11 +49,42 @@ tasks.register<Copy>("copyNativeLib") {
     }
 }
 
+fun Process.text(): String {
+    return inputStream.bufferedReader().readText()
+}
+
 tasks.register<Exec>("buildRust") {
     workingDir(rustProjectDir)
-    println("$rustProjectDir")
-    commandLine("cargo", "build", "--release")
+    println("Working directory: $rustProjectDir")
+
+    // Get the cargo executable path
+    val cargoPath = when {
+        os.isWindows -> "where cargo".execute().text().trim()
+        else -> "which cargo".execute().text().trim()
+    }
+    println("Cargo path: $cargoPath")
+
+    // Use the full path to cargo
+    if (cargoPath.isNotEmpty()) {
+        commandLine(cargoPath, "build", "--release")
+    } else {
+        throw GradleException("Could not find cargo executable")
+    }
 }
+
+// Extension function to execute shell commands
+fun String.execute(): Process {
+    val parts = this.split("\\s".toRegex())
+    val proc = ProcessBuilder(*parts.toTypedArray())
+        .redirectOutput(ProcessBuilder.Redirect.PIPE)
+        .redirectError(ProcessBuilder.Redirect.PIPE)
+        .start()
+
+    proc.waitFor(10, TimeUnit.SECONDS)
+    return proc
+}
+
+
 
 dependencies {
     testImplementation(kotlin("test"))

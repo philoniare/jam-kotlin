@@ -3,7 +3,6 @@ package io.forge.jam.safrole
 import io.forge.jam.core.EpochMark
 import io.forge.jam.core.JamErrorCode
 import io.forge.jam.core.TicketEnvelope
-import io.forge.jam.core.toHex
 import io.forge.jam.vrfs.RustLibrary
 import org.bouncycastle.crypto.digests.Blake2bDigest
 
@@ -133,6 +132,12 @@ object SafroleStateTransition {
         val newTickets = mutableListOf<TicketBody>()
 
         for (ticket in tickets) {
+            // Check for valid attempt value
+            if (ticket.attempt > 1) {
+                return JamErrorCode.BAD_TICKET_ATTEMPT
+            }
+
+
             // Verify ring VRF proof
             if (!verifyRingProof(ticket.signature, postState.gammaZ, postState.eta[2], ticket.attempt)) {
                 return JamErrorCode.BAD_TICKET_PROOF
@@ -229,11 +234,7 @@ object SafroleStateTransition {
         entryIndex: Long
     ): Boolean {
         // Implement Ring VRF proof verification
-        println("proof: ${proof.toHex()}")
-        println("RingRoot: ${ringRoot.toHex()}")
-        println("entropy: ${entropy.toHex()}")
-        println("entryIndex: ${entryIndex}")
-        return true
+        return RustLibrary.verifyRingProof(entropy, entryIndex, proof, ringRoot)
     }
 
     private fun extractVrfOutput(proof: ByteArray): ByteArray {

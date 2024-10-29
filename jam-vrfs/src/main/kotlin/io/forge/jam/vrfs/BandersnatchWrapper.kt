@@ -62,7 +62,20 @@ object RustLibrary {
     ): ByteArray
 
     @JvmStatic
-    external fun rustFree(ptr: Long, len: Long)
+    fun verifyRingProof(
+        entropy: ByteArray,
+        attempt: Long,
+        signature: ByteArray,
+        commitment: ByteArray
+    ): Boolean {
+        try {
+            val result = verifierRingVrfVerify(entropy, attempt, signature, commitment)
+            // If result is all zeros, verification failed
+            return !result.all { it == 0.toByte() }
+        } catch (e: Exception) {
+            return false
+        }
+    }
 
     @JvmStatic
     fun generateRingRoot(

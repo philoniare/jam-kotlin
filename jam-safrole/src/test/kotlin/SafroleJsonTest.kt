@@ -51,6 +51,7 @@ class SafroleJsonTest {
             println("Current test in progress: $testCase")
             val (postState, output) = SafroleStateTransition.transition(inputCase.input, inputCase.preState)
             println("Output: $output")
+            println("Expected Output: ${inputCase.output}")
 
             // Compare the expected and actual output
             assertSafroleOutputEquals(inputCase.output, output, testCase)
