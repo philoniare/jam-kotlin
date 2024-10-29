@@ -40,7 +40,6 @@ class RustLibraryTest {
         val signatureBytes = signatureHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
         val gammaZ =
             "96a4b479612d8d2770d6a4785fa2f44e0befca6f008b176de51e309e2ee796d2b596e315fcb044495b75c3cb5c7fd4cdae0959758cac93d4ab8789c6aec4ba8f683c6b103cf6888f70edfcb8dcbbc1d85a8fa3832e0cd4503c7a1796c8d0c3f792e630ae2b14e758ab0960e372172203f4c9a41777dadd529971d7ab9d23ab29fe0e9c85ec450505dde7f5ac038274cf"
-        println("Len: ${gammaZ.length}")
         val gammaZBytes = gammaZ.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
         val entropy = "bb30a42c1e62f0afda5f0a4e8a562f7a13a24cea00ee81917b86b89e801314aa"
         val entropyBytes = entropy.chunked(2).map { it.toInt(16).toByte() }.toByteArray()

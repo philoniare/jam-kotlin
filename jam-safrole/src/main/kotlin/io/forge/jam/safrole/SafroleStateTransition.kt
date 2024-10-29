@@ -168,7 +168,6 @@ class SafroleStateTransition(private val config: SafroleConfig) {
 
         // Verify ordering
         if (!hasStrictlyIncreasingIdentifiers(newTickets)) {
-            println("NewTickets: $newTickets")
             return JamErrorCode.BAD_TICKET_ORDER
         }
 

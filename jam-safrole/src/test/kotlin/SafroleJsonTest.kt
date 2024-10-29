@@ -50,7 +50,6 @@ class SafroleJsonTest {
                 ".scale"
             )
 
-            println("Current test in progress: $testCase")
             val safrole = SafroleStateTransition(
                 SafroleConfig(
                     epochLength = 12,
@@ -59,8 +58,6 @@ class SafroleJsonTest {
                 )
             )
             val (postState, output) = safrole.transition(inputCase.input, inputCase.preState)
-            println("Output: $output")
-            println("Expected Output: ${inputCase.output}")
 
             // Compare the expected and actual output
             assertSafroleOutputEquals(inputCase.output, output, testCase)
@@ -84,7 +81,6 @@ class SafroleJsonTest {
                 ".scale"
             )
 
-            println("Current test in progress: $testCase")
             val safrole = SafroleStateTransition(
                 SafroleConfig(
                     epochLength = 600,
@@ -93,8 +89,6 @@ class SafroleJsonTest {
                 )
             )
             val (postState, output) = safrole.transition(inputCase.input, inputCase.preState)
-            println("Output: $output")
-            println("Expected Output: ${inputCase.output}")
 
             // Compare the expected and actual output
             assertSafroleOutputEquals(inputCase.output, output, testCase)
