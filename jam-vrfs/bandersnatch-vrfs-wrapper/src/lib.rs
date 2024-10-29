@@ -7,7 +7,6 @@ use jni::sys::{jbyte, jbyteArray, jint, jlong};
 use jni::JNIEnv;
 use std::sync::OnceLock;
 
-const RING_SIZE: usize = 6;
 static RING_CTX: OnceLock<RingContext> = OnceLock::new();
 const ERROR_RESULT: [u8; 32] = [0; 32];
 
@@ -41,17 +40,18 @@ fn vrf_input_point(vrf_input_data: &[u8]) -> Input {
     Input::new(vrf_input_data).unwrap()
 }
 
-fn initialize_ring_context(srs_data: &[u8]) -> Result<(), String> {
+fn initialize_ring_context(srs_data: &[u8], ring_size: jint) -> Result<(), String> {
     if RING_CTX.get().is_some() {
         return Ok(());  // Already initialized
     }
+    let ring_size = ring_size as usize;
 
     use bandersnatch::PcsParams;
 
     let pcs_params = PcsParams::deserialize_uncompressed_unchecked(&mut &srs_data[..])
         .map_err(|e| format!("Failed to deserialize PCS params: {}", e))?;
 
-    let ring_ctx = match RingContext::from_srs(RING_SIZE, pcs_params) {
+    let ring_ctx = match RingContext::from_srs(ring_size, pcs_params) {
         Ok(ctx) => ctx,
         Err(e) => return Err(format!("Failed to create ring context: {:?}", e)),
     };
@@ -69,17 +69,18 @@ fn ring_context() -> &'static RingContext {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_initializeContext(
+pub extern "system" fn Java_io_forge_jam_vrfs_BandersnatchWrapper_initializeContext(
     env: JNIEnv,
     _class: JClass,
     srs_data: JByteArray,
+    ring_size: jint,
 ) -> jbyteArray {
     let srs_bytes = match env.convert_byte_array(srs_data) {
         Ok(data) => data,
         Err(e) => return throw_exception(env, &format!("Failed to convert SRS data: {}", e)),
     };
 
-    if let Err(e) = initialize_ring_context(&srs_bytes) {
+    if let Err(e) = initialize_ring_context(&srs_bytes, ring_size) {
         return throw_exception(env, &format!("Failed to initialize context: {}", e));
     }
 
@@ -183,7 +184,7 @@ impl Verifier {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_createProver(
+pub extern "system" fn Java_io_forge_jam_vrfs_BandersnatchWrapper_createProver(
     _env: JNIEnv,
     _class: JClass,
     ring_size: jint,
@@ -205,7 +206,7 @@ pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_createProver(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_destroyProver(
+pub extern "system" fn Java_io_forge_jam_vrfs_BandersnatchWrapper_destroyProver(
     _env: JNIEnv,
     _class: JClass,
     prover_ptr: jlong,
@@ -218,7 +219,7 @@ pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_destroyProver(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_getVerifierCommitment(
+pub extern "system" fn Java_io_forge_jam_vrfs_BandersnatchWrapper_getVerifierCommitment(
     mut env: JNIEnv,
     _class: JClass,
     ring_size: jint,
@@ -294,7 +295,7 @@ pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_getVerifierCommitment(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_destroyVerifier(
+pub extern "system" fn Java_io_forge_jam_vrfs_BandersnatchWrapper_destroyVerifier(
     _env: JNIEnv,
     _class: JClass,
     verifier_ptr: jlong,
@@ -312,7 +313,7 @@ fn throw_exception(mut env: JNIEnv, message: &str) -> jbyteArray {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_proverRingVrfSign(
+pub extern "system" fn Java_io_forge_jam_vrfs_BandersnatchWrapper_proverRingVrfSign(
     env: JNIEnv,
     _class: JClass,
     prover_ptr: jlong,
@@ -351,7 +352,7 @@ pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_proverRingVrfSign(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_verifierRingVrfVerify(
+pub extern "system" fn Java_io_forge_jam_vrfs_BandersnatchWrapper_verifierRingVrfVerify(
     mut env: JNIEnv,
     _class: JClass,
     entropy: JByteArray,
@@ -396,7 +397,7 @@ pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_verifierRingVrfVerify(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_rustFree(
+pub extern "system" fn Java_io_forge_jam_vrfs_BandersnatchWrapper_rustFree(
     _env: JNIEnv,
     _class: JClass,
     ptr: jlong,

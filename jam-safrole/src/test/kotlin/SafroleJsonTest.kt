@@ -1,10 +1,7 @@
 package io.forge.jam.core.encoding
 
 import io.forge.jam.core.toHex
-import io.forge.jam.safrole.SafroleCase
-import io.forge.jam.safrole.SafroleOutput
-import io.forge.jam.safrole.SafroleState
-import io.forge.jam.safrole.SafroleStateTransition
+import io.forge.jam.safrole.*
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -43,7 +40,7 @@ class SafroleJsonTest {
     }
 
     @Test
-    fun testSafrole() {
+    fun testTinySafrole() {
         val folderName = "tiny"
         val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
 
@@ -54,7 +51,14 @@ class SafroleJsonTest {
             )
 
             println("Current test in progress: $testCase")
-            val (postState, output) = SafroleStateTransition.transition(inputCase.input, inputCase.preState)
+            val safrole = SafroleStateTransition(
+                SafroleConfig(
+                    epochLength = 12,
+                    ticketCutoff = 10,
+                    ringSize = 6
+                )
+            )
+            val (postState, output) = safrole.transition(inputCase.input, inputCase.preState)
             println("Output: $output")
             println("Expected Output: ${inputCase.output}")
 
@@ -67,6 +71,39 @@ class SafroleJsonTest {
                 postState,
             )
         }
+    }
 
+    @Test
+    fun testFullSafrole() {
+        val folderName = "full"
+        val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
+
+        for (testCase in testCases) {
+            val (inputCase) = TestFileLoader.loadTestData<SafroleCase>(
+                "$folderName/$testCase",
+                ".scale"
+            )
+
+            println("Current test in progress: $testCase")
+            val safrole = SafroleStateTransition(
+                SafroleConfig(
+                    epochLength = 600,
+                    ticketCutoff = 500,
+                    ringSize = 1023
+                )
+            )
+            val (postState, output) = safrole.transition(inputCase.input, inputCase.preState)
+            println("Output: $output")
+            println("Expected Output: ${inputCase.output}")
+
+            // Compare the expected and actual output
+            assertSafroleOutputEquals(inputCase.output, output, testCase)
+
+            // Compare the expected and actual post_state
+            assertSafroleStateEquals(
+                inputCase.postState,
+                postState,
+            )
+        }
     }
 }

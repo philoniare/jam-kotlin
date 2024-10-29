@@ -3,12 +3,11 @@ package io.forge.jam.safrole
 import io.forge.jam.core.EpochMark
 import io.forge.jam.core.JamErrorCode
 import io.forge.jam.core.TicketEnvelope
-import io.forge.jam.vrfs.RustLibrary
+import io.forge.jam.vrfs.BandersnatchWrapper
 import org.bouncycastle.crypto.digests.Blake2bDigest
 
-object SafroleStateTransition {
-    const val EPOCH_LENGTH: Long = 12
-    const val TICKET_CUTOFF: Long = 10
+class SafroleStateTransition(private val config: SafroleConfig) {
+    private val bandersnatchWrapper: BandersnatchWrapper = BandersnatchWrapper(config.ringSize)
 
     fun transition(
         input: SafroleInput,
@@ -23,10 +22,10 @@ object SafroleStateTransition {
             }
 
             // Calculate epoch data (eq. 47)
-            val prevEpoch = preState.tau / EPOCH_LENGTH
-            val prevPhase = preState.tau % EPOCH_LENGTH
-            val newEpoch = input.slot / EPOCH_LENGTH
-            val newPhase = input.slot % EPOCH_LENGTH
+            val prevEpoch = preState.tau / config.epochLength
+            val prevPhase = preState.tau % config.epochLength
+            val newEpoch = input.slot / config.epochLength
+            val newPhase = input.slot % config.epochLength
 
             // Create mutable post state
             var epochMark: EpochMark? = null
@@ -35,9 +34,9 @@ object SafroleStateTransition {
             // Check for tickets_mark condition
             // Same epoch AND crossing cutoff point Y and accumulator is full
             if (newEpoch == prevEpoch &&
-                prevPhase < TICKET_CUTOFF &&
-                newPhase >= TICKET_CUTOFF &&
-                postState.gammaA.size.toLong() == EPOCH_LENGTH
+                prevPhase < config.ticketCutoff &&
+                newPhase >= config.ticketCutoff &&
+                postState.gammaA.size.toLong() == config.epochLength
             ) {
                 ticketsMark = transformTicketsSequence(postState.gammaA)
             }
@@ -107,8 +106,8 @@ object SafroleStateTransition {
         // 5.6. Determine sealing sequence (eq. 69)
         if (
             newEpoch == prevEpoch + 1 && // Moving to next epoch only
-            prevPhase >= TICKET_CUTOFF && // Previous phase cutoff
-            preState.gammaA.size == EPOCH_LENGTH.toInt() // Accumulator full
+            prevPhase >= config.ticketCutoff && // Previous phase cutoff
+            preState.gammaA.size == config.epochLength.toInt() // Accumulator full
         ) {
             // Use accumulated tickets
             val ticketSequence = transformTicketsSequence(preState.gammaA)
@@ -134,7 +133,7 @@ object SafroleStateTransition {
         phase: Long
     ): JamErrorCode? {
         // Skip if in epoch tail
-        if (phase >= TICKET_CUTOFF) {
+        if (phase >= config.ticketCutoff) {
             return JamErrorCode.UNEXPECTED_TICKET
         }
 
@@ -177,7 +176,7 @@ object SafroleStateTransition {
         if (newTickets.isNotEmpty()) {
             postState.gammaA = (postState.gammaA + newTickets)
                 .sortedWith(Comparator { a, b -> a.id.compareTo(b.id) })
-                .take(EPOCH_LENGTH.toInt())
+                .take(config.epochLength.toInt())
         }
 
         return null
@@ -233,7 +232,7 @@ object SafroleStateTransition {
 
     private fun generateRingRoot(validators: List<ValidatorKey>): ByteArray {
         var bandersnatchKeys = validators.map { it.bandersnatch }
-        return RustLibrary.generateRingRoot(bandersnatchKeys, 6) ?: ByteArray(0)
+        return bandersnatchWrapper.generateRingRoot(bandersnatchKeys, config.ringSize) ?: ByteArray(0)
     }
 
     private fun verifyRingProof(
@@ -243,22 +242,18 @@ object SafroleStateTransition {
         entryIndex: Long
     ): ByteArray {
         // Implement Ring VRF proof verification
-        return RustLibrary.verifyRingProof(entropy, entryIndex, proof, ringRoot)
+        return bandersnatchWrapper.verifyRingProof(entropy, entryIndex, proof, ringRoot)
     }
 
-    private fun extractVrfOutput(proof: ByteArray): ByteArray {
-        // Extract VRF output from proof
-        return byteArrayOf(0)
-    }
 
     private fun generateFallbackSequence(
         entropy: ByteArray,
         validators: List<ValidatorKey>
     ): List<ByteArray> {
-        val result = ArrayList<ByteArray>(EPOCH_LENGTH.toInt())
+        val result = ArrayList<ByteArray>(config.epochLength.toInt())
         val bandersnatchKeys = validators.map { it.bandersnatch }
 
-        for (i in 0 until EPOCH_LENGTH.toInt()) {
+        for (i in 0 until config.epochLength.toInt()) {
             // Little-endian encode the index i
             val indexBytes = ByteArray(4)
             indexBytes[0] = (i and 0xFF).toByte()
