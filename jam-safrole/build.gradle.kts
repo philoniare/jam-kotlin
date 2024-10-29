@@ -11,7 +11,14 @@ dependencies {
     implementation(project(":jam-core"))
     implementation(project(":jam-vrfs"))
 
-
     testImplementation(kotlin("test"))
     testImplementation(project(":jam-core", configuration = "testArtifacts"))
+}
+
+tasks.test {
+    testLogging {
+        events("passed", "skipped", "failed", "standardOut", "standardError")
+        showStandardStreams = true
+        showStackTraces = true
+    }
 }

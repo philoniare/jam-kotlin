@@ -1,5 +1,4 @@
 import io.forge.jam.vrfs.RustLibrary
-import io.forge.jam.vrfs.use
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull

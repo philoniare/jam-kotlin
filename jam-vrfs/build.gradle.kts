@@ -19,21 +19,27 @@ val libSuffix = when {
 
 val nativeLibName = "${libPrefix}bandersnatch_vrfs_wrapper.$libSuffix"
 val rustProjectDir = project.projectDir.resolve("bandersnatch-vrfs-wrapper")
-val nativeLibs = project.buildDir.resolve("native-libs")
+val nativeLibs = project.parent?.buildDir?.resolve("native-libs")
+    ?: project.buildDir.resolve("native-libs")
+val osName = when {
+    os.isMacOsX -> "mac"
+    os.isLinux -> "linux"
+    os.isWindows -> "windows"
+    else -> throw GradleException("Unsupported operating system")
+}
 
 tasks.register<Copy>("copyNativeLib") {
     dependsOn("buildRust")
 
+    println("Folder: ${nativeLibs.resolve(osName)}")
+
     from(rustProjectDir.resolve("target/release/$nativeLibName"))
-    into(nativeLibs)
-
+    into(nativeLibs.resolve(osName))
     doFirst {
-        // Ensure directory exists
-        nativeLibs.mkdirs()
+        nativeLibs.resolve(osName).mkdirs()
     }
-
     doLast {
-        val libFile = nativeLibs.resolve(nativeLibName)
+        val libFile = nativeLibs.resolve(osName).resolve(nativeLibName)
         if (libFile.exists()) {
             libFile.setExecutable(true, false)
         } else {
@@ -72,5 +78,12 @@ tasks.clean {
             workingDir(rustProjectDir)
             commandLine("cargo", "clean")
         }
+    }
+}
+
+tasks.jar {
+    dependsOn("copyNativeLib")
+    from(nativeLibs) {
+        into("native-libs")
     }
 }

@@ -4,6 +4,7 @@ import io.forge.jam.core.EpochMark
 import io.forge.jam.core.JamErrorCode
 import io.forge.jam.core.TicketEnvelope
 import io.forge.jam.core.toHex
+import io.forge.jam.vrfs.RustLibrary
 import org.bouncycastle.crypto.digests.Blake2bDigest
 
 object SafroleStateTransition {
@@ -217,12 +218,14 @@ object SafroleStateTransition {
     }
 
     private fun generateRingRoot(validators: List<ValidatorKey>): ByteArray {
-        // Implement Bandersnatch ring root generation
         var bandersnatchKeys = validators.map { it.bandersnatch }
-//        RustLibrary.use(bandersnatchKeys.size, 0) { (_, verifierPtr) ->
-//
-//        }
-        return ByteArray(0)
+        var result = ByteArray(0)
+
+        RustLibrary.use(bandersnatchKeys, 6, 0) { (_, verifierPtr) ->
+            result = RustLibrary.getVerifierCommitment(verifierPtr)!!
+        }
+
+        return result
     }
 
     private fun verifyRingProof(

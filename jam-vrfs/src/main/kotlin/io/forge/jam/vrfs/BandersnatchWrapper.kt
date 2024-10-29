@@ -6,45 +6,37 @@ import java.io.File
 object RustLibrary {
     init {
         val libraryName = "bandersnatch_vrfs_wrapper"
-
-        try {
-            // First try the system property way
-            System.loadLibrary(libraryName)
-            val srsData = loadSrsData()
-            initializeContext(srsData)
-        } catch (e: UnsatisfiedLinkError) {
-            // If that fails, try to find it in the build directory
-            val buildDir = File("build/native-libs")
-            val libFileName = when {
-                System.getProperty("os.name").lowercase().contains("mac") -> "lib$libraryName.dylib"
-                System.getProperty("os.name").lowercase().contains("linux") -> "lib$libraryName.so"
-                System.getProperty("os.name").lowercase().contains("windows") -> "$libraryName.dll"
-                else -> throw RuntimeException("Unsupported operating system")
-            }
-
-            val libFile = buildDir.resolve(libFileName)
-            if (libFile.exists()) {
-                System.load(libFile.absolutePath)
-            } else {
-                // If still not found, try to locate it relative to the working directory
-                val workingDir = File(System.getProperty("user.dir"))
-                val alternativeLibFile = workingDir.resolve("build/native-libs/$libFileName")
-                if (alternativeLibFile.exists()) {
-                    System.load(alternativeLibFile.absolutePath)
-                } else {
-                    throw RuntimeException(
-                        """
-                        Cannot find native library. Tried:
-                        1. System library path: $libraryName
-                        2. Build directory: ${libFile.absolutePath}
-                        3. Working directory: ${alternativeLibFile.absolutePath}
-                        Current working directory: ${workingDir.absolutePath}
-                        Library path: ${System.getProperty("java.library.path")}
-                    """.trimIndent()
-                    )
-                }
-            }
+        val osNameProperty = System.getProperty("os.name").lowercase()
+        val osName = when {
+            osNameProperty.contains("mac") -> "mac"
+            osNameProperty.contains("linux") -> "linux"
+            osNameProperty.contains("windows") -> "windows"
+            else -> throw RuntimeException("Unsupported operating system: $osNameProperty")
         }
+
+        val libFileName = when (osName) {
+            "mac" -> "lib$libraryName.dylib"
+            "linux" -> "lib$libraryName.so"
+            "windows" -> "$libraryName.dll"
+            else -> throw RuntimeException("Unsupported operating system: $osName")
+        }
+
+        val projectDir = File(System.getProperty("user.dir"))
+        val parentBuildLib = projectDir.parentFile
+            ?.resolve("build")
+            ?.resolve("native-libs")
+            ?.resolve(osName)
+            ?.resolve(libFileName)
+
+        if (parentBuildLib?.exists() == true) {
+            System.load(parentBuildLib.absolutePath)
+        } else {
+            println("Native library not found in parent build directory")
+        }
+        
+        // Initialize the context as before
+        val srsData = loadSrsData()
+        initializeContext(srsData)
     }
 
     private fun loadSrsData(): ByteArray {
@@ -90,21 +82,21 @@ object RustLibrary {
 
     @JvmStatic
     external fun rustFree(ptr: Long, len: Long)
-}
 
-fun RustLibrary.use(
-    publicKeys: List<ByteArray>,
-    ringSize: Int,
-    proverKeyIndex: Int,
-    block: (Pair<Long, Long>) -> Unit
-) {
-    val concatenatedKeys: ByteArray = publicKeys.flatMap { it.toList() }.toByteArray()
-    val proverPtr = createProver(ringSize, proverKeyIndex)
-    val verifierPtr = createVerifier(ringSize, concatenatedKeys)
-    try {
-        block(Pair(proverPtr, verifierPtr))
-    } finally {
-        destroyProver(proverPtr)
-        destroyVerifier(verifierPtr)
+    fun use(
+        publicKeys: List<ByteArray>,
+        ringSize: Int,
+        proverKeyIndex: Int,
+        block: (Pair<Long, Long>) -> Unit
+    ) {
+        val concatenatedKeys: ByteArray = publicKeys.flatMap { it.toList() }.toByteArray()
+        val proverPtr = createProver(ringSize, proverKeyIndex)
+        val verifierPtr = createVerifier(ringSize, concatenatedKeys)
+        try {
+            block(Pair(proverPtr, verifierPtr))
+        } finally {
+            destroyProver(proverPtr)
+            destroyVerifier(verifierPtr)
+        }
     }
 }

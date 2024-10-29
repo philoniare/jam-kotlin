@@ -1,7 +1,9 @@
 package io.forge.jam.core.encoding
 
+import io.forge.jam.safrole.SafroleCase
 import io.forge.jam.safrole.SafroleOutput
 import io.forge.jam.safrole.SafroleState
+import io.forge.jam.safrole.SafroleStateTransition
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -32,7 +34,7 @@ class SafroleJsonTest {
         assertEquals(expected.iota, actual.iota, "Mismatch in iota")
         assertEquals(expected.gammaA, actual.gammaA, "Mismatch in gammaA")
         assertEquals(expected.gammaS, actual.gammaS, "Mismatch in gammaS")
-//        assertArrayEquals(expected.gammaZ, actual.gammaZ, "Mismatch in gammaZ")
+        assertArrayEquals(expected.gammaZ, actual.gammaZ, "Mismatch in gammaZ")
     }
 
     @Test
@@ -41,23 +43,23 @@ class SafroleJsonTest {
         val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
 
         for (testCase in testCases) {
-//            val (inputCase) = TestFileLoader.loadTestData<SafroleCase>(
-//                "$folderName/$testCase",
-//                ".scale"
-//            )
-//
-//            println("Current test in progress: $testCase")
-//            val (postState, output) = SafroleStateTransition.transition(inputCase.input, inputCase.preState)
-//            println("Output: $output")
-//
-//            // Compare the expected and actual output
-//            assertSafroleOutputEquals(inputCase.output, output, testCase)
-//
-//            // Compare the expected and actual post_state
-//            assertSafroleStateEquals(
-//                inputCase.postState,
-//                postState,
-//            )
+            val (inputCase) = TestFileLoader.loadTestData<SafroleCase>(
+                "$folderName/$testCase",
+                ".scale"
+            )
+
+            println("Current test in progress: $testCase")
+            val (postState, output) = SafroleStateTransition.transition(inputCase.input, inputCase.preState)
+            println("Output: $output")
+
+            // Compare the expected and actual output
+            assertSafroleOutputEquals(inputCase.output, output, testCase)
+
+            // Compare the expected and actual post_state
+            assertSafroleStateEquals(
+                inputCase.postState,
+                postState,
+            )
         }
 
     }
