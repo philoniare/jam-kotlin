@@ -40,9 +40,6 @@ object SafroleStateTransition {
                 ticketsMark = transitionResult.second
             }
 
-            // Process entropy accumulation (eq. 67)
-            postState.eta[0] = blake2b256(preState.eta[0] + input.entropy)
-
             // Process ticket submissions if any (eq. 74-80)
             if (input.extrinsic.isNotEmpty()) {
                 val ticketResult = processExtrinsics(postState, input.extrinsic, newPhase)
@@ -50,6 +47,9 @@ object SafroleStateTransition {
                     return Pair(postState, SafroleOutput(err = ticketResult))
                 }
             }
+
+            // Process entropy accumulation (eq. 67)
+            postState.eta[0] = blake2b256(preState.eta[0] + input.entropy)
 
             // Update timeslot
             postState.tau = input.slot
@@ -149,8 +149,7 @@ object SafroleStateTransition {
             )
 
             // Check uniqueness (eq. 78)
-            if (postState.gammaA.any { it.id.contentEquals(ticketBody.id) } ||
-                newTickets.any { it.id.contentEquals(ticketBody.id) }) {
+            if (postState.gammaA.any { it.id.contentEquals(ticketBody.id) }) {
                 return JamErrorCode.DUPLICATE_TICKET
             }
 

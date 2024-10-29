@@ -1,5 +1,6 @@
 package io.forge.jam.core.encoding
 
+import io.forge.jam.core.toHex
 import io.forge.jam.safrole.SafroleCase
 import io.forge.jam.safrole.SafroleOutput
 import io.forge.jam.safrole.SafroleState
@@ -21,11 +22,15 @@ class SafroleJsonTest {
     }
 
     fun assertSafroleStateEquals(expected: SafroleState, actual: SafroleState) {
-        assertEquals(expected.tau, actual.tau, "Mismatch in tau")
+        assertEquals(expected.tau, actual.tau, "Mismatch in tau.")
 
         assertEquals(expected.eta.size, actual.eta.size, "Mismatch in eta size")
         for (i in expected.eta.indices) {
-            assertArrayEquals(expected.eta[i], actual.eta[i], "Mismatch in eta at index $i")
+            assertArrayEquals(
+                expected.eta[i],
+                actual.eta[i],
+                "Mismatch in eta at index $i. Expected: ${expected.eta[i].toHex()}, Actual: ${actual.eta[i].toHex()}"
+            )
         }
 
         assertEquals(expected.lambda, actual.lambda, "Mismatch in lambda")
