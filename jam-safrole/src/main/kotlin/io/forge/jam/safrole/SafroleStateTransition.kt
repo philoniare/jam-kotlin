@@ -8,7 +8,7 @@ import org.bouncycastle.crypto.digests.Blake2bDigest
 
 object SafroleStateTransition {
     const val EPOCH_LENGTH: Long = 12
-    const val TICKET_CUTOFF: Long = 500
+    const val TICKET_CUTOFF: Long = 10
 
     fun transition(
         input: SafroleInput,
@@ -32,12 +32,20 @@ object SafroleStateTransition {
             var epochMark: EpochMark? = null
             var ticketsMark: List<TicketBody>? = null
 
+            // Check for tickets_mark condition
+            // Same epoch AND crossing cutoff point Y and accumulator is full
+            if (newEpoch == prevEpoch &&
+                prevPhase < TICKET_CUTOFF &&
+                newPhase >= TICKET_CUTOFF &&
+                postState.gammaA.size.toLong() == EPOCH_LENGTH
+            ) {
+                ticketsMark = transformTicketsSequence(postState.gammaA)
+            }
 
             // Handle epoch transition if needed
             if (newEpoch > prevEpoch) {
-                val transitionResult = handleEpochTransition(postState, preState, prevPhase, preState.eta[0].clone())
-                epochMark = transitionResult.first
-                ticketsMark = transitionResult.second
+                epochMark =
+                    handleEpochTransition(postState, preState, newEpoch, prevEpoch, prevPhase, preState.eta[0].clone())
             }
 
             // Process ticket submissions if any (eq. 74-80)
@@ -70,9 +78,11 @@ object SafroleStateTransition {
     private fun handleEpochTransition(
         postState: SafroleState,
         preState: SafroleState,
+        newEpoch: Long,
+        prevEpoch: Long,
         prevPhase: Long,
         originalEta0: ByteArray
-    ): Pair<EpochMark?, List<TicketBody>?> {
+    ): EpochMark {
         // 5.1. Rotate entropy values (eq. 68)
         postState.eta[3] = preState.eta[2]
         postState.eta[2] = preState.eta[1]
@@ -88,22 +98,21 @@ object SafroleStateTransition {
         // 5.4. Generate new ring root
         postState.gammaZ = generateRingRoot(postState.gammaK)
 
-
         // 5.5. Generate epoch mark (eq. 72)
         val epochMark = EpochMark(
             entropy = postState.eta[1],
             validators = postState.gammaK.map { it.bandersnatch }
         )
-        var ticketsMark: List<TicketBody>? = null
 
         // 5.6. Determine sealing sequence (eq. 69)
-        if (prevPhase >= TICKET_CUTOFF && preState.gammaA.size == EPOCH_LENGTH.toInt()) {
+        if (
+            newEpoch == prevEpoch + 1 && // Moving to next epoch only
+            prevPhase >= TICKET_CUTOFF && // Previous phase cutoff
+            preState.gammaA.size == EPOCH_LENGTH.toInt() // Accumulator full
+        ) {
             // Use accumulated tickets
             val ticketSequence = transformTicketsSequence(preState.gammaA)
             postState.gammaS = TicketsOrKeys.fromTickets(ticketSequence)
-
-            // Generate tickets mark (eq. 73)
-            ticketsMark = ticketSequence
         } else {
             // Use fallback sequence (eq. 71)
             val fallbackKeys = generateFallbackSequence(
@@ -116,7 +125,7 @@ object SafroleStateTransition {
         // 5.7. Clear ticket accumulator
         postState.gammaA = emptyList()
 
-        return Pair(epochMark, ticketsMark)
+        return epochMark
     }
 
     private fun processExtrinsics(
@@ -143,7 +152,7 @@ object SafroleStateTransition {
             if (ticketId.all { it == 0.toByte() }) {
                 return JamErrorCode.BAD_TICKET_PROOF
             }
-            
+
             val ticketBody = TicketBody(
                 id = ticketId,
                 attempt = ticket.attempt

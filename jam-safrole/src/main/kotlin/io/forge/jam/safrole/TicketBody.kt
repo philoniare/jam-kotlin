@@ -1,6 +1,7 @@
 package io.forge.jam.safrole
 
 import io.forge.jam.core.ByteArrayHexSerializer
+import io.forge.jam.core.toHex
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -9,6 +10,13 @@ data class TicketBody(
     val id: ByteArray,
     val attempt: Long
 ) {
+    override fun toString(): String {
+        return "TicketBody(" +
+            "id=${id.toHex()}, " +
+            "attempt=[${attempt}]" +
+            ")"
+    }
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is TicketBody) return false
