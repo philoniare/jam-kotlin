@@ -3,15 +3,32 @@ use ark_ec_vrfs::{prelude::ark_serialize, suites::bandersnatch::edwards::RingCon
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use bandersnatch::{Input, Output, Public, RingProof, Secret};
 use jni::objects::{JByteArray, JClass};
-use jni::sys::{jbyteArray, jint, jlong};
+use jni::sys::{jbyte, jbyteArray, jint, jlong};
 use jni::JNIEnv;
 use std::sync::OnceLock;
 
 const RING_SIZE: usize = 6;
 static RING_CTX: OnceLock<RingContext> = OnceLock::new();
+const ERROR_RESULT: [u8; 32] = [0; 32];
 
 type RingCommitment = ark_ec_vrfs::ring::RingCommitment<bandersnatch::BandersnatchSha512Ell2>;
 
+#[derive(Debug)]
+enum VrfError {
+    DeserializationError(&'static str),
+    VerificationError,
+    ConversionError,
+}
+
+impl std::fmt::Display for VrfError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VrfError::DeserializationError(msg) => write!(f, "Deserialization error: {}", msg),
+            VrfError::VerificationError => write!(f, "VRF verification failed"),
+            VrfError::ConversionError => write!(f, "Data conversion error"),
+        }
+    }
+}
 
 #[derive(CanonicalSerialize, CanonicalDeserialize)]
 struct RingVrfSignature {
@@ -134,34 +151,34 @@ impl Verifier {
     /// Used for tickets verification.
     ///
     /// On success returns the VRF output hash.
-    pub fn ring_vrf_verify(
-        &self,
-        vrf_input_data: &[u8],
-        aux_data: &[u8],
+    fn ring_vrf_verify(
+        entropy: &[u8],
+        attempt: u8,
         signature: &[u8],
-    ) -> Result<[u8; 32], ()> {
+        commitment: &[u8],
+    ) -> Result<[u8; 32], VrfError> {
         use ark_ec_vrfs::ring::Verifier as _;
 
-        let signature = RingVrfSignature::deserialize_compressed(signature).unwrap();
+        let commitment = RingCommitment::deserialize_compressed(commitment)
+            .map_err(|_| VrfError::DeserializationError("invalid commitment format"))?;
 
-        let input = vrf_input_point(vrf_input_data);
+        let signature = RingVrfSignature::deserialize_compressed(signature)
+            .map_err(|_| VrfError::DeserializationError("invalid signature format"))?;
+        let input_data = [b"jam_ticket_seal", &entropy[..], &[attempt]].concat();
+
+        let input = vrf_input_point(&input_data);
         let output = signature.output;
 
         let ring_ctx = ring_context();
 
-        // The verifier key is reconstructed from the commitment and the constant
-        // verifier key component of the SRS in order to verify some proof.
-        // As an alternative we can construct the verifier key using the
-        // RingContext::verifier_key() method, but is more expensive.
-        // In other words, we prefer computing the commitment once, when the keyset changes.
-        let verifier_key = ring_ctx.verifier_key_from_commitment(self.commitment.clone());
+        let verifier_key = ring_ctx.verifier_key_from_commitment(commitment);
         let verifier = ring_ctx.verifier(verifier_key);
-        if Public::verify(input, output, aux_data, &signature.proof, &verifier).is_err() {
-            return Err(());
+        if Public::verify(input, output, &[], &signature.proof, &verifier).is_err() {
+            return Err(VrfError::VerificationError);
         }
-        // This truncated hash is the actual value used as ticket-id/score in JAM
-        let vrf_output_hash: [u8; 32] = output.hash()[..32].try_into().unwrap();
-        Ok(vrf_output_hash)
+        output.hash()[..32]
+            .try_into()
+            .map_err(|_| VrfError::ConversionError)
     }
 }
 
@@ -202,58 +219,39 @@ pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_destroyProver(
 
 #[no_mangle]
 pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_getVerifierCommitment(
-    env: JNIEnv,
-    _class: JClass,
-    verifier_ptr: jlong,
-) -> jbyteArray {
-    if verifier_ptr == 0 {
-        return throw_exception(env, "Null verifier pointer");
-    }
-
-    unsafe {
-        let verifier = &*(verifier_ptr as *mut Verifier);
-
-        let mut buf = Vec::new();
-        if verifier.commitment.serialize_compressed(&mut buf).is_err() {
-            return throw_exception(env, "Failed to serialize commitment");
-        }
-
-        match env.byte_array_from_slice(&buf) {
-            Ok(array) => array.into_raw(),
-            Err(e) => throw_exception(env, &format!("Failed to create output array: {}", e)),
-        }
-    }
-}
-
-#[no_mangle]
-pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_createVerifier(
-    env: JNIEnv,
+    mut env: JNIEnv,
     _class: JClass,
     ring_size: jint,
     keys: JByteArray,
-) -> jlong {
+) -> jbyteArray {
+    // Helper function to throw exception and return null
+    fn throw_and_return_null(env: &mut JNIEnv, message: &str) -> jbyteArray {
+        let _ = env.throw_new("java/lang/RuntimeException", message);
+        std::ptr::null_mut()
+    }
+
     // Step 1: Convert the JByteArray to a Rust Vec<u8>
     let key_bytes = match env.convert_byte_array(keys) {
         Ok(bytes) => bytes,
         Err(e) => {
-            eprintln!("Failed to convert byte array: {:?}", e);
-            return 0; // Return 0 or handle the error as appropriate
+            return throw_and_return_null(&mut env, &format!("Failed to convert byte array: {:?}", e));
         }
     };
 
     // Step 2: Determine the size of each public key
-    // This example assumes each public key is 32 bytes. Adjust as needed.
     const PUBLIC_KEY_SIZE: usize = 32;
 
     // Step 3: Validate the total length of the byte array
     let expected_length = (ring_size as usize) * PUBLIC_KEY_SIZE;
     if key_bytes.len() != expected_length {
-        eprintln!(
-            "Invalid key bytes length: expected {}, got {}",
-            expected_length,
-            key_bytes.len()
+        return throw_and_return_null(
+            &mut env,
+            &format!(
+                "Invalid key bytes length: expected {}, got {}",
+                expected_length,
+                key_bytes.len()
+            ),
         );
-        return 0; // Return 0 or handle the error as appropriate
     }
 
     // Step 4: Split the byte array into individual keys
@@ -271,8 +269,10 @@ pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_createVerifier(
         match Public::deserialize_compressed(&mut &key[..]) {
             Ok(public_key) => ring.push(public_key),
             Err(e) => {
-                eprintln!("Failed to deserialize public key: {}", e);
-                return 0; // Return 0 or handle the error as appropriate
+                return throw_and_return_null(
+                    &mut env,
+                    &format!("Failed to deserialize public key: {}", e),
+                );
             }
         }
     }
@@ -280,8 +280,17 @@ pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_createVerifier(
     // Step 6: Create the Verifier
     let verifier = Verifier::new(ring);
 
-    // Step 7: Return a raw pointer to the Verifier as jlong
-    Box::into_raw(Box::new(verifier)) as jlong
+    // Step 7: Serialize the commitment
+    let mut buf = Vec::new();
+    if verifier.commitment.serialize_compressed(&mut buf).is_err() {
+        return throw_and_return_null(&mut env, "Failed to serialize commitment");
+    }
+
+    // Step 8: Convert to JByteArray
+    match env.byte_array_from_slice(&buf) {
+        Ok(array) => array.into_raw(),
+        Err(e) => throw_and_return_null(&mut env, &format!("Failed to create output array: {}", e)),
+    }
 }
 
 #[no_mangle]
@@ -343,44 +352,46 @@ pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_proverRingVrfSign(
 
 #[no_mangle]
 pub extern "system" fn Java_io_forge_jam_vrfs_RustLibrary_verifierRingVrfVerify(
-    env: JNIEnv,
+    mut env: JNIEnv,
     _class: JClass,
-    verifier_ptr: jlong,
-    vrf_input_data: JByteArray,
-    aux_data: JByteArray,
+    entropy: JByteArray,
+    attempt: jbyte,
     signature: JByteArray,
+    commitment: JByteArray,
 ) -> jbyteArray {
-    if verifier_ptr == 0 {
-        return throw_exception(env, "Null verifier pointer");
-    }
-
-    unsafe {
-        let verifier = &*(verifier_ptr as *mut Verifier);
-
-        let vrf_input_data = match env.convert_byte_array(vrf_input_data) {
-            Ok(data) => data,
-            Err(e) => return throw_exception(env, &format!("Failed to convert input data: {}", e)),
-        };
-
-        let aux_data = match env.convert_byte_array(aux_data) {
-            Ok(data) => data,
-            Err(e) => return throw_exception(env, &format!("Failed to convert aux data: {}", e)),
-        };
-
-        let signature_data = match env.convert_byte_array(signature) {
-            Ok(data) => data,
-            Err(e) => return throw_exception(env, &format!("Failed to convert signature: {}", e)),
-        };
-
-        match verifier.ring_vrf_verify(&vrf_input_data, &aux_data, &signature_data) {
-            Ok(output_hash) => {
-                match env.byte_array_from_slice(&output_hash) {
-                    Ok(array) => array.into_raw(),
-                    Err(e) => throw_exception(env, &format!("Failed to create output array: {}", e)),
-                }
-            }
-            Err(_) => throw_exception(env, "Verification failed"),
+    let return_error = |env: &mut JNIEnv, error_msg: &str| -> jbyteArray {
+        let _ = env.throw_new("java/lang/RuntimeException", error_msg);
+        match env.byte_array_from_slice(&ERROR_RESULT) {
+            Ok(array) => array.into_raw(),
+            Err(_) => std::ptr::null_mut()
         }
+    };
+
+    // Convert input parameters
+    let entropy_data = match env.convert_byte_array(entropy) {
+        Ok(data) => data,
+        Err(_) => return return_error(&mut env, "Failed to convert entropy data"),
+    };
+
+    let signature_data = match env.convert_byte_array(signature) {
+        Ok(data) => data,
+        Err(_) => return return_error(&mut env, "Failed to convert signature data"),
+    };
+
+    let commitment_data = match env.convert_byte_array(commitment) {
+        Ok(data) => data,
+        Err(_) => return return_error(&mut env, "Failed to convert commitment data"),
+    };
+
+    let attempt_value = attempt as u8;
+
+    // Perform verification
+    match Verifier::ring_vrf_verify(&entropy_data, attempt_value, &signature_data, &commitment_data) {
+        Ok(output_hash) => match env.byte_array_from_slice(&output_hash) {
+            Ok(array) => array.into_raw(),
+            Err(_) => return_error(&mut env, "Failed to create output array")
+        },
+        Err(e) => return_error(&mut env, &e.to_string())
     }
 }
 

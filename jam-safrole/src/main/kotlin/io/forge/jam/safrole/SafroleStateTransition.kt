@@ -219,13 +219,7 @@ object SafroleStateTransition {
 
     private fun generateRingRoot(validators: List<ValidatorKey>): ByteArray {
         var bandersnatchKeys = validators.map { it.bandersnatch }
-        var result = ByteArray(0)
-
-        RustLibrary.use(bandersnatchKeys, 6, 0) { (_, verifierPtr) ->
-            result = RustLibrary.getVerifierCommitment(verifierPtr)!!
-        }
-
-        return result
+        return RustLibrary.generateRingRoot(bandersnatchKeys, 6) ?: ByteArray(0)
     }
 
     private fun verifyRingProof(

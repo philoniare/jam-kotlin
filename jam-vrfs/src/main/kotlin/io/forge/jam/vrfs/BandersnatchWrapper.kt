@@ -33,7 +33,7 @@ object RustLibrary {
         } else {
             println("Native library not found in parent build directory")
         }
-        
+
         // Initialize the context as before
         val srsData = loadSrsData()
         initializeContext(srsData)
@@ -51,52 +51,25 @@ object RustLibrary {
     external fun initializeContext(srsData: ByteArray): ByteArray
 
     @JvmStatic
-    external fun createProver(ringSize: Int, proverKeyIndex: Int): Long
-
-    @JvmStatic
-    external fun destroyProver(proverPtr: Long)
-
-    @JvmStatic
-    external fun getVerifierCommitment(verifierPtr: Long): ByteArray?
-
-    @JvmStatic
-    external fun createVerifier(ringSize: Int, keys: ByteArray): Long
-
-    @JvmStatic
-    external fun destroyVerifier(verifierPtr: Long)
-
-    @JvmStatic
-    external fun proverRingVrfSign(
-        proverPtr: Long,
-        vrfInputData: ByteArray,
-        auxData: ByteArray
-    ): ByteArray?
+    external fun getVerifierCommitment(ringSize: Int, keys: ByteArray): ByteArray?
 
     @JvmStatic
     external fun verifierRingVrfVerify(
-        verifierPtr: Long,
-        vrfInputData: ByteArray,
-        auxData: ByteArray,
-        signature: ByteArray
-    ): ByteArray?
+        entropy: ByteArray,
+        attempt: Long,
+        signature: ByteArray,
+        commitment: ByteArray
+    ): ByteArray
 
     @JvmStatic
     external fun rustFree(ptr: Long, len: Long)
 
-    fun use(
+    @JvmStatic
+    fun generateRingRoot(
         publicKeys: List<ByteArray>,
         ringSize: Int,
-        proverKeyIndex: Int,
-        block: (Pair<Long, Long>) -> Unit
-    ) {
+    ): ByteArray? {
         val concatenatedKeys: ByteArray = publicKeys.flatMap { it.toList() }.toByteArray()
-        val proverPtr = createProver(ringSize, proverKeyIndex)
-        val verifierPtr = createVerifier(ringSize, concatenatedKeys)
-        try {
-            block(Pair(proverPtr, verifierPtr))
-        } finally {
-            destroyProver(proverPtr)
-            destroyVerifier(verifierPtr)
-        }
+        return getVerifierCommitment(ringSize, concatenatedKeys)
     }
 }
