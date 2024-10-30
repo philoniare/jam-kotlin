@@ -2,6 +2,7 @@ package io.forge.jam.safrole
 
 import io.forge.jam.core.serializers.ByteArrayHexSerializer
 import io.forge.jam.core.serializers.ByteArrayListHexSerializer
+import io.forge.jam.core.toHex
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -20,4 +21,9 @@ data class HistoricalBeta(
     @SerialName("reported")
     @Serializable(with = ByteArrayListHexSerializer::class)
     val reported: List<ByteArray>
-)
+) {
+    override fun toString(): String {
+        val reportedHex = reported.joinToString(", ") { it.toHex() }
+        return "\nHistoricalBeta(headerHash=${headerHash.toHex()}, mmr=$mmr, stateRoot=${stateRoot.toHex()}, reported=[$reportedHex])"
+    }
+}

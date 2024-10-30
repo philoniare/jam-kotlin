@@ -9,11 +9,23 @@ class HistoryTransition {
 
     fun stf(input: HistoricalInput, preState: HistoricalState): HistoricalState {
         validateInputs(input)
+
+        val updatedPreState = if (preState.beta.isNotEmpty()) {
+            val lastBlock = preState.beta.last().copy(
+                stateRoot = input.parentStateRoot
+            )
+            preState.copy(
+                beta = preState.beta.dropLast(1) + lastBlock,
+            )
+        } else {
+            preState
+        }
+
         val newMmr = appendToMmr(
-            if (preState.beta.isEmpty()) {
+            if (updatedPreState.beta.isEmpty()) {
                 HistoricalMmr(peaks = listOf())
             } else {
-                preState.beta.last().mmr
+                updatedPreState.beta.last().mmr
             },
             input.accumulateRoot
         )
@@ -24,7 +36,7 @@ class HistoryTransition {
             reported = input.workPackages
         )
 
-        val newBeta = (preState.beta + newBlock).takeLast(BLOCK_HISTORY_LIMIT)
+        val newBeta = (updatedPreState.beta + newBlock).takeLast(BLOCK_HISTORY_LIMIT)
         return HistoricalState(beta = newBeta)
     }
 
