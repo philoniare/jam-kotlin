@@ -1,0 +1,32 @@
+package io.forge.jam.safrole
+
+import io.forge.jam.core.serializers.NullableByteArrayListSerializer
+import io.forge.jam.core.toHex
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class HistoricalMmr(
+    @Serializable(with = NullableByteArrayListSerializer::class)
+    val peaks: List<ByteArray?>
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is HistoricalMmr) return false
+
+        if (peaks.size != other.peaks.size) return false
+
+        return peaks.zip(other.peaks).all { (a, b) ->
+            a === b || (a != null && b != null && a.contentEquals(b))
+        }
+    }
+
+    override fun hashCode(): Int {
+        return peaks.fold(0) { acc, bytes ->
+            31 * acc + (bytes?.contentHashCode() ?: 0)
+        }
+    }
+
+    override fun toString(): String {
+        return "HistoricalMmr(peaks=${peaks.map { it?.toHex() ?: "null" }})"
+    }
+}
