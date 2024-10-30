@@ -1,7 +1,7 @@
 package io.forge.jam.safrole
 
-import io.forge.jam.core.ByteArrayHexSerializer
 import io.forge.jam.core.TicketEnvelope
+import io.forge.jam.core.serializers.ByteArrayHexSerializer
 import kotlinx.serialization.Serializable
 
 @Serializable

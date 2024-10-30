@@ -1,5 +1,6 @@
-package io.forge.jam.core
+package io.forge.jam.core.serializers
 
+import io.forge.jam.core.hexToBytes
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor

@@ -1,4 +1,4 @@
-package io.forge.jam.core
+package io.forge.jam.core.serializers
 
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.ListSerializer

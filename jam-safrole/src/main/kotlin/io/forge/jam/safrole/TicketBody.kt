@@ -1,6 +1,6 @@
 package io.forge.jam.safrole
 
-import io.forge.jam.core.ByteArrayHexSerializer
+import io.forge.jam.core.serializers.ByteArrayHexSerializer
 import io.forge.jam.core.toHex
 import kotlinx.serialization.Serializable
 

@@ -1,5 +1,7 @@
 package io.forge.jam.core
 
+import io.forge.jam.core.serializers.ByteArrayHexSerializer
+import io.forge.jam.core.serializers.ByteArrayListHexSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
