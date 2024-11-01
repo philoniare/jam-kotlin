@@ -8,17 +8,17 @@ import kotlinx.serialization.Serializable
 data class Psi(
     @SerialName("psi_g")
     @Serializable(with = ByteArrayListHexSerializer::class)
-    val psiG: List<ByteArray>,
+    val psiG: MutableList<ByteArray>,
 
     @SerialName("psi_b")
     @Serializable(with = ByteArrayListHexSerializer::class)
-    val psiB: List<ByteArray>,
+    val psiB: MutableList<ByteArray>,
 
     @SerialName("psi_w")
     @Serializable(with = ByteArrayListHexSerializer::class)
-    val psiW: List<ByteArray>,
+    val psiW: MutableList<ByteArray>,
 
     @SerialName("psi_o")
     @Serializable(with = ByteArrayListHexSerializer::class)
-    val psiO: List<ByteArray>,
+    val psiO: MutableList<ByteArray>,
 )

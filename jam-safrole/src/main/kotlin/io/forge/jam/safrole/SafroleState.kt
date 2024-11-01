@@ -43,6 +43,6 @@ data class SafroleState(
 
 
     @Serializable(with = NullableAvailabilityAssignmentListSerializer::class)
-    val rho: List<AvailabilityAssignment?>? = null,
-    val psi: Psi? = null
+    var rho: MutableList<AvailabilityAssignment?>? = null,
+    var psi: Psi? = null
 )

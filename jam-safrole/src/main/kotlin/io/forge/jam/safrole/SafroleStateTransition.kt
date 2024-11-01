@@ -1,10 +1,17 @@
 package io.forge.jam.safrole
 
+import io.forge.jam.core.Dispute
 import io.forge.jam.core.EpochMark
 import io.forge.jam.core.JamErrorCode
 import io.forge.jam.core.TicketEnvelope
 import io.forge.jam.vrfs.BandersnatchWrapper
 import org.bouncycastle.crypto.digests.Blake2bDigest
+import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
+import org.bouncycastle.crypto.signers.Ed25519Signer
+
+private const val JAM_VALID = "jam_valid"
+private const val JAM_INVALID = "jam_invalid"
+private const val JAM_GUARANTEE = "jam_guarantee"
 
 class SafroleStateTransition(private val config: SafroleConfig) {
     private val bandersnatchWrapper: BandersnatchWrapper = BandersnatchWrapper(config.ringSize)
@@ -15,6 +22,20 @@ class SafroleStateTransition(private val config: SafroleConfig) {
     ): Pair<SafroleState, SafroleOutput> {
         try {
             val postState = preState.copy()
+
+            // Create mutable post state
+            var epochMark: EpochMark? = null
+            var ticketsMark: List<TicketBody>? = null
+            var offendersMark: List<ByteArray>? = null
+
+            // Process disputes without slot advancement
+            if (input.disputes != null) {
+                offendersMark = processDisputes(input.disputes, postState)
+                // If only processing disputes, return immediately
+                if (input.slot == preState.tau) {
+                    return Pair(postState, SafroleOutput(ok = OutputMarks(offendersMark = offendersMark)))
+                }
+            }
 
             // Validate slot transition (eq. 42)
             if (input.slot <= preState.tau) {
@@ -27,9 +48,6 @@ class SafroleStateTransition(private val config: SafroleConfig) {
             val newEpoch = input.slot / config.epochLength
             val newPhase = input.slot % config.epochLength
 
-            // Create mutable post state
-            var epochMark: EpochMark? = null
-            var ticketsMark: List<TicketBody>? = null
 
             // Check for tickets_mark condition
             // Same epoch AND crossing cutoff point Y and accumulator is full
@@ -80,6 +98,170 @@ class SafroleStateTransition(private val config: SafroleConfig) {
         } catch (e: Exception) {
             println("Error: ${e.message}")
             return Pair(preState, SafroleOutput(err = JamErrorCode.RESERVED))
+        }
+    }
+
+    private fun processDisputes(dispute: Dispute, postState: SafroleState): List<ByteArray> {
+        // Track new offenders for the mark
+        val offendersMark = mutableListOf<ByteArray>()
+        // Initialize post_state variables
+        if (postState.psi == null) {
+            postState.psi = Psi(
+                psiG = mutableListOf(),
+                psiB = mutableListOf(),
+                psiW = mutableListOf(),
+                psiO = mutableListOf()
+            )
+        }
+
+        if (postState.rho == null) {
+            postState.rho = MutableList(341) { null }
+        }
+
+        // Process verdicts
+        for (verdict in dispute.verdicts) {
+            val reportHash = verdict.target
+            val epochAge = verdict.age
+
+            // Count positive votes
+            val positiveVotes = verdict.votes.count { it.vote }
+
+            // Get validator set based on age
+            val validatorSet = if (epochAge == 0L) {
+                postState.kappa
+            } else {
+                postState.lambda
+            }
+
+            // Verify all vote signatures
+            for (vote in verdict.votes) {
+                val validator = validatorSet[vote.index.toInt()]
+                val message = if (vote.vote) {
+                    JAM_VALID.toByteArray() + reportHash
+                } else {
+                    JAM_INVALID.toByteArray() + reportHash
+                }
+
+                verifyEd25519Signature(
+                    publicKey = validator.ed25519,
+                    message = message,
+                    signature = vote.signature
+                )
+            }
+
+            // Calculate vote thresholds
+            val numValidators = validatorSet.size
+            val superMajority = (2 * numValidators / 3) + 1
+            val oneThird = numValidators / 3
+
+            // Update PSI sets based on vote count
+            when (positiveVotes) {
+                superMajority -> postState.psi!!.psiG.add(reportHash)
+                0 -> postState.psi!!.psiB.add(reportHash)
+                oneThird -> postState.psi!!.psiW.add(reportHash)
+            }
+        }
+
+        // Process culprits
+        for (culprit in dispute.culprits) {
+            val message = JAM_GUARANTEE.toByteArray() + culprit.target
+
+            // Verify culprit signature
+            verifyEd25519Signature(
+                publicKey = culprit.key,
+                message = message,
+                signature = culprit.signature
+            )
+
+            // Add culprit if report is bad and validator not already punished
+            if (culprit.target in postState.psi!!.psiB && culprit.key !in postState.psi!!.psiO) {
+                postState.psi!!.psiO.add(culprit.key)
+                offendersMark.add(culprit.key)
+            }
+        }
+
+        // Process faults
+        for (fault in dispute.faults) {
+            val message = if (fault.vote) {
+                JAM_VALID.toByteArray() + fault.target
+            } else {
+                JAM_INVALID.toByteArray() + fault.target
+            }
+
+            // Verify fault signature
+            verifyEd25519Signature(
+                publicKey = fault.key,
+                message = message,
+                signature = fault.signature
+            )
+
+            // Check if vote conflicts with verdict
+            val isBad = fault.target in postState.psi!!.psiB
+            val isGood = fault.target in postState.psi!!.psiG
+
+            // Add fault if vote conflicts and validator not already punished
+            if ((isBad != isGood) == fault.vote && fault.key !in postState.psi!!.psiO) {
+                postState.psi!!.psiO.add(fault.key)
+                offendersMark.add(fault.key)
+            }
+        }
+
+        // Clear invalid reports from rho state
+        for (i in postState.rho!!.indices) {
+            val report = postState.rho!![i] ?: continue
+
+            val reportHash = blake2b256(report.dummyWorkReport)
+
+            // Find matching verdict if any
+            val verdict = dispute.verdicts.find { it.target.contentEquals(reportHash) }
+
+            // Clear report if judged invalid/uncertain
+            if (verdict != null) {
+                val positiveVotes = verdict.votes.count { it.vote }
+                val superMajority = (2 * postState.kappa.size / 3) + 1
+
+                if (positiveVotes < superMajority) {
+                    postState.rho!![i] = null
+                }
+            }
+        }
+        return offendersMark
+    }
+
+    private fun verifyEd25519Signature(
+        publicKey: ByteArray,
+        message: ByteArray,
+        signature: ByteArray
+    ) {
+        // Validate input lengths
+        if (publicKey.size != 32) {
+            throw IllegalArgumentException("Ed25519 public key must be 32 bytes")
+        }
+        if (signature.size != 64) {
+            throw IllegalArgumentException("Ed25519 signature must be 64 bytes")
+        }
+        if (message.isEmpty()) {
+            throw IllegalArgumentException("Message cannot be empty")
+        }
+
+        try {
+            // Create Ed25519 public key parameters
+            val pubKeyParams = Ed25519PublicKeyParameters(publicKey, 0)
+
+            // Create and initialize the signer in verification mode
+            val signer = Ed25519Signer()
+            signer.init(false, pubKeyParams)
+
+            // Add message data
+            signer.update(message, 0, message.size)
+
+            // Verify the signature
+            if (!signer.verifySignature(signature)) {
+                throw IllegalArgumentException("Invalid Ed25519 signature")
+            }
+        } catch (e: Exception) {
+            // Catch any BouncyCastle errors and convert to IllegalArgumentException
+            throw IllegalArgumentException("Ed25519 verification failed: ${e.message}")
         }
     }
 
