@@ -60,12 +60,12 @@ class DisputeJsonTest {
         assertArrayEquals(expected.gammaZ, actual.gammaZ, "Mismatch in gammaZ")
 
         // Check rho
-//        assertEquals(expected.rho?.size, actual.rho?.size, "Mismatch in rho size")
-//        if (expected.rho != null && actual.rho != null) {
-//            for (i in expected.rho!!.indices) {
-//                assertEquals(expected.rho!![i], actual.rho!![i], "Mismatch in rho at index $i")
-//            }
-//        }
+        assertEquals(expected.rho?.size, actual.rho?.size, "Mismatch in rho size")
+        if (expected.rho != null && actual.rho != null) {
+            for (i in expected.rho!!.indices) {
+                assertEquals(expected.rho!![i], actual.rho!![i], "Mismatch in rho at index $i")
+            }
+        }
 
         // Check psi
         assertEquals(expected.psi, actual.psi, "Mismatch in psi")

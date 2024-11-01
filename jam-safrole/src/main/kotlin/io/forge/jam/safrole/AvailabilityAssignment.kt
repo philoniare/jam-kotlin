@@ -11,4 +11,20 @@ data class AvailabilityAssignment(
     val dummyWorkReport: ByteArray,
 
     val timeout: Long
-)
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is AvailabilityAssignment) return false
+
+        if (!dummyWorkReport.contentEquals(other.dummyWorkReport)) return false
+        if (timeout != other.timeout) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = dummyWorkReport.contentHashCode()
+        result = 31 * result + timeout.hashCode()
+        return result
+    }
+}
