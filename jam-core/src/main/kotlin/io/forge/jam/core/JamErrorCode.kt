@@ -55,4 +55,13 @@ enum class JamErrorCode {
 
     @SerialName("bad-vote-split")
     BAD_VOTE_SPLIT,
+
+    @SerialName("fault-verdict-wrong")
+    FAULT_VERDICT_WRONG,
+
+    @SerialName("not-enough-faults")
+    NOT_ENOUGH_FAULTS,
+
+    @SerialName("faults-not-sorted-unique")
+    FAULTS_NOT_SORTED_UNIQUE,
 }

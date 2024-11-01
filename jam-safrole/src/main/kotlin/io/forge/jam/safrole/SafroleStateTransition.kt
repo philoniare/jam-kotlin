@@ -17,7 +17,11 @@ class SafroleStateTransition(private val config: SafroleConfig) {
         verdict: Verdict,
         currentEpoch: Long
     ): JamErrorCode? {
-        // The age must be exactly currentEpoch or currentEpoch-1
+        println("Verdict age: ${verdict.age}, current epoch: $currentEpoch")
+
+        // Verdicts must use either:
+        // - Current validator set (κ) if age == currentEpoch
+        // - Previous validator set (λ) if age == currentEpoch - 1
         val validAges = setOf(currentEpoch, currentEpoch - 1)
 
         if (!validAges.contains(verdict.age)) {
@@ -201,6 +205,39 @@ class SafroleStateTransition(private val config: SafroleConfig) {
                 return voteError
             }
 
+            val positiveVotes = verdict.votes.count { it.vote }
+            val totalVotes = verdict.votes.size
+            if (positiveVotes == totalVotes &&
+                positiveVotes >= config.superMajority &&
+                disputes.faults.isEmpty()
+            ) {
+                // If we have all positive votes but no faults registered against
+                // validators who may have incorrectly judged it invalid
+                return JamErrorCode.NOT_ENOUGH_FAULTS
+            }
+
+            if (positiveVotes >= config.superMajority) {
+                val hasFault = disputes.faults.any { fault ->
+                    fault.target.contentEquals(target)
+                }
+                if (!hasFault) {
+                    return JamErrorCode.NOT_ENOUGH_FAULTS
+                }
+            }
+
+            // Validate
+            val isGoodVerdict = positiveVotes >= config.superMajority
+            val matchingFaults = disputes.faults.filter { it.target.contentEquals(target) }
+            for (fault in matchingFaults) {
+                // For a good verdict (supermajority positive votes),
+                // faults must have vote=false to be valid
+                // For a bad verdict (not supermajority positive),
+                // faults must have vote=true to be valid
+                if (fault.vote == isGoodVerdict) {
+                    return JamErrorCode.FAULT_VERDICT_WRONG
+                }
+            }
+
             // Verify all vote signatures
             for (i in 0 until verdict.votes.size - 1) {
                 val vote = verdict.votes[i]
@@ -252,7 +289,16 @@ class SafroleStateTransition(private val config: SafroleConfig) {
             }
         }
 
-        for (fault in disputes.faults) {
+        for (i in 0 until disputes.faults.size) {
+            val fault = disputes.faults[i]
+            if (i < disputes.faults.size - 1) {
+                val currentKey = disputes.faults[i].key
+                val nextKey = disputes.faults[i + 1].key
+
+                if (currentKey.compareUnsigned(nextKey) >= 0) {
+                    return JamErrorCode.FAULTS_NOT_SORTED_UNIQUE
+                }
+            }
             val message = if (fault.vote) {
                 JAM_VALID.toByteArray() + fault.target
             } else {
