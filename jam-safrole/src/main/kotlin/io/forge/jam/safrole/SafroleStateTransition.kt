@@ -35,13 +35,13 @@ class SafroleStateTransition(private val config: SafroleConfig) {
                 }
 
                 // If only processing disputes, return immediately
-                if (input.slot == preState.tau) {
+                if (input.slot == null) {
                     return Pair(postState, SafroleOutput(ok = OutputMarks(offendersMark = offendersMark)))
                 }
             }
 
             // Validate slot transition (eq. 42)
-            if (input.slot <= preState.tau) {
+            if (input.slot!! <= preState.tau) {
                 return Pair(postState, SafroleOutput(err = JamErrorCode.BAD_SLOT))
             }
 
@@ -256,6 +256,13 @@ class SafroleStateTransition(private val config: SafroleConfig) {
                 superMajority -> postState.psi!!.psiG.add(reportHash)
                 0 -> postState.psi!!.psiB.add(reportHash)
                 oneThird -> postState.psi!!.psiW.add(reportHash)
+            }
+        }
+
+        // Verify that all culprit targets are marked as bad before processing them
+        for (culprit in dispute.culprits) {
+            if (culprit.target !in postState.psi!!.psiB) {
+                return Pair(emptyList(), JamErrorCode.CULPRITS_VERDICT_NOT_BAD)
             }
         }
 

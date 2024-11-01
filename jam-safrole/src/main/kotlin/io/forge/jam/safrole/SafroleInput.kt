@@ -9,7 +9,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class SafroleInput(
-    val slot: Long = 0,
+    val slot: Long? = null,
 
     @Serializable(with = ByteArrayHexSerializer::class)
     val entropy: ByteArray = byteArrayOf(0),

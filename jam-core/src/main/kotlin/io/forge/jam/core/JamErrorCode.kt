@@ -40,4 +40,7 @@ enum class JamErrorCode {
 
     @SerialName("offender-already-reported")
     OFFENDER_ALREADY_REPORTED,
+
+    @SerialName("culprits-verdict-not-bad")
+    CULPRITS_VERDICT_NOT_BAD,
 }
