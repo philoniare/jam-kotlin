@@ -130,7 +130,10 @@ class SafroleStateTransition(private val config: SafroleConfig) {
                 // From equation 104: "c = [k __ {r, k, s} ∈ c]"
                 if (culprits[i].key.compareUnsigned(culprits[i + 1].key) >= 0) {
                     isOrderValid = false
+                }
 
+                if (state.psi?.psiO?.any { it.contentEquals(culprit.key) } == true) {
+                    return JamErrorCode.OFFENDER_ALREADY_REPORTED
                 }
             }
         }
@@ -264,21 +267,26 @@ class SafroleStateTransition(private val config: SafroleConfig) {
             // Add culprit if report is bad and validator not already punished
             if (targetInPsiB && !keyInPsiO) {
                 postState.psi!!.psiO.add(culprit.key)
+                println("Adding culprit: ${culprit.key.toHex()}")
                 offendersMark.add(culprit.key)
             }
         }
 
         // Process faults
         for (fault in dispute.faults) {
-            // Check if vote conflicts with verdict
             val isBad = fault.target in postState.psi!!.psiB
             val isGood = fault.target in postState.psi!!.psiG
 
-            // Add fault if vote conflicts and validator not already punished
-            if ((isBad != isGood) == fault.vote && fault.key !in postState.psi!!.psiO) {
+            // A fault exists if:
+            // - Report is in psiG but validator voted false
+            // - Report is in psiB but validator voted true
+            val voteConflicts = (isGood && !fault.vote) || (isBad && fault.vote)
+            val notPunished = fault.key !in postState.psi!!.psiO
+
+            if (voteConflicts && notPunished) {
                 postState.psi!!.psiO.add(fault.key)
-                println("Adding fault: ${fault.key.toHex()}")
                 offendersMark.add(fault.key)
+                println("Added offender to both psiO and offendersMark")
             }
         }
 

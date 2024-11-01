@@ -37,4 +37,7 @@ enum class JamErrorCode {
 
     @SerialName("already-judged")
     ALREADY_JUDGED,
+
+    @SerialName("offender-already-reported")
+    OFFENDER_ALREADY_REPORTED,
 }
