@@ -35,6 +35,9 @@ enum class JamErrorCode {
     @SerialName("culprits-not-sorted-unique")
     CULPRITS_NOT_SORTED_UNIQUE,
 
+    @SerialName("judgements-not-sorted-unique")
+    JUDGEMENTS_NOT_SORTED_UNIQUE,
+
     @SerialName("already-judged")
     ALREADY_JUDGED,
 
@@ -43,4 +46,10 @@ enum class JamErrorCode {
 
     @SerialName("culprits-verdict-not-bad")
     CULPRITS_VERDICT_NOT_BAD,
+
+    @SerialName("bad-judgement-age")
+    BAD_JUDGEMENT_AGE,
+
+    @SerialName("verdicts-not-sorted-unique")
+    VERDICTS_NOT_SORTED_UNIQUE,
 }

@@ -114,7 +114,7 @@ class SafroleStateTransition(private val config: SafroleConfig) {
         var isOrderValid = true
         val culprits = disputes.culprits
         if (culprits.isNotEmpty()) {
-            for (i in 0 until culprits.size - 1) {
+            for (i in 0 until culprits.size) {
                 val culprit = culprits[i]
                 val message = JAM_GUARANTEE.toByteArray() + culprit.target
 
@@ -128,9 +128,12 @@ class SafroleStateTransition(private val config: SafroleConfig) {
                     return JamErrorCode.BAD_SIGNATURE
                 }
                 // From equation 104: "c = [k __ {r, k, s} ∈ c]"
-                if (culprits[i].key.compareUnsigned(culprits[i + 1].key) >= 0) {
-                    isOrderValid = false
+                if (i < culprits.size - 1) {
+                    if (culprits[i].key.compareUnsigned(culprits[i + 1].key) >= 0) {
+                        isOrderValid = false
+                    }
                 }
+
 
                 if (state.psi?.psiO?.any { it.contentEquals(culprit.key) } == true) {
                     return JamErrorCode.OFFENDER_ALREADY_REPORTED
@@ -143,16 +146,19 @@ class SafroleStateTransition(private val config: SafroleConfig) {
             return JamErrorCode.CULPRITS_NOT_SORTED_UNIQUE
         }
 
-
-        for (verdict in disputes.verdicts) {
+        for (i in 0 until disputes.verdicts.size) {
+            val verdict = disputes.verdicts[i]
             val target = verdict.target
+            val currentEpochIndex = state.tau / config.epochLength
+            val validatorSet = if (verdict.age == currentEpochIndex) {
+                state.kappa
+            } else {
+                state.lambda
+            }
+
             // Verify all vote signatures
-            for (vote in verdict.votes) {
-                val validatorSet = if (verdict.age == 0L) {
-                    state.kappa
-                } else {
-                    state.lambda
-                }
+            for (i in 0 until verdict.votes.size - 1) {
+                val vote = verdict.votes[i]
                 val validator = validatorSet[vote.index.toInt()]
                 val message = if (vote.vote) {
                     JAM_VALID.toByteArray() + target
@@ -168,10 +174,15 @@ class SafroleStateTransition(private val config: SafroleConfig) {
                 ) {
                     return JamErrorCode.BAD_SIGNATURE
                 }
+
+                if (i < verdict.votes.size - 1) {
+                    if (verdict.votes[i].index >= verdict.votes[i + 1].index) {
+                        return JamErrorCode.JUDGEMENTS_NOT_SORTED_UNIQUE
+                    }
+                }
             }
 
             // Validate if any verdict target has already been judged
-            println("Contains: ${target.toHex()} in ${state.psi?.psiB}: ${state.psi?.psiB?.contains(target)}")
             if (state.psi?.psiG?.contains(target) == true ||
                 state.psi?.psiB?.contains(target) == true ||
                 state.psi?.psiW?.contains(target) == true
@@ -184,6 +195,14 @@ class SafroleStateTransition(private val config: SafroleConfig) {
             if (negativeVotes == verdict.votes.size) {
                 if (disputes.culprits.size < 2) {
                     return JamErrorCode.NOT_ENOUGH_CULPRITS
+                }
+            }
+
+            if (i < disputes.verdicts.size - 1) {
+                val current = disputes.verdicts[i].target
+                val next = disputes.verdicts[i + 1].target
+                if (current.compareUnsigned(next) >= 0) {
+                    return JamErrorCode.VERDICTS_NOT_SORTED_UNIQUE
                 }
             }
         }
@@ -274,7 +293,6 @@ class SafroleStateTransition(private val config: SafroleConfig) {
             // Add culprit if report is bad and validator not already punished
             if (targetInPsiB && !keyInPsiO) {
                 postState.psi!!.psiO.add(culprit.key)
-                println("Adding culprit: ${culprit.key.toHex()}")
                 offendersMark.add(culprit.key)
             }
         }
