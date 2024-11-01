@@ -27,7 +27,13 @@ class SafroleStateTransition(private val config: SafroleConfig) {
 
             // Process disputes without slot advancement
             if (input.disputes != null) {
-                offendersMark = processDisputes(input.disputes, postState)
+                val (offendersList, error) = processDisputes(input.disputes, postState)
+                offendersMark = offendersList
+
+                if (error != null) {
+                    return Pair(postState, SafroleOutput(err = error))
+                }
+
                 // If only processing disputes, return immediately
                 if (input.slot == preState.tau) {
                     return Pair(postState, SafroleOutput(ok = OutputMarks(offendersMark = offendersMark)))
@@ -98,7 +104,7 @@ class SafroleStateTransition(private val config: SafroleConfig) {
         }
     }
 
-    private fun processDisputes(dispute: Dispute, postState: SafroleState): List<ByteArray> {
+    private fun processDisputes(dispute: Dispute, postState: SafroleState): Pair<List<ByteArray>, JamErrorCode?> {
         // Track new offenders for the mark
         val offendersMark = mutableListOf<ByteArray>()
         // Initialize post_state variables
@@ -139,11 +145,15 @@ class SafroleStateTransition(private val config: SafroleConfig) {
                     JAM_INVALID.toByteArray() + reportHash
                 }
 
-                verifyEd25519Signature(
+                val isSigValid = verifyEd25519Signature(
                     publicKey = validator.ed25519,
                     message = message,
                     signature = vote.signature
                 )
+                if (!isSigValid) {
+                    // Return
+                    return Pair(offendersMark, JamErrorCode.BAD_SIGNATURE)
+                }
             }
 
             // Calculate vote thresholds
@@ -164,11 +174,14 @@ class SafroleStateTransition(private val config: SafroleConfig) {
             val message = JAM_GUARANTEE.toByteArray() + culprit.target
 
             // Verify culprit signature
-            verifyEd25519Signature(
+            val isSigValid = verifyEd25519Signature(
                 publicKey = culprit.key,
                 message = message,
                 signature = culprit.signature
             )
+            if (!isSigValid) {
+                return Pair(offendersMark, JamErrorCode.BAD_SIGNATURE)
+            }
 
             val targetInPsiB = postState.psi!!.psiB.any { it.contentEquals(culprit.target) }
             val keyInPsiO = postState.psi!!.psiO.any { it.contentEquals(culprit.key) }
@@ -189,11 +202,14 @@ class SafroleStateTransition(private val config: SafroleConfig) {
             }
 
             // Verify fault signature
-            verifyEd25519Signature(
+            val isSigValid = verifyEd25519Signature(
                 publicKey = fault.key,
                 message = message,
                 signature = fault.signature
             )
+            if (!isSigValid) {
+                return Pair(offendersMark, JamErrorCode.BAD_SIGNATURE)
+            }
 
             // Check if vote conflicts with verdict
             val isBad = fault.target in postState.psi!!.psiB
@@ -226,14 +242,14 @@ class SafroleStateTransition(private val config: SafroleConfig) {
                 }
             }
         }
-        return offendersMark
+        return Pair(offendersMark, null)
     }
 
     private fun verifyEd25519Signature(
         publicKey: ByteArray,
         message: ByteArray,
         signature: ByteArray
-    ) {
+    ): Boolean {
         // Validate input lengths
         if (publicKey.size != 32) {
             throw IllegalArgumentException("Ed25519 public key must be 32 bytes")
@@ -257,12 +273,9 @@ class SafroleStateTransition(private val config: SafroleConfig) {
             signer.update(message, 0, message.size)
 
             // Verify the signature
-            if (!signer.verifySignature(signature)) {
-                throw IllegalArgumentException("Invalid Ed25519 signature")
-            }
+            return signer.verifySignature(signature)
         } catch (e: Exception) {
-            // Catch any BouncyCastle errors and convert to IllegalArgumentException
-            throw IllegalArgumentException("Ed25519 verification failed: ${e.message}")
+            return true
         }
     }
 

@@ -24,5 +24,8 @@ enum class JamErrorCode {
     RESERVED,
 
     @SerialName("duplicate-ticket")
-    DUPLICATE_TICKET
+    DUPLICATE_TICKET,
+
+    @SerialName("bad-signature")
+    BAD_SIGNATURE,
 }
