@@ -96,7 +96,6 @@ class DisputeJsonTest {
         val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
 
         for (testCase in testCases) {
-            println("Running test case: $testCase")
             val (inputCase) = TestFileLoader.loadTestData<SafroleCase>(
                 "$folderName/$testCase",
                 ".scale"
@@ -111,8 +110,6 @@ class DisputeJsonTest {
                 )
             )
             val (postState, output) = safrole.transition(inputCase.input, inputCase.preState)
-            println("Output: $output")
-            println("Output: $postState")
 
             assertDisputeOutputEquals(inputCase.output, output, testCase)
 
@@ -126,7 +123,6 @@ class DisputeJsonTest {
         val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
 
         for (testCase in testCases) {
-            println("Running test case: $testCase")
             val (inputCase) = TestFileLoader.loadTestData<SafroleCase>(
                 "$folderName/$testCase",
                 ".scale"
@@ -134,15 +130,13 @@ class DisputeJsonTest {
 
             val safrole = SafroleStateTransition(
                 SafroleConfig(
-                    epochLength = 12,
-                    ticketCutoff = 10,
+                    epochLength = 600,
+                    ticketCutoff = 500,
                     ringSize = 6,
                     validatorCount = 1023
                 )
             )
             val (postState, output) = safrole.transition(inputCase.input, inputCase.preState)
-            println("Output: $output")
-            println("Output: $postState")
 
             assertDisputeOutputEquals(inputCase.output, output, testCase)
 

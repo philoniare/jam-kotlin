@@ -17,8 +17,6 @@ class SafroleStateTransition(private val config: SafroleConfig) {
         verdict: Verdict,
         currentEpoch: Long
     ): JamErrorCode? {
-        println("Verdict age: ${verdict.age}, current epoch: $currentEpoch")
-
         // Verdicts must use either:
         // - Current validator set (κ) if age == currentEpoch
         // - Previous validator set (λ) if age == currentEpoch - 1
@@ -406,7 +404,6 @@ class SafroleStateTransition(private val config: SafroleConfig) {
             if (voteConflicts && notPunished) {
                 postState.psi!!.psiO.add(fault.key)
                 offendersMark.add(fault.key)
-                println("Added offender to both psiO and offendersMark")
             }
         }
 
