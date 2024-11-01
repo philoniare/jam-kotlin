@@ -52,4 +52,7 @@ enum class JamErrorCode {
 
     @SerialName("verdicts-not-sorted-unique")
     VERDICTS_NOT_SORTED_UNIQUE,
+
+    @SerialName("bad-vote-split")
+    BAD_VOTE_SPLIT,
 }

@@ -13,6 +13,40 @@ private const val JAM_GUARANTEE = "jam_guarantee"
 class SafroleStateTransition(private val config: SafroleConfig) {
     private val bandersnatchWrapper: BandersnatchWrapper = BandersnatchWrapper(config.ringSize)
 
+    private fun validateJudgementAge(
+        verdict: Verdict,
+        currentEpoch: Long
+    ): JamErrorCode? {
+        // The age must be exactly currentEpoch or currentEpoch-1
+        val validAges = setOf(currentEpoch, currentEpoch - 1)
+
+        if (!validAges.contains(verdict.age)) {
+            return JamErrorCode.BAD_JUDGEMENT_AGE
+        }
+
+        return null
+    }
+
+    private fun validateVoteDistribution(verdict: Verdict, validatorSet: List<ValidatorKey>): JamErrorCode? {
+        val positiveVotes = verdict.votes.count { it.vote }
+        val totalVotes = verdict.votes.size
+
+        // Only allow:
+        // - 0 (all negative) for invalid reports
+        // - 1/3 for uncertain/"wonky" reports
+        // - 2/3 + 1 for valid reports
+        val validThresholds = setOf(
+            0,
+            config.oneThird,
+            config.superMajority
+        )
+
+        if (!validThresholds.contains(positiveVotes)) {
+            return JamErrorCode.BAD_VOTE_SPLIT
+        }
+        return null
+    }
+
     fun transition(
         input: SafroleInput,
         preState: SafroleState
@@ -108,6 +142,7 @@ class SafroleStateTransition(private val config: SafroleConfig) {
         disputes: Dispute,
         state: SafroleState,
     ): JamErrorCode? {
+        val currentEpoch = state.tau / config.epochLength
         // 1. First validate signatures
         // This comes from equation 101 which requires valid signatures:
         // "s ∈ E_k ⟨X_G ⌢ r⟩"
@@ -148,12 +183,22 @@ class SafroleStateTransition(private val config: SafroleConfig) {
 
         for (i in 0 until disputes.verdicts.size) {
             val verdict = disputes.verdicts[i]
+            val ageError = validateJudgementAge(verdict, currentEpoch)
+            if (ageError != null) {
+                return ageError
+            }
+
             val target = verdict.target
             val currentEpochIndex = state.tau / config.epochLength
             val validatorSet = if (verdict.age == currentEpochIndex) {
                 state.kappa
             } else {
                 state.lambda
+            }
+
+            val voteError = validateVoteDistribution(verdict, validatorSet)
+            if (voteError != null) {
+                return voteError
             }
 
             // Verify all vote signatures
@@ -221,6 +266,10 @@ class SafroleStateTransition(private val config: SafroleConfig) {
                 )
             ) {
                 return JamErrorCode.BAD_SIGNATURE
+            }
+
+            if (state.psi?.psiO?.any { it.contentEquals(fault.key) } == true) {
+                return JamErrorCode.OFFENDER_ALREADY_REPORTED
             }
         }
 

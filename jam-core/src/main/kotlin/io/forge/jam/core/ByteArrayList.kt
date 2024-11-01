@@ -57,4 +57,8 @@ class ByteArrayList : AbstractMutableList<ByteArray>() {
     override fun hashCode(): Int {
         return items.fold(1) { acc, bytes -> 31 * acc + bytes.contentHashCode() }
     }
+
+    override fun toString(): String {
+        return items.joinToString(prefix = "[", postfix = "]") { it.toHex() }
+    }
 }
