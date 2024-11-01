@@ -274,10 +274,8 @@ pub extern "system" fn Java_io_forge_jam_vrfs_BandersnatchWrapper_getVerifierCom
         match Public::deserialize_compressed(&mut &key[..]) {
             Ok(public_key) => ring.push(public_key),
             Err(e) => {
-                return throw_and_return_null(
-                    &mut env,
-                    &format!("Failed to deserialize public key: {}", e),
-                );
+                // Use a padding point as key
+                ring.push(Public::from(ring_context(ring_size).padding_point()));
             }
         }
     }

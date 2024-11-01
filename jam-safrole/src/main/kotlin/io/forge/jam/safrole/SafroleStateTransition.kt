@@ -3,7 +3,6 @@ package io.forge.jam.safrole
 import io.forge.jam.core.EpochMark
 import io.forge.jam.core.JamErrorCode
 import io.forge.jam.core.TicketEnvelope
-import io.forge.jam.core.toHex
 import io.forge.jam.vrfs.BandersnatchWrapper
 import org.bouncycastle.crypto.digests.Blake2bDigest
 
@@ -45,7 +44,15 @@ class SafroleStateTransition(private val config: SafroleConfig) {
             // Handle epoch transition if needed
             if (newEpoch > prevEpoch) {
                 epochMark =
-                    handleEpochTransition(postState, preState, newEpoch, prevEpoch, prevPhase, preState.eta[0].clone())
+                    handleEpochTransition(
+                        input,
+                        postState,
+                        preState,
+                        newEpoch,
+                        prevEpoch,
+                        prevPhase,
+                        preState.eta[0].clone()
+                    )
             }
 
             // Process ticket submissions if any (eq. 74-80)
@@ -71,11 +78,13 @@ class SafroleStateTransition(private val config: SafroleConfig) {
                 )
             )
         } catch (e: Exception) {
+            println("Error: ${e.message}")
             return Pair(preState, SafroleOutput(err = JamErrorCode.RESERVED))
         }
     }
 
     private fun handleEpochTransition(
+        input: SafroleInput,
         postState: SafroleState,
         preState: SafroleState,
         newEpoch: Long,
@@ -93,7 +102,19 @@ class SafroleStateTransition(private val config: SafroleConfig) {
         postState.kappa = preState.gammaK
 
         // 5.3. Load new pending validators
-        postState.gammaK = preState.iota
+        postState.gammaK = preState.iota.map { validator ->
+            if (input.postOffenders.any { offender -> offender.contentEquals(validator.ed25519) }) {
+                // Replace offender's entire validator key with zeros
+                ValidatorKey(
+                    bandersnatch = ByteArray(32) { 0 },
+                    ed25519 = ByteArray(32) { 0 },
+                    bls = ByteArray(144) { 0 },
+                    metadata = ByteArray(128) { 0 }
+                )
+            } else {
+                validator
+            }
+        }
 
         // 5.4. Generate new ring root
         postState.gammaZ = generateRingRoot(postState.gammaK)
@@ -148,10 +169,6 @@ class SafroleStateTransition(private val config: SafroleConfig) {
 
 
             // Verify ring VRF proof
-            println("Signature: ${ticket.signature.toHex()}")
-            println("GammaZ: ${postState.gammaZ.toHex()}")
-            println("ETA: ${postState.eta[2].toHex()}")
-            println("Attempt: ${ticket.attempt}")
             val ticketId = verifyRingProof(ticket.signature, postState.gammaZ, postState.eta[2], ticket.attempt)
             if (ticketId.all { it == 0.toByte() }) {
                 return JamErrorCode.BAD_TICKET_PROOF
