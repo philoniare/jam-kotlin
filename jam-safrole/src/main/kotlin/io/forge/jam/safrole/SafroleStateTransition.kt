@@ -3,6 +3,7 @@ package io.forge.jam.safrole
 import io.forge.jam.core.EpochMark
 import io.forge.jam.core.JamErrorCode
 import io.forge.jam.core.TicketEnvelope
+import io.forge.jam.core.toHex
 import io.forge.jam.vrfs.BandersnatchWrapper
 import org.bouncycastle.crypto.digests.Blake2bDigest
 
@@ -147,6 +148,10 @@ class SafroleStateTransition(private val config: SafroleConfig) {
 
 
             // Verify ring VRF proof
+            println("Signature: ${ticket.signature.toHex()}")
+            println("GammaZ: ${postState.gammaZ.toHex()}")
+            println("ETA: ${postState.eta[2].toHex()}")
+            println("Attempt: ${ticket.attempt}")
             val ticketId = verifyRingProof(ticket.signature, postState.gammaZ, postState.eta[2], ticket.attempt)
             if (ticketId.all { it == 0.toByte() }) {
                 return JamErrorCode.BAD_TICKET_PROOF

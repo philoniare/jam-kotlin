@@ -10,7 +10,6 @@ class ErasureCodingTest {
         val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
 
         for (testCase in testCases) {
-            println("Current Test Case: $testCase")
             val inputCase = TestFileLoader.loadJsonData<EcData>(
                 "$folderName/$testCase",
             )

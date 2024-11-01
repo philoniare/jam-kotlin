@@ -55,14 +55,12 @@ fun Process.text(): String {
 
 tasks.register<Exec>("buildRust") {
     workingDir(rustProjectDir)
-    println("Working directory: $rustProjectDir")
 
     // Get the cargo executable path
     val cargoPath = when {
         os.isWindows -> "where cargo".execute().text().trim()
         else -> "which cargo".execute().text().trim()
     }
-    println("Cargo path: $cargoPath")
 
     // Use the full path to cargo
     if (cargoPath.isNotEmpty()) {

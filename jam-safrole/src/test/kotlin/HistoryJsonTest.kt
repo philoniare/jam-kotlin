@@ -78,7 +78,6 @@ class HistoryJsonTest {
         val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
 
         for (testCase in testCases) {
-            println("Current Test Case: $testCase")
             val (inputCase) = TestFileLoader.loadTestData<HistoricalCase>(
                 "$folderName/$testCase",
                 ".scale"
@@ -86,7 +85,6 @@ class HistoryJsonTest {
 
             val transition = HistoryTransition()
             val postState = transition.stf(inputCase.input, inputCase.preState)
-            println("Output beta: ${postState.beta}")
 
             assertHistoryStateEquals(
                 inputCase.postState,
