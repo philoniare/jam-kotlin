@@ -1,4 +1,4 @@
-package io.forge.jam.core
+package io.forge.jam.ec
 
 import io.forge.jam.core.serializers.ByteArrayHexSerializer
 import io.forge.jam.core.serializers.ByteArrayListHexSerializer
