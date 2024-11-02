@@ -89,7 +89,7 @@ object Utils {
     enum class Reg {
         R0, R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12;
 
-        fun name(): String = this.name.lowercase()
+        fun lowercaseName(): String = this.name.lowercase()
 
         companion object {
             val ALL = values()
@@ -99,7 +99,7 @@ object Utils {
             fun parse(text: String): Reg? {
                 val trimmed = text.trim().lowercase()
                 return ALL.firstOrNull { reg ->
-                    trimmed == reg.name() || trimmed == "r${reg.ordinal}"
+                    trimmed == reg.lowercaseName() || trimmed == "r${reg.ordinal}"
                 }
             }
         }

@@ -1,5 +1,7 @@
 package io.forge.jam.pvm
 
+import io.forge.jam.pvm.Abi.VM_CODE_ADDRESS_ALIGNMENT
+
 typealias LookupEntry = Int
 
 const val EMPTY_LOOKUP_ENTRY: LookupEntry = 0

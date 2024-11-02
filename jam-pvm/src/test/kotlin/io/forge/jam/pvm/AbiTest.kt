@@ -1,89 +1,101 @@
 package io.forge.jam.pvm
 
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.assertDoesNotThrow
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class AbiTest {
 
+    companion object {
+        private const val PAGE_SIZE: UInt = 0x4000U
+        private val MAX_REGION_SIZE = ((1UL shl 32) - (Abi.VM_MAX_PAGE_SIZE.toULong() * 4UL)).toUInt()
+        val maxSize = (Abi.ADDRESS_SPACE_SIZE - Abi.VM_MAX_PAGE_SIZE.toULong() * 5UL).toUInt()
+    }
+
     @Test
     fun testConstantRequirements() {
         assertDoesNotThrow {
-            require(VM_MIN_PAGE_SIZE <= VM_MAX_PAGE_SIZE) { "io.forge.jam.VM_MIN_PAGE_SIZE must be less than or equal to io.forge.jam.VM_MAX_PAGE_SIZE" }
+            require(Abi.VM_MIN_PAGE_SIZE <= Abi.VM_MAX_PAGE_SIZE) { "io.forge.jam.VM_MIN_PAGE_SIZE must be less than or equal to io.forge.jam.VM_MAX_PAGE_SIZE" }
         }
         assertDoesNotThrow {
-            require(VM_ADDR_RETURN_TO_HOST and 0b11U == 0U) { "io.forge.jam.VM_ADDR_RETURN_TO_HOST must be aligned to 4 bytes" }
+            require(Abi.VM_ADDR_RETURN_TO_HOST and 0b11U == 0U) { "io.forge.jam.VM_ADDR_RETURN_TO_HOST must be aligned to 4 bytes" }
         }
     }
 
     @Test
     fun testMemoryMapBasicCase() {
-        val map = MemoryMap.new(0x4000U, 1U, 1U, 1U).getOrThrow()
+        val map = Abi.MemoryMapBuilder.new(PAGE_SIZE).roDataSize(1U).rwDataSize(1U).stackSize(1U).build().getOrThrow()
         assertEquals(0x10000U, map.roDataAddress())
         assertEquals(0x4000U, map.roDataSize)
-        assertEquals(0x30000U, map.rwDataAddress())
+        assertEquals(0x30000U, map.rwDataAddress)
         assertEquals(0x4000U, map.rwDataSize)
         assertEquals(0x4000U, map.stackSize)
-        assertEquals(0xffff0000U, map.stackAddressHigh())
-        assertEquals(0xfffec000U, map.stackAddressLow())
+        assertEquals(0xfffe0000U, map.stackAddressHigh)
+        assertEquals(0xfffdc000U, map.stackAddressLow())
         assertEquals(0x30001U, map.heapBase)
         assertEquals(
-            (ADDRESS_SPACE_SIZE - VM_MAX_PAGE_SIZE.toULong() * 3UL - map.heapBase.toULong()).toUInt(),
+            (Abi.ADDRESS_SPACE_SIZE - Abi.VM_MAX_PAGE_SIZE.toULong() * 4UL - map.heapBase.toULong()).toUInt(),
             map.maxHeapSize
         )
     }
 
     @Test
     fun testMemoryMapMaxReadOnlyData() {
-        val maxSize = (ADDRESS_SPACE_SIZE - VM_MAX_PAGE_SIZE.toULong() * 4UL).toUInt()
-        val map = MemoryMap.new(0x4000U, maxSize, 0U, 0U).getOrThrow()
+        val map = Abi.MemoryMapBuilder.new(PAGE_SIZE)
+            .roDataSize(maxSize)
+            .build().getOrThrow()
         assertEquals(0x10000U, map.roDataAddress())
         assertEquals(maxSize, map.roDataSize)
-        assertEquals(map.roDataAddress() + VM_MAX_PAGE_SIZE + maxSize, map.rwDataAddress())
-        assertEquals(0U, map.rwDataSize)
-        assertEquals(VM_ADDR_USER_STACK_HIGH, map.stackAddressHigh())
-        assertEquals(VM_ADDR_USER_STACK_HIGH, map.stackAddressLow())
-        assertEquals(0U, map.stackSize)
-        assertEquals(map.rwDataAddress(), map.heapBase)
-        assertEquals(0U, map.maxHeapSize)
+        assertEquals(map.rwDataAddress, map.roDataAddress() + Abi.VM_MAX_PAGE_SIZE + maxSize)
+        assertEquals(map.rwDataSize, 0u)
+        assertEquals(map.stackAddressHigh, Abi.VM_ADDRESS_SPACE_TOP - Abi.VM_MAX_PAGE_SIZE)
+        assertEquals(map.stackAddressLow(), Abi.VM_ADDRESS_SPACE_TOP - Abi.VM_MAX_PAGE_SIZE)
+        assertEquals(map.stackSize, 0U)
+        assertEquals(map.heapBase, map.rwDataAddress)
+        assertEquals(map.maxHeapSize, 0U)
     }
 
     @Test
     fun testMemoryMapMaxReadWriteData() {
-        val maxSize = (ADDRESS_SPACE_SIZE - VM_MAX_PAGE_SIZE.toULong() * 4UL).toUInt()
-        val map = MemoryMap.new(0x4000U, 0U, maxSize, 0U).getOrThrow()
-        assertEquals(VM_MAX_PAGE_SIZE, map.roDataAddress())
-        assertEquals(0U, map.roDataSize)
-        assertEquals(VM_MAX_PAGE_SIZE * 2U, map.rwDataAddress())
-        assertEquals(maxSize, map.rwDataSize)
-        assertEquals(VM_ADDR_USER_STACK_HIGH, map.stackAddressHigh())
-        assertEquals(VM_ADDR_USER_STACK_HIGH, map.stackAddressLow())
-        assertEquals(0U, map.stackSize)
-        assertEquals(map.rwDataAddress() + map.rwDataSize, map.heapBase)
-        assertEquals(0U, map.maxHeapSize)
+        val map = Abi.MemoryMapBuilder.new(PAGE_SIZE)
+            .rwDataSize(maxSize).build().getOrThrow()
+        assertEquals(map.roDataAddress(), Abi.VM_MAX_PAGE_SIZE)
+        assertEquals(map.roDataSize, 0U)
+        assertEquals(map.rwDataAddress, Abi.VM_MAX_PAGE_SIZE * 2U)
+        assertEquals(map.rwDataSize, maxSize)
+        assertEquals(map.stackAddressHigh, Abi.VM_ADDRESS_SPACE_TOP - Abi.VM_MAX_PAGE_SIZE)
+        assertEquals(map.stackAddressLow(), Abi.VM_ADDRESS_SPACE_TOP - Abi.VM_MAX_PAGE_SIZE)
+        assertEquals(map.stackSize, 0U)
+        assertEquals(map.heapBase, map.rwDataAddress + map.rwDataSize)
+        assertEquals(map.maxHeapSize, 0U)
     }
 
     @Test
     fun testMemoryMapMaxStack() {
-        val maxSize = (ADDRESS_SPACE_SIZE - VM_MAX_PAGE_SIZE.toULong() * 4UL).toUInt()
-        val map = MemoryMap.new(0x4000U, 0U, 0U, maxSize).getOrThrow()
-        assertEquals(VM_MAX_PAGE_SIZE, map.roDataAddress())
-        assertEquals(0U, map.roDataSize)
-        assertEquals(VM_MAX_PAGE_SIZE * 2U, map.rwDataAddress())
-        assertEquals(0U, map.rwDataSize)
-        assertEquals(VM_ADDR_USER_STACK_HIGH, map.stackAddressHigh())
-        assertEquals(VM_ADDR_USER_STACK_HIGH - maxSize, map.stackAddressLow())
-        assertEquals(maxSize, map.stackSize)
-        assertEquals(map.rwDataAddress(), map.heapBase)
-        assertEquals(0U, map.maxHeapSize)
+        val map = Abi.MemoryMapBuilder.new(PAGE_SIZE)
+            .stackSize(maxSize).build().getOrThrow()
+        assertEquals(map.roDataAddress(), Abi.VM_MAX_PAGE_SIZE)
+        assertEquals(map.roDataSize, 0U)
+        assertEquals(map.rwDataAddress, Abi.VM_MAX_PAGE_SIZE * 2U)
+        assertEquals(map.rwDataSize, 0U)
+        assertEquals(map.stackAddressHigh, Abi.VM_ADDRESS_SPACE_TOP - Abi.VM_MAX_PAGE_SIZE)
+        assertEquals(map.stackAddressLow(), Abi.VM_ADDRESS_SPACE_TOP - Abi.VM_MAX_PAGE_SIZE - maxSize)
+        assertEquals(map.stackSize, maxSize)
+        assertEquals(map.heapBase, map.rwDataAddress)
+        assertEquals(map.maxHeapSize, 0U)
     }
 
     @Test
     fun testMemoryMapErrorCases() {
-        val maxSize = (ADDRESS_SPACE_SIZE - VM_MAX_PAGE_SIZE.toULong() * 4UL).toUInt()
-        assertFailsWith<IllegalArgumentException> { MemoryMap.new(0x4000U, maxSize + 1U, 0U, 0U).getOrThrow() }
-        assertFailsWith<IllegalArgumentException> { MemoryMap.new(0x4000U, maxSize, 1U, 0U).getOrThrow() }
-        assertFailsWith<IllegalArgumentException> { MemoryMap.new(0x4000U, maxSize, 0U, 1U).getOrThrow() }
+        assertFailsWith<IllegalStateException> {
+            Abi.MemoryMapBuilder.new(PAGE_SIZE).roDataSize(maxSize + 1U).build().getOrThrow()
+        }
+        assertFailsWith<IllegalStateException> {
+            Abi.MemoryMapBuilder.new(PAGE_SIZE).roDataSize(maxSize).rwDataSize(1U).build().getOrThrow()
+        }
+        assertFailsWith<IllegalStateException> {
+            Abi.MemoryMapBuilder.new(PAGE_SIZE).roDataSize(maxSize).stackSize(1U).build().getOrThrow()
+        }
     }
 }
