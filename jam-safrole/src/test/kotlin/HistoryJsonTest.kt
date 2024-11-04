@@ -25,9 +25,9 @@ class HistoryJsonTest {
     private fun assertHistoricalBetaEquals(expected: HistoricalBeta, actual: HistoricalBeta, path: String) {
         // Compare header hash
         assertArrayEquals(
-            expected.headerHash,
-            actual.headerHash,
-            "$path: Mismatch in headerHash. Expected: ${expected.headerHash.toHex()}, Actual: ${actual.headerHash.toHex()}"
+            expected.hash,
+            actual.hash,
+            "$path: Mismatch in hash. Expected: ${expected.hash.toHex()}, Actual: ${actual.hash.toHex()}"
         )
 
         // Compare state root
@@ -49,9 +49,9 @@ class HistoryJsonTest {
 
         for (i in expected.reported.indices) {
             assertArrayEquals(
-                expected.reported[i],
-                actual.reported[i],
-                "$path: Mismatch in reported[$i]. Expected: ${expected.reported[i].toHex()}, Actual: ${actual.reported[i].toHex()}"
+                expected.reported[i].hash,
+                actual.reported[i].hash,
+                "$path: Mismatch in reported[$i]. Expected: ${expected.reported[i].hash.toHex()}, Actual: ${actual.reported[i].hash.toHex()}"
             )
         }
     }
@@ -80,7 +80,7 @@ class HistoryJsonTest {
         for (testCase in testCases) {
             val (inputCase) = TestFileLoader.loadTestData<HistoricalCase>(
                 "$folderName/$testCase",
-                ".scale"
+                ".bin"
             )
 
             val transition = HistoryTransition()

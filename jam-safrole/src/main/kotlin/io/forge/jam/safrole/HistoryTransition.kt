@@ -35,7 +35,7 @@ class HistoryTransition {
             input.accumulateRoot
         )
         val newBlock = HistoricalBeta(
-            headerHash = input.headerHash,
+            hash = input.headerHash,
             mmr = newMmr,
             stateRoot = ZERO_HASH,
             reported = input.workPackages
@@ -51,7 +51,7 @@ class HistoryTransition {
         require(input.accumulateRoot.size == 32) { "Accumulate root must be 32 bytes" }
         require(input.workPackages.size <= MAX_CORES) { "Too many work packages" }
         input.workPackages.forEachIndexed { index, pkg ->
-            require(pkg.size == 32) { "Work package $index must be 32 bytes" }
+            require(pkg.hash.size == 32) { "Work package $index must be 32 bytes" }
         }
     }
 

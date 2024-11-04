@@ -1,7 +1,7 @@
 package io.forge.jam.safrole
 
+import io.forge.jam.core.ReportedWorkPackage
 import io.forge.jam.core.serializers.ByteArrayHexSerializer
-import io.forge.jam.core.serializers.ByteArrayListHexSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -20,6 +20,5 @@ data class HistoricalInput(
     val accumulateRoot: ByteArray,
 
     @SerialName("work_packages")
-    @Serializable(with = ByteArrayListHexSerializer::class)
-    val workPackages: List<ByteArray>
+    val workPackages: List<ReportedWorkPackage>
 )
