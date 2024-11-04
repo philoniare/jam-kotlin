@@ -155,6 +155,11 @@ fun ByteArray.compareUnsigned(other: ByteArray): Int {
     return this.size - other.size
 }
 
+fun ByteArray.startsWith(prefix: ByteArray): Boolean {
+    if (this.size < prefix.size) return false
+    return prefix.withIndex().all { (i, byte) -> this[i] == byte }
+}
+
 // Extension function to compare ByteArrays
 fun ByteArray.compareTo(other: ByteArray): Int {
     val minLength = minOf(size, other.size)
