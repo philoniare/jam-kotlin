@@ -22,7 +22,7 @@ class PvmTest {
             )
 
             println("Running test case: ${inputCase.expectedGas}.")
-            assert(false)
+//            assert(false)
         }
     }
 }

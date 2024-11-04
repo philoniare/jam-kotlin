@@ -17,6 +17,8 @@ data class WorkReport(
     @SerialName("auth_output")
     @Serializable(with = ByteArrayHexSerializer::class)
     val authOutput: ByteArray,
+    @SerialName("segment_root_lookup")
+    val segmentRootLookup: List<SegmentRootLookup>,
     val results: List<WorkResult>
 ) : Encodable {
     override fun encode(): ByteArray {
@@ -26,7 +28,9 @@ data class WorkReport(
         val authorizerHashBytes = authorizerHash
         val authOutputLengthBytes = encodeFixedWidthInteger(authOutput.size, 1, false)
         val authOutputBytes = authOutput
+        val segmentRootLookupBytes = encodeList(segmentRootLookup)
         val resultsBytes = encodeList(results)
-        return packageSpecBytes + contextBytes + coreIndexBytes + authorizerHashBytes + authOutputLengthBytes + authOutputBytes + resultsBytes
+        return packageSpecBytes + contextBytes + coreIndexBytes + authorizerHashBytes + authOutputLengthBytes +
+            authOutputBytes + segmentRootLookupBytes + resultsBytes
     }
 }

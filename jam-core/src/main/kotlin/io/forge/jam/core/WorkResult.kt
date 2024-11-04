@@ -13,14 +13,14 @@ data class WorkResult(
     @Serializable(with = ByteArrayHexSerializer::class)
     @SerialName("payload_hash")
     val payloadHash: ByteArray,
-    @SerialName("gas_ratio")
-    val gasRatio: Long,
+    @SerialName("gas")
+    val gas: Long,
     val result: ExecutionResult
 ) : Encodable {
     override fun encode(): ByteArray {
         val serviceBytes = encodeFixedWidthInteger(service, 4, false)
-        val gasRatioBytes = encodeFixedWidthInteger(gasRatio, 8, false)
-        return serviceBytes + codeHash + payloadHash + gasRatioBytes + result.encode()
+        val gasBytes = encodeFixedWidthInteger(gas, 8, false)
+        return serviceBytes + codeHash + payloadHash + gasBytes + result.encode()
     }
 }
 
