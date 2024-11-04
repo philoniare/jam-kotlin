@@ -6,6 +6,10 @@ fun UInt.countLeadingOneBits(): Int {
     return (-this.toInt()).countLeadingZeroBits()
 }
 
+fun ULong.countLeadingOneBits(): Int {
+    return (-this.toLong()).countLeadingZeroBits()
+}
+
 fun UByteArray.toUIntLittleEndian(length: Int): UInt {
     require(length in 1..4) { "Length must be between 1 and 4" }
     var result = 0u
@@ -136,6 +140,76 @@ fun writeSimpleVarint(value: UInt, buffer: UByteArray): UInt {
     return varintLength
 }
 
+fun writeSimpleVarint64(value: ULong, buffer: UByteArray): UInt {
+    val varintLength = getBytesRequired64(value)
+    when (varintLength) {
+        0u -> {}
+        1u -> {
+            buffer[0] = value.toUByte()
+        }
+
+        2u -> {
+            buffer[0] = value.toUByte()
+            buffer[1] = (value shr 8).toUByte()
+        }
+
+        3u -> {
+            buffer[0] = value.toUByte()
+            buffer[1] = (value shr 8).toUByte()
+            buffer[2] = (value shr 16).toUByte()
+        }
+
+        4u -> {
+            buffer[0] = value.toUByte()
+            buffer[1] = (value shr 8).toUByte()
+            buffer[2] = (value shr 16).toUByte()
+            buffer[3] = (value shr 24).toUByte()
+        }
+
+        5u -> {
+            buffer[0] = value.toUByte()
+            buffer[1] = (value shr 8).toUByte()
+            buffer[2] = (value shr 16).toUByte()
+            buffer[3] = (value shr 24).toUByte()
+            buffer[4] = (value shr 32).toUByte()
+        }
+
+        6u -> {
+            buffer[0] = value.toUByte()
+            buffer[1] = (value shr 8).toUByte()
+            buffer[2] = (value shr 16).toUByte()
+            buffer[3] = (value shr 24).toUByte()
+            buffer[4] = (value shr 32).toUByte()
+            buffer[5] = (value shr 40).toUByte()
+        }
+
+        7u -> {
+            buffer[0] = value.toUByte()
+            buffer[1] = (value shr 8).toUByte()
+            buffer[2] = (value shr 16).toUByte()
+            buffer[3] = (value shr 24).toUByte()
+            buffer[4] = (value shr 32).toUByte()
+            buffer[5] = (value shr 40).toUByte()
+            buffer[6] = (value shr 48).toUByte()
+        }
+
+        8u -> {
+            buffer[0] = value.toUByte()
+            buffer[1] = (value shr 8).toUByte()
+            buffer[2] = (value shr 16).toUByte()
+            buffer[3] = (value shr 24).toUByte()
+            buffer[4] = (value shr 32).toUByte()
+            buffer[5] = (value shr 40).toUByte()
+            buffer[6] = (value shr 48).toUByte()
+            buffer[7] = (value shr 56).toUByte()
+        }
+
+        else -> throw IllegalStateException("Unexpected varint length")
+    }
+
+    return varintLength
+}
+
 
 fun getBytesRequired(value: UInt): UInt {
     val zeros = value.countLeadingZeroBits()
@@ -152,6 +226,34 @@ fun getBytesRequired(value: UInt): UInt {
                 ones > 16 -> 2u
                 ones > 8 -> 3u
                 else -> 4u
+            }
+        }
+    }
+}
+
+fun getBytesRequired64(value: ULong): UInt {
+    val zeros = value.countLeadingZeroBits()
+    return when {
+        zeros == 64 -> 0u
+        zeros > 56 -> 1u
+        zeros > 48 -> 2u
+        zeros > 40 -> 3u
+        zeros > 32 -> 4u
+        zeros > 24 -> 5u
+        zeros > 16 -> 6u
+        zeros > 8 -> 7u
+        zeros != 0 -> 8u
+        else -> {
+            val ones = value.countLeadingOneBits()
+            when {
+                ones > 56 -> 1u
+                ones > 48 -> 2u
+                ones > 40 -> 3u
+                ones > 32 -> 4u
+                ones > 24 -> 5u
+                ones > 16 -> 6u
+                ones > 8 -> 7u
+                else -> 8u
             }
         }
     }
