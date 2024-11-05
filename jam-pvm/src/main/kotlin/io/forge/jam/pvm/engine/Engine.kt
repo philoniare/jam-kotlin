@@ -1,6 +1,7 @@
 package io.forge.jam.pvm.engine
 
 data class Engine(
+    val selectedBackend: BackendKind,
     val selectedSandbox: SandboxKind?,
     val interpreterEnabled: Boolean,
     val crosscheck: Boolean,
@@ -22,7 +23,8 @@ data class Engine(
                 interpreterEnabled = true,
                 crosscheck = crosscheck,
                 state = EngineState.new(moduleCache = null),
-                allowDynamicPaging = config.allowDynamicPaging
+                allowDynamicPaging = config.allowDynamicPaging,
+                selectedBackend = BackendKind.Interpreter
             )
         }
     }

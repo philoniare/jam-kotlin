@@ -36,7 +36,7 @@ sealed class InterruptKind {
      * Requires dynamic paging to be enabled with [ModuleConfig.setDynamicPaging],
      * otherwise is never emitted.
      */
-    data class Segfault(val fault: Segfault) : InterruptKind()
+    data class Segfault(val fault: SegfaultInfo) : InterruptKind()
 
     /**
      * The execution ran out of gas.

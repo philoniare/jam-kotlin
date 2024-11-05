@@ -1,16 +1,18 @@
 package io.forge.jam.pvm.program
 
+import io.forge.jam.pvm.engine.RuntimeInstructionSet
+
 /**
  * A partially deserialized PolkaVM program.
  */
 data class ProgramBlob(
-    private var is64Bit: Boolean = false,
-    private var roDataSize: UInt = 0u,
-    private var rwDataSize: UInt = 0u,
-    private var stackSize: UInt = 0u,
-    private var roData: ArcBytes = ArcBytes.empty(),
-    private var rwData: ArcBytes = ArcBytes.empty(),
-    private var code: ArcBytes = ArcBytes.empty(),
+    var is64Bit: Boolean = false,
+    var roDataSize: UInt = 0u,
+    var rwDataSize: UInt = 0u,
+    var stackSize: UInt = 0u,
+    var roData: ArcBytes = ArcBytes.empty(),
+    var rwData: ArcBytes = ArcBytes.empty(),
+    var code: ArcBytes = ArcBytes.empty(),
     private var jumpTable: ArcBytes = ArcBytes.empty(),
     private var jumpTableEntrySize: Byte = 0,
     private var bitmask: ArcBytes = ArcBytes.empty(),
@@ -24,8 +26,11 @@ data class ProgramBlob(
     companion object {
         private val VM_MAXIMUM_JUMP_TABLE_ENTRIES: UInt = 16u * 1024u * 1024u
         private val VM_MAXIMUM_CODE_SIZE: UInt = 32u * 1024u * 1024u
-        private val BLOB_LEN_OFFSET: Int = ProgramParts.BLOB_MAGIC.size + 1
         private const val VERSION_DEBUG_LINE_PROGRAM_V1: Byte = 1
+
+        fun isJumpTargetValid(instructionSet: RuntimeInstructionSet, offset: ProgramCounter) {
+            TODO("Not yet implemented")
+        }
 
         fun fromParts(parts: ProgramParts): Result<ProgramBlob> = runCatching {
             val blob = ProgramBlob(

@@ -19,6 +19,8 @@ enum class Reg {
     A4,
     A5;
 
+    fun toIndex(): Int = ordinal
+
     /**
      * Returns the ABI name of the register (e.g., "ra", "sp", "a0").
      */

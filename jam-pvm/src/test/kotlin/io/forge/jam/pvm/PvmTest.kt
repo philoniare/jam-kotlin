@@ -2,7 +2,6 @@ package io.forge.jam.pvm
 
 import io.forge.jam.core.encoding.TestFileLoader
 import io.forge.jam.pvm.engine.*
-import io.forge.jam.pvm.program.ArcBytes
 import io.forge.jam.pvm.program.ProgramBlob
 import io.forge.jam.pvm.program.ProgramParts
 import org.junit.jupiter.api.Test
@@ -20,8 +19,8 @@ class PvmTest {
             )
 
             val config = Config.new()
-            val engine = Engine.new(config)
-            
+            val engine = Engine.new(config).getOrThrow()
+
             val parts = ProgramParts.fromRaw(inputCase.program).getOrThrow()
             val blob = ProgramBlob.fromParts(parts).getOrThrow()
 

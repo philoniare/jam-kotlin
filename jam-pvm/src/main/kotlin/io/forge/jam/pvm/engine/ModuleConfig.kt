@@ -1,13 +1,13 @@
 package io.forge.jam.pvm.engine
 
 class ModuleConfig private constructor(
-    private var pageSize: UInt = 0x1000u,
-    private var gasMeteringKind: GasMeteringKind? = null,
-    private var isStrict: Boolean = false,
-    private var stepTracing: Boolean = false,
-    private var dynamicPaging: Boolean = false,
-    private var auxDataSize: UInt = 0u,
-    private var allowSbrk: Boolean = true,
+    var pageSize: UInt = 0x1000u,
+    var gasMetering: GasMeteringKind? = null,
+    var isStrict: Boolean = false,
+    var stepTracing: Boolean = false,
+    var dynamicPaging: Boolean = false,
+    var auxDataSize: UInt = 0u,
+    var allowSbrk: Boolean = true,
     private var cacheByHash: Boolean = false
 ) : Cloneable {
 
@@ -40,7 +40,7 @@ class ModuleConfig private constructor(
      * Default: `None`
      */
     fun setGasMetering(kind: GasMeteringKind?): ModuleConfig = apply {
-        this.gasMeteringKind = kind
+        this.gasMetering = kind
     }
 
     /**
@@ -117,7 +117,7 @@ class ModuleConfig private constructor(
 
     public override fun clone(): ModuleConfig = ModuleConfig(
         pageSize = pageSize,
-        gasMeteringKind = gasMeteringKind,
+        gasMetering = gasMetering,
         isStrict = isStrict,
         stepTracing = stepTracing,
         dynamicPaging = dynamicPaging,
