@@ -1,6 +1,7 @@
 package io.forge.jam.pvm.engine
 
 import io.forge.jam.pvm.Abi
+import io.forge.jam.pvm.program.Program
 import io.forge.jam.pvm.program.ProgramBlob
 import io.forge.jam.pvm.program.ProgramCounter
 import io.forge.jam.pvm.program.asRef
@@ -128,13 +129,13 @@ class Module private constructor(private var state: AtomicReference<ModulePrivat
 
     fun gasMetering(): GasMeteringKind? = state().gasMetering
 
-    fun findStartOfBasicBlock(offset: ProgramCounter): ProgramCounter {
-        Program.findStartOfBasicBlock(
+    fun findStartOfBasicBlock(offset: ProgramCounter): ProgramCounter? {
+        return Program.findStartOfBasicBlock(
             state().instructionSet,
             state().blob.code.toByteArray(),
             state().blob.bitmask.toByteArray(),
             offset.value
-        )?.let { return ProgramCounter(it) }
+        )?.let { ProgramCounter(it) }
     }
 
 }

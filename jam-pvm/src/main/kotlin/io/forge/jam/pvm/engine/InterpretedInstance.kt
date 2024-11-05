@@ -155,9 +155,7 @@ class InterpretedInstance private constructor(
             return target
         }
 
-        val basicBlockOffset = module.findStartOfBasicBlock(programCounter)?.also { offset ->
-        } ?: run {
-            return null
+        val basicBlockOffset = module.findStartOfBasicBlock(programCounter).also { offset ->
         }
 
         compileBlock(basicBlockOffset) ?: return null

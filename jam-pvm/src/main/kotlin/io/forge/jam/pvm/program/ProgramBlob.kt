@@ -23,14 +23,15 @@ data class ProgramBlob(
     private var debugLineProgramRanges: ArcBytes = ArcBytes.empty(),
     private var debugLinePrograms: ArcBytes = ArcBytes.empty()
 ) {
+    fun isJumpTargetValid(instructionSet: RuntimeInstructionSet, offset: ProgramCounter): Boolean {
+        return Program.isJumpTargetValid(instructionSet, code.toByteArray(), bitmask.asRef(), offset.value)
+    }
+
+
     companion object {
         private val VM_MAXIMUM_JUMP_TABLE_ENTRIES: UInt = 16u * 1024u * 1024u
         private val VM_MAXIMUM_CODE_SIZE: UInt = 32u * 1024u * 1024u
         private const val VERSION_DEBUG_LINE_PROGRAM_V1: Byte = 1
-
-        fun isJumpTargetValid(instructionSet: RuntimeInstructionSet, offset: ProgramCounter) {
-            TODO("Not yet implemented")
-        }
 
         fun fromParts(parts: ProgramParts): Result<ProgramBlob> = runCatching {
             val blob = ProgramBlob(
