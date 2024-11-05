@@ -9,6 +9,81 @@ data class Instructions<I>(
     private var isDone: Boolean = false,
     private val instructionSet: I
 ) : Iterator<ParsedInstruction> {
+
+    override fun hasNext(): Boolean = !isDone && offset.toInt() < code.size
+
+    override fun next(): ParsedInstruction {
+        invalidOffset?.let { invalid ->
+            invalidOffset = null
+            return ParsedInstruction(
+                kind = Instruction.Invalid,
+                offset = ProgramCounter(invalid),
+                nextOffset = ProgramCounter(offset)
+            )
+        }
+
+        if (isDone || offset.toInt() >= code.size) {
+            throw NoSuchElementException("No more instructions")
+        }
+
+        val currentOffset = offset
+        assert(Program.getBitForOffset(bitmask, code.size, currentOffset)) {
+            "Invalid instruction offset"
+        }
+
+
+        val (nextOffset, instruction, isNextInstructionInvalid) =
+            parseInstruction(instructionSet, code, bitmask, currentOffset)
+        assert(nextOffset > currentOffset)
+
+        if (!isNextInstructionInvalid) {
+            offset = nextOffset
+            assert(
+                offset.toInt() == code.size ||
+                    Program.getBitForOffset(bitmask, code.size, offset)
+            ) { "bit at $offset is zero" }
+        } else {
+            when {
+                nextOffset.toInt() == code.size -> {
+                    offset = (code.size + 1).toUInt()
+                }
+
+                isBounded -> {
+                    isDone = true
+                    offset = if (instruction.opcode().canFallthrough()) {
+                        code.size.toUInt()
+                    } else {
+                        nextOffset
+                    }
+                }
+
+                else -> {
+                    offset = Program.findNextOffsetUnbounded(bitmask, code.size.toUInt(), nextOffset)
+                    assert(
+                        offset.toInt() == code.size ||
+                            Program.getBitForOffset(bitmask, code.size, offset)
+                    ) { "bit at $offset is zero" }
+                }
+            }
+
+            if (instruction.opcode().canFallthrough()) {
+                invalidOffset = nextOffset
+            }
+        }
+
+        return ParsedInstruction(
+            kind = instruction,
+            offset = ProgramCounter(currentOffset),
+            nextOffset = ProgramCounter(nextOffset)
+        )
+    }
+
+    fun sizeHint(): Pair<Int, Int?> {
+        val remaining = code.size - minOf(offset.toInt(), code.size)
+        return 0 to remaining
+    }
+
+
     companion object {
         fun <I> new(
             instructionSet: I,
