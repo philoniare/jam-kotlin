@@ -1,10 +1,7 @@
 package io.forge.jam.pvm.engine
 
 import io.forge.jam.pvm.Abi
-import io.forge.jam.pvm.program.Program
-import io.forge.jam.pvm.program.ProgramBlob
-import io.forge.jam.pvm.program.ProgramCounter
-import io.forge.jam.pvm.program.asRef
+import io.forge.jam.pvm.program.*
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.log2
 
@@ -136,6 +133,10 @@ class Module private constructor(private var state: AtomicReference<ModulePrivat
             state().blob.bitmask.toByteArray(),
             offset.value
         )?.let { ProgramCounter(it) }
+    }
+
+    fun instructionsBoundedAt(offset: ProgramCounter): Instructions<RuntimeInstructionSet> {
+        return state().blob.instructionsBoundedAt(state().instructionSet, offset)
     }
 
 }

@@ -71,6 +71,27 @@ class Program {
             return ((bitmask[byteIndex].toInt() shr shift) and 1) == 1
         }
 
+        fun findNextOffsetUnbounded(bitmask: ByteArray, codeLen: UInt, offsetStart: UInt): UInt {
+            var offset = offsetStart
+            while (true) {
+                val byteIndex = (offset.toLong() shr 3).toInt()
+                if (byteIndex >= bitmask.size) break
+
+                val byte = bitmask[byteIndex].toUByte()
+                val shift = (offset and 7u).toInt()
+                val mask = byte.toUInt() shr shift
+
+                if (mask == 0u) {
+                    offset += (8u - shift.toUInt())
+                } else {
+                    offset += mask.countTrailingZeroBits().toUInt()
+                    break
+                }
+            }
+
+            return minOf(codeLen, offset)
+        }
+
         fun findStartOfBasicBlock(
             instructionSet: RuntimeInstructionSet,
             code: ByteArray,

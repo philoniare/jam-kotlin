@@ -23,6 +23,16 @@ data class ProgramBlob(
     private var debugLineProgramRanges: ArcBytes = ArcBytes.empty(),
     private var debugLinePrograms: ArcBytes = ArcBytes.empty()
 ) {
+
+    fun <T> instructionsBoundedAt(instructionSet: T, offset: ProgramCounter): Instructions<T> {
+        return Instructions(
+            code = code.toByteArray(),
+            bitmask = bitmask.toByteArray(),
+            offset = offset.value,
+            instructionSet = instructionSet
+        )
+    }
+
     fun isJumpTargetValid(instructionSet: RuntimeInstructionSet, offset: ProgramCounter): Boolean {
         return Program.isJumpTargetValid(instructionSet, code.toByteArray(), bitmask.asRef(), offset.value)
     }
