@@ -149,22 +149,92 @@ class InterpretedInstance private constructor(
         return Pair(isJumpTargetValid, target)
     }
 
-    fun resolveArbitraryJump(programCounter: ProgramCounter): Target {
+    fun resolveArbitraryJump(programCounter: ProgramCounter): Target? {
         compiledOffsetForBlock.get(programCounter.value)?.let { compiledOffset ->
             val (_, target) = unpackTarget(compiledOffset)
             return target
         }
 
-        val basicBlockOffset = module.findStartOfBasicBlock(programCounter).also { offset ->
-        }
+        val basicBlockOffset = module.findStartOfBasicBlock(programCounter)
 
-        compileBlock(basicBlockOffset) ?: return null
+        compileBlock(basicBlockOffset)
 
         // Get the compiled offset and unpack target
         return compiledOffsetForBlock.get(programCounter.value)?.let { compiledOffset ->
             unpackTarget(compiledOffset).second
         }
+    }
 
+    fun compileBlock(programCounter: ProgramCounter?): Target? {
+        if (programCounter?.value!! > module.codeLen()) {
+            return null
+        }
+
+        var origin = try {
+            compiledHandlers.size.toUInt()
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to compile block: ${e.message}")
+        }
+
+        val gasVisitor = GasVisitor()
+        var chargeGasIndex: Pair<ProgramCounter, Int>? = null
+        var isJumpTargetValid = module.isJumpTargetValid(programCounter)
+
+        for (instruction in module.instructionsBoundedAt(programCounter)) {
+            compiledOffsetForBlock[instruction.offset.value] = packTarget(
+                compiledHandlers.size,
+                isJumpTargetValid
+            )
+
+            isJumpTargetValid = false
+
+            if (stepTracing) {
+                emit(Step(instruction.offset))
+            }
+
+            if (module.gasMetering() != null) {
+                if (chargeGasIndex == null) {
+
+                    chargeGasIndex = instruction.offset to compiledHandlers.size
+                    emit(ChargeGas(instruction.offset, 0))
+                }
+                instruction.visit(gasVisitor)
+            }
+
+            // Debug assertions equivalent
+            val originalLength = compiledHandlers.size
+
+            instruction.visit(
+                Compiler(
+                    programCounter = instruction.offset,
+                    nextProgramCounter = instruction.nextOffset,
+                    compiledHandlers = compiledHandlers,
+                    compiledArgs = compiledArgs,
+                    module = module
+                )
+            )
+
+            // Debug assertions equivalent
+            assert(compiledHandlers.size > originalLength) {
+                "Handler size must increase after instruction visit"
+            }
+
+            if (instruction.opcode.startsNewBasicBlock()) {
+                break
+            }
+        }
+
+        chargeGasIndex?.let { (programCounter, index) ->
+            val gasCost = gasVisitor.takeBlockCost()
+                ?: throw IllegalStateException("No gas cost available")
+            compiledArgs[index] = Args.chargeGas(programCounter, gasCost)
+        }
+
+        if (compiledHandlers.size == origin.toInt()) {
+            return null
+        }
+
+        return origin.toTarget()
     }
 
     private fun runImpl(debug: Boolean): InterruptKind {
@@ -177,7 +247,7 @@ class InterpretedInstance private constructor(
                 nextProgramCounter ?: throw IllegalStateException("Failed to run: next program counter is not set")
 
             this.programCounter = programCounter
-            this.compiledOffset = resolveArbitraryJump(programCounter, debug)
+            this.compiledOffset = resolveArbitraryJump(programCounter)
 
         }
 
