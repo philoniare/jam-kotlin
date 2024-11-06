@@ -1,5 +1,6 @@
 package io.forge.jam.pvm.program
 
+import io.forge.jam.pvm.engine.InstructionSet
 import io.forge.jam.pvm.engine.RuntimeInstructionSet
 
 /**
@@ -24,7 +25,7 @@ data class ProgramBlob(
     private var debugLinePrograms: ArcBytes = ArcBytes.empty()
 ) {
 
-    fun <T> instructionsBoundedAt(instructionSet: T, offset: ProgramCounter): Instructions<T> {
+    fun <I : InstructionSet> instructionsBoundedAt(instructionSet: I, offset: ProgramCounter): Instructions<I> {
         return Instructions(
             code = code.toByteArray(),
             bitmask = bitmask.toByteArray(),

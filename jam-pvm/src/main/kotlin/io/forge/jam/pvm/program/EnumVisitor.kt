@@ -2,7 +2,7 @@ package io.forge.jam.pvm.program
 
 import io.forge.jam.pvm.engine.InstructionSet
 
-data class EnumVisitor<I : InstructionSet>(override val instructionSet: I, override val state: Unit) :
+data class EnumVisitor<I : InstructionSet>(override val instructionSet: I) :
     OpcodeVisitor<Instruction, I> {
     override fun dispatch(opcode: UInt, chunk: ULong, offset: UInt, skip: UInt): Instruction {
         if (instructionSet.opcodeFromU8(opcode.toUByte()) == null) {

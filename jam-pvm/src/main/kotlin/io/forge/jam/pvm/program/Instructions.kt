@@ -1,6 +1,8 @@
 package io.forge.jam.pvm.program
 
-data class Instructions<I>(
+import io.forge.jam.pvm.engine.InstructionSet
+
+data class Instructions<I : InstructionSet>(
     private val code: ByteArray,
     private val bitmask: ByteArray,
     private var offset: UInt = 0u,
@@ -8,7 +10,7 @@ data class Instructions<I>(
     private var isBounded: Boolean = false,
     private var isDone: Boolean = false,
     private val instructionSet: I
-) : Iterator<ParsedInstruction> {
+) : Iterator<ParsedInstruction>, Cloneable {
 
     override fun hasNext(): Boolean = !isDone && offset.toInt() < code.size
 
@@ -33,7 +35,7 @@ data class Instructions<I>(
 
 
         val (nextOffset, instruction, isNextInstructionInvalid) =
-            parseInstruction(instructionSet, code, bitmask, currentOffset)
+            Program.parseInstruction(instructionSet, code, bitmask, currentOffset)
         assert(nextOffset > currentOffset)
 
         if (!isNextInstructionInvalid) {
@@ -85,7 +87,7 @@ data class Instructions<I>(
 
 
     companion object {
-        fun <I> new(
+        fun <I : InstructionSet> new(
             instructionSet: I,
             code: ByteArray,
             bitmask: ByteArray,

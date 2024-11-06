@@ -3,7 +3,6 @@ package io.forge.jam.pvm.program
 import io.forge.jam.pvm.engine.InstructionSet
 import io.forge.jam.pvm.engine.RuntimeInstructionSet
 import io.forge.jam.pvm.readSimpleVarint
-import java.math.BigInteger
 
 /**
  * Static container for program-wide operations and lookup tables.
@@ -29,17 +28,23 @@ class Program {
             }
         }
 
-        fun visitorStepFast() {
-
-        }
-
-        fun <T, S, R> visitorStepSlow(
-            state: S,
+        fun <I : InstructionSet> visitorStepFast(
+            state: Unit,
             code: ByteArray,
             bitmask: ByteArray,
             offset: UInt,
-            opcodeVisitor: OpcodeVisitor<S, R>
-        ) {
+            opcodeVisitor: OpcodeVisitor<Instruction, I>
+        ): Triple<UInt, Instruction, Boolean> {
+
+        }
+
+        fun <I : InstructionSet> visitorStepSlow(
+            state: Unit,
+            code: ByteArray,
+            bitmask: ByteArray,
+            offset: UInt,
+            opcodeVisitor: OpcodeVisitor<Instruction, I>
+        ): Triple<UInt, Instruction, Boolean> {
             if (offset.toInt() >= code.size) {
                 return Triple(offset + 1u, visitorStepInvalidInstruction(state, offset, opcodeVisitor), true)
             }
@@ -57,32 +62,30 @@ class Program {
             var finalIsNextInstructionInvalid = isNextInstructionInvalid
             if (isNextInstructionInvalid && offset.toInt() + skip.toInt() + 1 >= code.size) {
                 // Last instruction handling
-                opcodeVisitor.instructionSet.opcodeFromByte(opcode.toByte())?.let { opcodeValue ->
+                opcodeVisitor.instructionSet.opcodeFromU8(opcode.toUByte())?.let { opcodeValue ->
                     if (!opcodeValue.canFallthrough()) {
                         finalIsNextInstructionInvalid = false
                     }
                 }
             }
 
-            // Create 16-byte array for chunk conversion
             val t = ByteArray(16)
             chunk.drop(1).take(15).forEachIndexed { index, byte ->
                 t[index] = byte
             }
 
-            // Convert to ULong (since Kotlin doesn't have u128)
             val chunkValue = t.take(8).foldIndexed(0UL) { index, acc, byte ->
                 acc or (byte.toULong() and 0xFFUL shl (index * 8))
             }
 
             assert(
-                opcodeVisitor.instructionSet.opcodeFromByte(opcode.toByte()) != null ||
+                opcodeVisitor.instructionSet.opcodeFromU8(opcode.toUByte()) != null ||
                     !isJumpTargetValid(opcodeVisitor.instructionSet, code, bitmask, offset + skip + 1u)
             )
 
             return Triple(
                 offset + skip + 1u,
-                opcodeVisitor.dispatch(state, opcode, chunkValue, offset, skip),
+                opcodeVisitor.dispatch(opcode.toUInt(), chunkValue, offset, skip),
                 finalIsNextInstructionInvalid
             )
         }
@@ -151,22 +154,22 @@ class Program {
             return mask.countTrailingZeroBits().toUInt()
         }
 
-        fun <T : OpcodeVisitor<S, R, I>, S, R, I : InstructionSet> visitorStepInvalidInstruction(
-            state: S,
+        fun <I : InstructionSet> visitorStepInvalidInstruction(
+            state: Unit,
             offset: UInt,
-            opcodeVisitor: T
-        ): R {
+            opcodeVisitor: OpcodeVisitor<Instruction, I>
+        ): Instruction {
             return opcodeVisitor.dispatch(
                 state = state,
                 opcode = INVALID_INSTRUCTION_INDEX,
-                chunk = BigInteger.valueOf(0L),
+                chunk = 0UL,
                 offset = offset,
                 skip = 0u
             )
         }
 
-        fun isJumpTargetValid(
-            instructionSet: RuntimeInstructionSet,
+        fun <I : InstructionSet> isJumpTargetValid(
+            instructionSet: I,
             code: ByteArray,
             bitmask: ByteArray,
             offset: UInt
