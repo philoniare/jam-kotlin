@@ -4,7 +4,7 @@ package io.forge.jam.pvm.engine
  * A specialized map implementation optimized for flat, dense numeric keys.
  * @param T The type of values stored in the map
  */
-internal class FlatMap<T : Any> private constructor(
+class FlatMap<T : Any> private constructor(
     private var inner: MutableList<T?>
 ) {
     companion object {

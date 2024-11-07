@@ -1,5 +1,7 @@
 package io.forge.jam.pvm.engine
 
+import io.forge.jam.pvm.program.ProgramCounter
+
 /**
  * Arguments structure for VM instructions.
  */
@@ -14,5 +16,7 @@ data class Args(
          * Creates a default Args instance with all values set to 0
          */
         fun default(): Args = Args()
+
+        fun trap(programCounter: ProgramCounter) = Args(a0 = programCounter.value)
     }
 }

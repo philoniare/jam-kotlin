@@ -3,7 +3,7 @@ package io.forge.jam.pvm.engine
 /**
  * Internal implementation of basic memory management for the VM
  */
-internal class BasicMemory private constructor(
+class BasicMemory private constructor(
     private val rwData: MutableList<UByte>,
     private val stack: MutableList<UByte>,
     private val aux: MutableList<UByte>,

@@ -5,7 +5,7 @@ import java.util.*
 /**
  * Internal implementation of dynamic memory management using page mapping
  */
-internal class DynamicMemory private constructor(
+class DynamicMemory private constructor(
     private val pages: TreeMap<UInt, ByteArray>
 ) {
     companion object {

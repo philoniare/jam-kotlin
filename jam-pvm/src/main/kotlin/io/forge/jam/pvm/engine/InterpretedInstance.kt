@@ -1,5 +1,6 @@
 package io.forge.jam.pvm.engine
 
+import io.forge.jam.pvm.program.Compiler
 import io.forge.jam.pvm.program.ProgramCounter
 import io.forge.jam.pvm.program.Reg
 
@@ -10,21 +11,21 @@ typealias Handler = (visitor: Visitor) -> Target?
  */
 class InterpretedInstance private constructor(
     val module: Module,
-    private val basicMemory: BasicMemory,
-    private val dynamicMemory: DynamicMemory,
+    val basicMemory: BasicMemory,
+    val dynamicMemory: DynamicMemory,
     val regs: ULongArray,
     var programCounter: ProgramCounter,
     var programCounterValid: Boolean,
     var nextProgramCounter: ProgramCounter?,
-    private var nextProgramCounterChanged: Boolean,
-    private var cycleCounter: ULong,
-    private var gas: Long,
-    private val compiledOffsetForBlock: FlatMap<NonZeroUInt>,
-    private val compiledHandlers: MutableList<Handler>,
-    private val compiledArgs: MutableList<Args>,
+    var nextProgramCounterChanged: Boolean,
+    var cycleCounter: ULong,
+    var gas: Long,
+    val compiledOffsetForBlock: FlatMap<NonZeroUInt>,
+    val compiledHandlers: MutableList<Handler>,
+    val compiledArgs: MutableList<Args>,
     var compiledOffset: UInt,
     var interrupt: InterruptKind,
-    private val stepTracing: Boolean
+    val stepTracing: Boolean
 ) {
     companion object {
         private const val TARGET_OUT_OF_RANGE = 0u
