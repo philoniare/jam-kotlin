@@ -8,6 +8,10 @@ class RawInstance(
     private val backend: InstanceBackend,
     private val crosscheckInstance: InterpretedInstance? = null
 ) {
+    companion object {
+        const val VM_ADDR_RETURN_TO_HOST: UInt = 0xffff0000u
+    }
+
     fun module(): Module = module
 
     fun run(): Result<InterruptKind> {
@@ -20,36 +24,15 @@ class RawInstance(
         }
 
         while (true) {
+            val interruption = backend.access { backend ->
+                backend.run()
+                    .getOrElse { error ->
+                        return Result.failure(PvmError.fromDisplay("execution failed: $error"))
+                    }
+            }
 
-            val interruption =
-                backend.access { backend ->
-                    backend.run()
-                        .getOrElse { error -> return Result.failure(PvmError.fromDisplay("execution failed: $error")) }
-                }
-
-            crosscheckInstance?.let { crosscheck ->
-                val isStep = interruption == InterruptKind.Step
-                val expectedInterruption = crosscheck.run()
-                    .getOrElse { throw Exception("crosscheck failed") }
-
-                require(interruption == expectedInterruption) {
-                    "run: crosscheck mismatch, interpreter = $expectedInterruption, backend = $interruption"
-                }
-
-                val crosscheckGas = crosscheck.gas()
-                val crosscheckProgramCounter = crosscheck.programCounter()
-                val crosscheckNextProgramCounter = crosscheck.nextProgramCounter()
-
-                if (module.gasMetering() == GasMeteringKind.Sync) {
-                    require(gas() == crosscheckGas)
-                }
-
-                require(programCounter() == crosscheckProgramCounter)
-                require(nextProgramCounter() == crosscheckNextProgramCounter)
-
-                if (isStep && !module.state().stepTracing) {
-                    continue
-                }
+            if (handleCrosscheck(interruption)) {
+                continue
             }
 
             if (gas() < 0) {
@@ -58,6 +41,34 @@ class RawInstance(
 
             return Result.success(interruption)
         }
+    }
+
+    private fun handleCrosscheck(interruption: InterruptKind): Boolean {
+        crosscheckInstance?.let { crosscheck ->
+            val isStep = interruption == InterruptKind.Step
+            val expectedInterruption = crosscheck.run()
+                .getOrElse { throw Exception("crosscheck failed") }
+
+            require(interruption == expectedInterruption) {
+                "run: crosscheck mismatch, interpreter = $expectedInterruption, backend = $interruption"
+            }
+
+            val crosscheckGas = crosscheck.gas()
+            val crosscheckProgramCounter = crosscheck.programCounter()
+            val crosscheckNextProgramCounter = crosscheck.nextProgramCounter()
+
+            if (module.gasMetering() == GasMeteringKind.Sync) {
+                require(gas() == crosscheckGas)
+            }
+
+            require(programCounter() == crosscheckProgramCounter)
+            require(nextProgramCounter() == crosscheckNextProgramCounter)
+
+            if (isStep && !module.state().stepTracing) {
+                return true
+            }
+        }
+        return false
     }
 
     fun reg(reg: Reg): ULong = backend.access { backend -> backend.reg(reg) }
@@ -70,8 +81,8 @@ class RawInstance(
     fun gas(): Long = backend.access { backend -> backend.gas() }
 
     fun setGas(gas: Long) {
-        crosscheckInstance?.setGas(gas)
-        backend.access { backend -> backend.setGas(gas) }
+        crosscheckInstance?.gas = gas
+        backend.access { backend -> backend.gas = gas }
     }
 
     fun programCounter(): ProgramCounter? = backend.access { backend -> backend.programCounter() }
@@ -139,7 +150,7 @@ class RawInstance(
             return Result.failure(MemoryAccessError.outOfRangeAccess(address, data.size.toULong()))
         }
 
-        val result = backend.writeMemory(address, data)
+        val result = backend.access { backend -> backend.writeMemory(address, data) }
 
         crosscheckInstance?.let { crosscheck ->
             val expectedResult = crosscheck.writeMemory(address, data)
@@ -156,7 +167,7 @@ class RawInstance(
         return result
     }
 
-    fun prepareCallUntyped(pc: ProgramCounter, args: List<RegValue>) {
+    fun prepareCallUntyped(pc: ProgramCounter, args: List<ULong>) {
         require(args.size <= Reg.ARG_REGS.size) { "too many arguments" }
 
         clearRegs()
@@ -169,15 +180,15 @@ class RawInstance(
         }
     }
 
-    fun heapSize(): UInt = backend.heapSize()
+    fun heapSize(): UInt = backend.access { backend -> backend.heapSize() }
 
-    fun sbrk(size: UInt): Result<UInt?> {
-        val result = backend.sbrk(size)
+    fun sbrk(size: UInt): UInt? {
+        val result = backend.access { backend -> backend.sbrk(size) }
 
         crosscheckInstance?.let { crosscheck ->
             val expectedResult = crosscheck.sbrk(size)
-            val expected = expectedResult.isSuccess
-            val actual = result.isSuccess
+            val expected = expectedResult != null
+            val actual = result != null
 
             require(expected == actual) {
                 "sbrk: crosscheck mismatch, size = $size, interpreter = $expected, backend = $actual"
@@ -187,7 +198,7 @@ class RawInstance(
         return result
     }
 
-    fun pid(): UInt? = backend.pid()
+    fun pid(): UInt? = backend.access { backend -> backend.pid() }
 
-    fun nextNativeProgramCounter(): ULong? = backend.nextNativeProgramCounter()
+    fun nextNativeProgramCounter(): ULong? = backend.access { backend -> backend.nextNativeProgramCounter() }
 }

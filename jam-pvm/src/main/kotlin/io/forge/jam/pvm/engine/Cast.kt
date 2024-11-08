@@ -17,103 +17,103 @@ value class Cast<T>(val value: T) {
  * Byte (i8) extensions
  */
 @Suppress("NOTHING_TO_INLINE")
-inline fun Cast<Byte>.toI32SignExtend(): Int = value.toInt()
+inline fun Cast<Byte>.byteToI32SignExtend(): Int = value.toInt()
 
 @Suppress("NOTHING_TO_INLINE")
-inline fun Cast<Byte>.toI64SignExtend(): Long = value.toLong()
+inline fun Cast<Byte>.byteToI64SignExtend(): Long = value.toLong()
 
 /**
  * Short (i16) extensions
  */
 @Suppress("NOTHING_TO_INLINE")
-inline fun Cast<Short>.toI32SignExtend(): Int = value.toInt()
+inline fun Cast<Short>.shortToI32SignExtend(): Int = value.toInt()
 
 @Suppress("NOTHING_TO_INLINE")
-inline fun Cast<Short>.toI64SignExtend(): Long = value.toLong()
+inline fun Cast<Short>.shortToI64SignExtend(): Long = value.toLong()
 
 /**
  * Int (i32) extensions
  */
 @Suppress("NOTHING_TO_INLINE")
-inline fun Cast<Int>.toUnsigned(): UInt = value.toUInt()
+inline fun Cast<Int>.intToUnsigned(): UInt = value.toUInt()
 
 @Suppress("NOTHING_TO_INLINE")
-inline fun Cast<Int>.toI64SignExtend(): Long = value.toLong()
+inline fun Cast<Int>.intToI64SignExtend(): Long = value.toLong()
 
 /**
  * Long (i64) extensions
  */
 @Suppress("NOTHING_TO_INLINE")
-inline fun Cast<Long>.toUnsigned(): ULong = value.toULong()
+inline fun Cast<Long>.longToUnsigned(): ULong = value.toULong()
 
 /**
  * UByte (u8) extensions
  */
 @Suppress("NOTHING_TO_INLINE")
-inline fun Cast<UByte>.toSigned(): Byte = value.toByte()
+inline fun Cast<UByte>.ubyteToSigned(): Byte = value.toByte()
 
 @Suppress("NOTHING_TO_INLINE")
-inline fun Cast<UByte>.toU64(): ULong = value.toULong()
+inline fun Cast<UByte>.ubyteToU64(): ULong = value.toULong()
 
 /**
  * UShort (u16) extensions
  */
 @Suppress("NOTHING_TO_INLINE")
-inline fun Cast<UShort>.toU64(): ULong = value.toULong()
+inline fun Cast<UShort>.ushortToU64(): ULong = value.toULong()
 
 /**
  * UInt (u32) extensions
  */
 @Suppress("NOTHING_TO_INLINE")
-inline fun Cast<UInt>.assertAlwaysFitsInU32(): UInt {
+inline fun Cast<UInt>.uintAssertAlwaysFitsInU32(): UInt {
     assert(value <= UInt.MAX_VALUE) { "Value doesn't fit in UInt" }
     return value.toUInt()
 }
 
 @Suppress("NOTHING_TO_INLINE")
-inline fun Cast<UInt>.toSigned(): Int = value.toInt()
+inline fun Cast<UInt>.uintToSigned(): Int = value.toInt()
 
 @Suppress("NOTHING_TO_INLINE")
-inline fun Cast<UInt>.toU64(): ULong = value.toULong()
+inline fun Cast<UInt>.uintToU64(): ULong = value.toULong()
 
 @Suppress("NOTHING_TO_INLINE")
-inline fun Cast<UInt>.toUSize(): ULong = value.toULong()
+inline fun Cast<UInt>.uintToUSize(): ULong = value.toULong()
 
 @Suppress("NOTHING_TO_INLINE")
-inline fun Cast<UInt>.truncateToU8(): UByte = value.toUByte()
+inline fun Cast<UInt>.uintTruncateToU8(): UByte = value.toUByte()
 
 @Suppress("NOTHING_TO_INLINE")
-inline fun Cast<UInt>.truncateToU16(): UShort = value.toUShort()
+inline fun Cast<UInt>.uintTruncateToU16(): UShort = value.toUShort()
 
 /**
  * ULong (u64) extensions
  */
 @Suppress("NOTHING_TO_INLINE")
-inline fun Cast<ULong>.assertAlwaysFitsInU32(): UInt {
+inline fun Cast<ULong>.ulongAssertAlwaysFitsInU32(): UInt {
     assert(value <= UInt.MAX_VALUE.toULong()) { "Value doesn't fit in UInt" }
     return value.toUInt()
 }
 
 @Suppress("NOTHING_TO_INLINE")
-inline fun Cast<ULong>.toSigned(): Long = value.toLong()
+inline fun Cast<ULong>.ulongToSigned(): Long = value.toLong()
 
 @Suppress("NOTHING_TO_INLINE")
-inline fun Cast<ULong>.truncateToU8(): UByte = value.toUByte()
+inline fun Cast<ULong>.ulongTruncateToU8(): UByte = value.toUByte()
 
 @Suppress("NOTHING_TO_INLINE")
-inline fun Cast<ULong>.truncateToU16(): UShort = value.toUShort()
+inline fun Cast<ULong>.ulongTruncateToU16(): UShort = value.toUShort()
 
 @Suppress("NOTHING_TO_INLINE")
-inline fun Cast<ULong>.truncateToU32(): UInt = value.toUInt()
+inline fun Cast<ULong>.ulongTruncateToU32(): UInt = value.toUInt()
 
 /**
- * ULong (usize) extensions - in Kotlin we use ULong for usize
+ * ULong (usize) extensions
  */
 @Suppress("NOTHING_TO_INLINE")
-inline fun Cast<ULong>.assertAlwaysFitsInU32ForSize(): UInt {
+inline fun Cast<ULong>.usizeAssertAlwaysFitsInU32(): UInt {
     assert(value <= UInt.MAX_VALUE.toULong()) { "Size doesn't fit in UInt" }
     return value.toUInt()
 }
 
 @Suppress("NOTHING_TO_INLINE")
-inline fun Cast<ULong>.toU64ForSize(): ULong = value
+inline fun Cast<ULong>.usizeToU64(): ULong = value

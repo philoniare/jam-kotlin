@@ -78,23 +78,18 @@ class InterpretedInstance private constructor(
 
     fun setReg(reg: Reg, value: ULong) {
         regs[reg.toIndex()] = if (!module.blob().is64Bit) {
-            Cast(value).truncateToU32()
+            Cast(Cast(value).ulongTruncateToU32())
+                .uintToSigned()
                 .let { Cast(it) }
-                .toSigned()
+                .intToI64SignExtend()
                 .let { Cast(it) }
-                .toI64SignExtend()
-                .let { Cast(it) }
-                .toUnsigned()
+                .longToUnsigned()
         } else {
             value
         }
     }
 
     fun gas(): Long = gas
-
-    fun setGas(newGas: Long) {
-        gas = newGas
-    }
 
     fun programCounter(): ProgramCounter? =
         if (!programCounterValid) null else programCounter
@@ -189,7 +184,7 @@ class InterpretedInstance private constructor(
     }
 
     fun packTarget(index: UInt, isJumpTargetValid: Boolean): NonZeroUInt {
-        var index = Cast(index).assertAlwaysFitsInU32()
+        var index = Cast(index).uintAssertAlwaysFitsInU32()
         if (isJumpTargetValid) {
             index = index or (1u shl 31)
         }
@@ -280,9 +275,9 @@ class InterpretedInstance private constructor(
         pageSize: UInt, pageAddressLo: UInt, pageAddressHi: UInt, address: UInt, length: UInt,
         callback: (pageAddress: UInt, pageOffset: UInt, bufferOffset: UInt, length: Int) -> Unit
     ) {
-        val pageSizeInt = Cast(pageSize).toUSize()
-        val lengthInt = Cast(length).toUSize()
-        val initialPageOffset = Cast(address).toUSize() - Cast(pageAddressLo).toUSize()
+        val pageSizeInt = Cast(pageSize).uintToU64()
+        val lengthInt = Cast(length).uintToU64()
+        val initialPageOffset = Cast(address).uintToU64() - Cast(pageAddressLo).uintToU64()
         val initialChunkLength = minOf(lengthInt, pageSizeInt - initialPageOffset)
         callback(pageAddressLo, initialPageOffset.toUInt(), 0u, initialChunkLength.toInt())
 
@@ -290,24 +285,24 @@ class InterpretedInstance private constructor(
             return
         }
 
-        var pageAddressLoLong = Cast(pageAddressLo).toU64()
-        val pageAddressHiLong = Cast(pageAddressHi).toU64()
-        pageAddressLoLong += Cast(pageSize).toU64()
+        var pageAddressLoLong = Cast(pageAddressLo).uintToU64()
+        val pageAddressHiLong = Cast(pageAddressHi).uintToU64()
+        pageAddressLoLong += Cast(pageSize).uintToU64()
         var bufferOffset = initialChunkLength
 
         while (pageAddressLoLong < pageAddressHiLong) {
             callback(
-                Cast(pageAddressLoLong).assertAlwaysFitsInU32(),
+                Cast(pageAddressLoLong).ulongAssertAlwaysFitsInU32(),
                 0u,
                 bufferOffset.toUInt(),
                 pageSizeInt.toInt()
             )
             bufferOffset += pageSizeInt
-            pageAddressLoLong += Cast(pageSize).toU64()
+            pageAddressLoLong += Cast(pageSize).uintToU64()
         }
 
         callback(
-            Cast(pageAddressLoLong).assertAlwaysFitsInU32(),
+            Cast(pageAddressLoLong).ulongAssertAlwaysFitsInU32(),
             0u,
             bufferOffset.toUInt(),
             (lengthInt - bufferOffset).toInt()
@@ -318,12 +313,12 @@ class InterpretedInstance private constructor(
         return try {
             if (!module.isDynamicPaging()) {
                 // Handle basic memory case
-                val length = Cast(buffer.size.toUInt()).assertAlwaysFitsInU32()
+                val length = Cast(buffer.size.toUInt()).uintAssertAlwaysFitsInU32()
                 val slice = basicMemory.getMemorySlice(module, address, length)
                     ?: return Result.failure(
                         MemoryAccessError.outOfRangeAccess(
                             address = address,
-                            length = Cast(buffer.size.toUInt()).toU64()
+                            length = Cast(buffer.size.toUInt()).uintToU64()
                         )
                     )
 
@@ -334,13 +329,13 @@ class InterpretedInstance private constructor(
                 eachPage(
                     module = module,
                     address = address,
-                    length = Cast(buffer.size.toUInt()).assertAlwaysFitsInU32()
+                    length = Cast(buffer.size.toUInt()).uintAssertAlwaysFitsInU32()
                 ) { pageAddress, pageOffset, bufferOffset, length ->
                     // Validate offsets and lengths
                     require(bufferOffset + length.toUInt() <= buffer.size.toUInt()) {
                         "Buffer offset out of bounds"
                     }
-                    require(pageOffset + length.toUInt() <= Cast(module.memoryMap().pageSize).toUSize()) {
+                    require(pageOffset + length.toUInt() <= Cast(module.memoryMap().pageSize).uintToU64()) {
                         "Page offset out of bounds"
                     }
 
@@ -358,6 +353,48 @@ class InterpretedInstance private constructor(
                 }
                 Result.success(buffer)
             }
+        } catch (e: Exception) {
+            Result.failure(MemoryAccessError.error(PvmError.fromDisplay(e.message ?: "Unknown error")))
+        }
+    }
+
+    fun writeMemory(address: UInt, data: ByteArray): Result<Unit> {
+        return try {
+            if (!module.isDynamicPaging()) {
+                // Handle basic memory case
+                val length = Cast(data.size.toUInt()).uintAssertAlwaysFitsInU32()
+                val slice = basicMemory.getMemorySliceMut(module, address, length)
+                    ?: return Result.failure(
+                        MemoryAccessError.outOfRangeAccess(
+                            address = address,
+                            length = Cast(data.size.toUInt()).uintToU64()
+                        )
+                    )
+
+                data.forEachIndexed { index, byte ->
+                    slice[index] = byte.toUByte()
+                }
+            } else {
+                // Handle dynamic paging case
+                val pageSize = module.memoryMap().pageSize
+                eachPage(
+                    module = module,
+                    address = address,
+                    length = Cast(data.size.toUInt()).uintAssertAlwaysFitsInU32()
+                ) { pageAddress, pageOffset, bufferOffset, length ->
+                    val page = dynamicMemory.pages.getOrPut(pageAddress) {
+                        ByteArray(pageSize.toInt()) // empty page of page_size
+                    }
+
+                    data.copyInto(
+                        destination = page,
+                        destinationOffset = pageOffset.toInt(),
+                        startIndex = bufferOffset.toInt(),
+                        endIndex = (bufferOffset + length.toUInt()).toInt()
+                    )
+                }
+            }
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(MemoryAccessError.error(PvmError.fromDisplay(e.message ?: "Unknown error")))
         }

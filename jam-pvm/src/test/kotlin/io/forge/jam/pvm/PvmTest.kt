@@ -3,7 +3,9 @@ package io.forge.jam.pvm
 import io.forge.jam.core.encoding.TestFileLoader
 import io.forge.jam.pvm.engine.*
 import io.forge.jam.pvm.program.ProgramBlob
+import io.forge.jam.pvm.program.ProgramCounter
 import io.forge.jam.pvm.program.ProgramParts
+import io.forge.jam.pvm.program.Reg
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 
@@ -33,11 +35,12 @@ class PvmTest {
             val instance = module.instantiate().getOrThrow()
 
             // Init instance state
-            module.setGas(inputCase.initialGas)
-            module.setNextProgramCounter(inputCase.initialPc)
+            instance.setGas(inputCase.initialGas)
+            val programCounter = ProgramCounter(inputCase.initialPc)
+            instance.setNextProgramCounter(programCounter)
 
             inputCase.initialRegs.forEachIndexed { index, value ->
-                module.setRegister(index, value)
+                instance.setReg(Reg.fromRaw(index)!!, value.toULong())
             }
 
             var finalPc = inputCase.initialPc
@@ -46,18 +49,19 @@ class PvmTest {
                     when (val result = instance.run().getOrThrow()) {
                         InterruptKind.Finished -> return@run "halt"
                         InterruptKind.Trap -> return@run "trap"
-                        InterruptKind.Ecalli -> TODO()
                         InterruptKind.NotEnoughGas -> return@run "out-of-gas"
-                        InterruptKind.Segfault -> TODO()
                         InterruptKind.Step -> {
-                            finalPc = instance.programCounter().getOrThrow()
+                            finalPc = instance.programCounter()!!.value
                             continue
                         }
+
+                        is InterruptKind.Ecalli -> TODO()
+                        is InterruptKind.Segfault -> TODO()
                     }
                 }
             }
             if (expectedStatus != "halt") {
-                finalPc = instance.programCounter().getOrThrow()
+                finalPc = instance.programCounter()!!.value
             }
 
             // Validate output state

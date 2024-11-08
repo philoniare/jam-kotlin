@@ -22,14 +22,13 @@ class Program {
         ): Triple<UInt, Instruction, Boolean> {
             val visitor = EnumVisitor(instructionSet)
             return if (offset.toInt() <= code.size) {
-                visitorStepFast(Unit, code, bitmask, offset, visitor)
+                visitorStepFast(code, bitmask, offset, visitor)
             } else {
-                visitorStepSlow(Unit, code, bitmask, offset, visitor)
+                visitorStepSlow(code, bitmask, offset, visitor)
             }
         }
 
         fun <I : InstructionSet> visitorStepFast(
-            state: Unit,
             code: ByteArray,
             bitmask: ByteArray,
             offset: UInt,
@@ -63,7 +62,6 @@ class Program {
             return Triple(
                 nextOffset,
                 opcodeVisitor.dispatch(
-                    state = state,
                     opcode = opcode.toUInt(),
                     chunk = chunkValue,
                     offset = offset,
@@ -74,14 +72,13 @@ class Program {
         }
 
         fun <I : InstructionSet> visitorStepSlow(
-            state: Unit,
             code: ByteArray,
             bitmask: ByteArray,
             offset: UInt,
             opcodeVisitor: OpcodeVisitor<Instruction, I>
         ): Triple<UInt, Instruction, Boolean> {
             if (offset.toInt() >= code.size) {
-                return Triple(offset + 1u, visitorStepInvalidInstruction(state, offset, opcodeVisitor), true)
+                return Triple(offset + 1u, visitorStepInvalidInstruction(offset, opcodeVisitor), true)
             }
 
             assert(code.size <= UInt.MAX_VALUE.toInt()) { "Code size exceeds maximum allowed" }
@@ -190,12 +187,10 @@ class Program {
         }
 
         fun <I : InstructionSet> visitorStepInvalidInstruction(
-            state: Unit,
             offset: UInt,
             opcodeVisitor: OpcodeVisitor<Instruction, I>
         ): Instruction {
             return opcodeVisitor.dispatch(
-                state = state,
                 opcode = INVALID_INSTRUCTION_INDEX,
                 chunk = 0UL,
                 offset = offset,

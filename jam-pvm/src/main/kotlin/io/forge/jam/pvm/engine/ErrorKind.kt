@@ -36,6 +36,6 @@ inline fun bail(message: () -> String): Nothing {
     throw PvmError.fromDisplay(message())
 }
 
-inline fun bailStatic(message: String): Nothing {
+fun bailStatic(message: String): Nothing {
     throw PvmError.fromStaticStr(message)
 }

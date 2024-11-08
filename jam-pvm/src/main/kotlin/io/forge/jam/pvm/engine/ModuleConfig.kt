@@ -21,11 +21,6 @@ class ModuleConfig private constructor(
     }
 
     /**
-     * Returns the size of the auxiliary data region.
-     */
-    fun getAuxDataSize(): UInt = auxDataSize
-
-    /**
      * Sets the size of the auxiliary data region.
      *
      * Default: `0`
@@ -42,11 +37,6 @@ class ModuleConfig private constructor(
     fun setGasMetering(kind: GasMeteringKind?): ModuleConfig = apply {
         this.gasMetering = kind
     }
-
-    /**
-     * Returns whether dynamic paging is enabled.
-     */
-    fun getDynamicPaging(): Boolean = dynamicPaging
 
     /**
      * Sets whether dynamic paging is enabled.

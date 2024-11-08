@@ -27,7 +27,7 @@ class Visitor(
     inline fun get64(regimm: RegImm): ULong = when (regimm) {
         is RegImm.RegValue -> inner.regs[regimm.reg.toIndex()]
         is RegImm.ImmValue -> {
-            Cast(regimm.value).toSigned().let { Cast(it) }.toI64SignExtend().let { Cast(it) }.toUnsigned()
+            Cast(Cast(Cast(regimm.value).uintToSigned()).intToI64SignExtend()).longToUnsigned()
         }
     }
 
@@ -44,11 +44,11 @@ class Visitor(
     inline fun set32(dst: Reg, value: UInt) {
         // The chain of casts: u32 -> i32 -> i64 -> u64
         val finalValue = Cast(value)
-            .toSigned()
+            .uintToSigned()
             .let { Cast(it) }
-            .toI64SignExtend()
+            .intToI64SignExtend()
             .let { Cast(it) }
-            .toUnsigned()
+            .longToUnsigned()
 
         inner.regs[dst.toIndex()] = finalValue
     }

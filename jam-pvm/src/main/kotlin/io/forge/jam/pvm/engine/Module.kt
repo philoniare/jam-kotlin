@@ -142,4 +142,8 @@ class Module private constructor(private var state: AtomicReference<ModulePrivat
     fun roundToPageSizeDown(value: UInt): UInt {
         return value and state().pageSizeMask.inv()
     }
+
+    fun defaultSp(): ULong {
+        return state().memoryMap.stackAddressHigh.toULong()
+    }
 }
