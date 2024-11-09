@@ -23,8 +23,10 @@ class PvmTest {
             val config = Config.new()
             val engine = Engine.new(config).getOrThrow()
 
-            val parts = ProgramParts.fromRaw(inputCase.program).getOrThrow()
+            var parts = ProgramParts()
+            parts.setCodeJumpTable(inputCase.program)
             val blob = ProgramBlob.fromParts(parts).getOrThrow()
+
 
             val moduleConfig = ModuleConfig.new()
             moduleConfig.setStrict(true)

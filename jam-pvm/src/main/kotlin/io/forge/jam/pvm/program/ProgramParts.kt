@@ -18,6 +18,12 @@ data class ProgramParts(
     var debugLineProgramRanges: ArcBytes = ArcBytes.empty(),
     var debugLinePrograms: ArcBytes = ArcBytes.empty()
 ) {
+
+    fun setCodeJumpTable(blob: ByteArray): Result<ProgramParts> = runCatching {
+        this.codeAndJumpTable = ArcBytes.fromStatic(blob)
+        this
+    }
+
     companion object {
         private const val BLOB_VERSION_V1_32: Byte = 1
         private const val BLOB_VERSION_V1_64: Byte = 0
@@ -36,13 +42,6 @@ data class ProgramParts(
         private const val SECTION_OPT_DEBUG_LINE_PROGRAMS: Byte = 129.toByte()
         private const val SECTION_OPT_DEBUG_LINE_PROGRAM_RANGES: Byte = 130.toByte()
         private const val SECTION_END_OF_FILE: Byte = 0
-
-        fun fromRaw(blob: ByteArray): Result<ProgramParts> = runCatching {
-            val parts = ProgramParts(is64Bit = true)
-            val arcBytes = ArcBytes.fromStatic(blob)
-            parts.codeAndJumpTable = arcBytes
-            parts
-        }
 
         fun fromBytes(blob: ArcBytes): Result<ProgramParts> = runCatching {
             val reader = ArcBytesReader(blob, 0)

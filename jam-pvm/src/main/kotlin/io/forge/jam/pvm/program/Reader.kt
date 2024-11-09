@@ -40,6 +40,7 @@ open class Reader<T>(
         }
         val slice = blobBytes.copyOfRange(position, position + length)
         position += length
+        println("slice: ${slice.contentToString()}")
         slice
     }
 

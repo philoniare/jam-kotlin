@@ -1,6 +1,7 @@
 package io.forge.jam.pvm.engine
 
 import io.forge.jam.pvm.Abi
+import io.forge.jam.pvm.PvmLogger
 import io.forge.jam.pvm.program.*
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.log2
@@ -24,6 +25,7 @@ data class ModulePrivate(
 class Module private constructor(private var state: AtomicReference<ModulePrivate?>) {
     companion object {
         private const val RESPONSE_WAIT_TIMEOUT = 60000L
+        private val logger = PvmLogger(Module::class.java)
 
         @JvmStatic
         fun fromBlob(engine: Engine, config: ModuleConfig, blob: ProgramBlob): Result<Module> = runCatching {
@@ -58,6 +60,51 @@ class Module private constructor(private var state: AtomicReference<ModulePrivat
             } else null
 
             val memoryMap = init.memoryMap().getOrThrow()
+
+// RO data starts at 0 by convention
+            logger.debug(
+                """
+    Memory map: RO data: 0x${0.toString(16).padStart(8, '0')}..0x${
+                    memoryMap.roDataSize.toString(16).padStart(8, '0')
+                } (${blob.roData.toByteArray().size}/${memoryMap.roDataSize} bytes, non-zero until 0x${
+                    blob.roData.toByteArray().size.toString(16).padStart(8, '0')
+                })
+""".trimIndent()
+            )
+
+            logger.debug(
+                """
+    Memory map: RW data: 0x${
+                    memoryMap.rwDataAddress.toString(16).padStart(8, '0')
+                }..0x${
+                    (memoryMap.rwDataAddress + memoryMap.rwDataSize).toString(16).padStart(8, '0')
+                } (${blob.rwData.toByteArray().size}/${memoryMap.rwDataSize} bytes, non-zero until 0x${
+                    (memoryMap.rwDataAddress.toUInt() + blob.rwData.toByteArray().size.toUInt()).toString(
+                        16
+                    ).padStart(8, '0')
+                })
+""".trimIndent()
+            )
+
+            logger.debug(
+                """
+    Memory map:   Stack: 0x${
+                    (memoryMap.stackAddressHigh - memoryMap.stackSize).toString(16).padStart(8, '0')
+                }..0x${
+                    memoryMap.stackAddressHigh.toString(16).padStart(8, '0')
+                } (${blob.stackSize}/${memoryMap.stackSize} bytes)
+""".trimIndent()
+            )
+
+            logger.debug(
+                """
+    Memory map:     Aux: 0x${
+                    memoryMap.auxDataAddress.toString(16).padStart(8, '0')
+                }..0x${
+                    (memoryMap.auxDataAddress + memoryMap.auxDataSize).toString(16).padStart(8, '0')
+                } (${config.auxDataSize}/${memoryMap.auxDataSize} bytes requested)
+""".trimIndent()
+            )
 
             val pageShift = log2(memoryMap.pageSize.toFloat()).toUInt()
             val pageSizeMask = ((1u shl pageShift.toInt()) - 1u)

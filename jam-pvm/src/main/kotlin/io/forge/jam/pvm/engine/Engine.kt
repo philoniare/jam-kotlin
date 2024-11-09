@@ -1,5 +1,7 @@
 package io.forge.jam.pvm.engine
 
+import io.forge.jam.pvm.PvmLogger
+
 data class Engine(
     val selectedBackend: BackendKind,
     val selectedSandbox: SandboxKind?,
@@ -9,6 +11,7 @@ data class Engine(
     val allowDynamicPaging: Boolean
 ) {
     companion object {
+        private val logger = PvmLogger(Engine::class.java)
         fun new(config: Config): Result<Engine> = runCatching {
             val crosscheck = config.crosscheck
 
@@ -17,6 +20,8 @@ data class Engine(
                 sandboxGlobal = null,
                 moduleCache = null,
             )
+            val selectedBackend = BackendKind.Interpreter
+            logger.debug("Selected backend: $selectedBackend")
 
             Engine(
                 selectedSandbox = SandboxKind.Generic,
@@ -24,7 +29,7 @@ data class Engine(
                 crosscheck = crosscheck,
                 state = EngineState.new(moduleCache = null),
                 allowDynamicPaging = config.allowDynamicPaging,
-                selectedBackend = BackendKind.Interpreter
+                selectedBackend = selectedBackend
             )
         }
     }
