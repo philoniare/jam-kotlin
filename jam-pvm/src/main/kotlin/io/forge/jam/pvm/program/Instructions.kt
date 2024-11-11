@@ -5,7 +5,7 @@ import io.forge.jam.pvm.engine.InstructionSet
 data class Instructions<I : InstructionSet>(
     private val code: ByteArray,
     private val bitmask: ByteArray,
-    private var offset: UInt = 0u,
+    var offset: UInt = 0u,
     private var invalidOffset: UInt? = null,
     private var isBounded: Boolean = false,
     private var isDone: Boolean = false,
@@ -94,7 +94,7 @@ data class Instructions<I : InstructionSet>(
             offset: UInt,
             isBounded: Boolean
         ): Instructions<I> {
-            require(code.size <= UInt.MAX_VALUE.toInt()) {
+            require(code.size <= Int.MAX_VALUE && code.size.toUInt() <= UInt.MAX_VALUE) {
                 "Code size exceeds maximum value"
             }
             require(bitmask.size == (code.size + 7) / 8) {

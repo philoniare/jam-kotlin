@@ -503,7 +503,10 @@ class Compiler(
     }
 
     override fun moveReg(reg1: RawReg, reg2: RawReg) {
-        TODO("Not yet implemented")
+        emit(
+            RawHandlers.moveReg,
+            Args.moveReg(reg1, reg2)
+        )
     }
 
     override fun sbrk(reg1: RawReg, reg2: RawReg) {

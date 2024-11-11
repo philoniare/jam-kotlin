@@ -210,7 +210,9 @@ class InterpretedInstance private constructor(
         var chargeGasIndex: Pair<ProgramCounter, Int>? = null
         var isJumpTargetValid = module.isJumpTargetValid(programCounter)
 
+        var i = 0
         for (instruction in module.instructionsBoundedAt(programCounter)) {
+            i++
             compiledOffsetForBlock.insert(
                 instruction.offset.value, packTarget(
                     compiledHandlers.size.toUInt(),
@@ -229,7 +231,8 @@ class InterpretedInstance private constructor(
             if (module.gasMetering() != null) {
                 if (chargeGasIndex == null) {
                     logger.debug("  [${compiledHandlers.size}]: ${instruction.offset}: charge_gas")
-                    chargeGasIndex = instruction.offset to compiledHandlers.size
+                    chargeGasIndex = Pair(instruction.offset, compiledHandlers.size)
+                    logger.debug("Gas Index: ${chargeGasIndex.first} ${chargeGasIndex.second}")
                     emit(RawHandlers.chargeGas, Args.chargeGas(instruction.offset, 0u))
                 }
                 instruction.kind.visit(gasVisitor)
@@ -260,10 +263,12 @@ class InterpretedInstance private constructor(
             }
         }
 
+        logger.debug("Compliled Handlers: $i")
+
         chargeGasIndex?.let { (programCounter, index) ->
             val gasCost = gasVisitor.takeBlockCost()
-                ?: throw IllegalStateException("No gas cost available")
-            compiledArgs[index] = Args.chargeGas(programCounter, gasCost)
+            println("GasCost: $gasCost")
+            compiledArgs[index] = Args.chargeGas(programCounter, 0u)
         }
 
         if (compiledHandlers.size == origin.toInt()) {

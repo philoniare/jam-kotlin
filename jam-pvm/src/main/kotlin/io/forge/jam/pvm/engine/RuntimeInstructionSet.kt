@@ -29,7 +29,7 @@ data class RuntimeInstructionSet(
     }
 
     companion object {
-        private object ISA32_V1 : InstructionSet {
+        object ISA32_V1 : InstructionSet {
             private val isIstructionValid = BooleanArray(256) { false }.apply {
                 val I_32 = 0
                 val I_64 = 1

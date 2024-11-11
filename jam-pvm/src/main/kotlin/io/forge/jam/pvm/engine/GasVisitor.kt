@@ -1,5 +1,6 @@
 package io.forge.jam.pvm.engine
 
+import io.forge.jam.pvm.PvmLogger
 import io.forge.jam.pvm.program.InstructionVisitor
 import io.forge.jam.pvm.program.RawReg
 
@@ -8,6 +9,7 @@ class GasVisitor : InstructionVisitor<Unit> {
     private var lastBlockCost: UInt? = null
 
     companion object {
+        private val logger = PvmLogger(GasVisitor::class.java)
         fun trapCost(): UInt {
             val gasVisitor = GasVisitor()
             gasVisitor.trap()
@@ -16,11 +18,16 @@ class GasVisitor : InstructionVisitor<Unit> {
     }
 
     fun startNewBasicBlock() {
+        logger.debug("Starting new basic block: $cost")
         lastBlockCost = cost
         cost = 0u
     }
 
-    fun takeBlockCost(): UInt? = lastBlockCost.also { lastBlockCost = null }
+    fun takeBlockCost(): UInt? {
+        val cost = lastBlockCost
+        lastBlockCost = null
+        return cost
+    }
 
     override fun invalid() {
         trap()

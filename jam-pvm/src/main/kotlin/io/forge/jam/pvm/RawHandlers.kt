@@ -5,9 +5,20 @@ import io.forge.jam.pvm.engine.Visitor
 import io.forge.jam.pvm.program.Compiler.Companion.notEnoughGasImpl
 import io.forge.jam.pvm.program.Compiler.Companion.trapImpl
 import io.forge.jam.pvm.program.ProgramCounter
+import io.forge.jam.pvm.program.Reg
+import io.forge.jam.pvm.program.toRegImm
 
 typealias Target = UInt
 typealias Handler = (Visitor) -> Target?
+
+fun transmuteReg(value: UInt): Reg {
+    require(Reg.fromRaw(value.toInt()) != null) {
+        "assertion failed: Reg.fromRaw(value) must not be null"
+    }
+
+    return Reg.fromRaw(value.toInt())
+        ?: throw IllegalStateException("Failed to transmute value to Reg")
+}
 
 object RawHandlers {
     val logger = PvmLogger(RawHandlers::class.java)
@@ -68,5 +79,15 @@ object RawHandlers {
             visitor.inner.gas = newGas.toLong()
             trapImpl(visitor, programCounter)
         }
+    }
+
+    val moveReg: Handler = { visitor ->
+        logger.debug("[${visitor.inner.compiledOffset}]: ")
+        val args = visitor.inner.compiledArgs[visitor.inner.compiledOffset.toInt()]
+        val d = transmuteReg(args.a0)
+        val s = transmuteReg(args.a1)
+        val imm = visitor.get64(s.toRegImm())
+        visitor.set64(d, imm)
+        visitor.goToNextInstruction()
     }
 }

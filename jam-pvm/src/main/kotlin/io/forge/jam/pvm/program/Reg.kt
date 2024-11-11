@@ -1,5 +1,7 @@
 package io.forge.jam.pvm.program
 
+import io.forge.jam.pvm.engine.RegImm
+
 /**
  * Represents a register in the VM architecture.
  * Each register has both an ABI name and a non-ABI numeric name.
@@ -113,3 +115,6 @@ enum class Reg {
         const val MAXIMUM_OUTPUT_REGS: Int = 2
     }
 }
+
+@Suppress("NOTHING_TO_INLINE")
+inline fun Reg.toRegImm(): RegImm = RegImm.RegValue(this)
