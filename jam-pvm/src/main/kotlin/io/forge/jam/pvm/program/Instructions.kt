@@ -38,11 +38,10 @@ data class Instructions<I : InstructionSet>(
 
         val (nextOffset, instruction, isNextInstructionInvalid) =
             Program.parseInstruction(instructionSet, code, bitmask, currentOffset)
-        logger.debug("next_offset: $nextOffset, instruction: $instruction, isNextInstructionInvalid: $isNextInstructionInvalid")
-
         require(nextOffset > currentOffset) {
             "assertion failed: next_offset > self.offset"
         }
+        logger.debug("next_offset: $nextOffset, instruction: $instruction, isNextInstructionInvalid: $isNextInstructionInvalid")
 
         if (!isNextInstructionInvalid) {
             offset = nextOffset

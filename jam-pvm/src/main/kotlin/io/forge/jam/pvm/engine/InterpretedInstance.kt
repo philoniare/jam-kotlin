@@ -31,7 +31,7 @@ class InterpretedInstance private constructor(
     val stepTracing: Boolean
 ) {
 
-    private fun emit(handler: Handler, args: Args) {
+    fun emit(handler: Handler, args: Args) {
         compiledHandlers.add(handler)
         compiledArgs.add(args)
     }
@@ -86,7 +86,6 @@ class InterpretedInstance private constructor(
 
             return instance.resolveJump(targetTrue)?.let { targetTrueResolved ->
                 val offset = instance.compiledOffset
-                // Update the handler and args at current offset
                 instance.compiledHandlers[offset.toInt()] = handler
                 instance.compiledArgs[offset.toInt()] = args.copy(
                     a2 = targetTrueResolved,
@@ -94,7 +93,6 @@ class InterpretedInstance private constructor(
                 )
                 Pair(handler, args)
             } ?: run {
-                // Return trap if target can't be resolved
                 Pair(RawHandlers.trap, Args.trap(instance.programCounter))
             }
         }
@@ -200,19 +198,24 @@ class InterpretedInstance private constructor(
     }
 
     fun resolveJump(programCounter: ProgramCounter): Target? {
-        compiledOffsetForBlock.get(programCounter.value)?.let { compiledOffset ->
+        val compiledOffset = compiledOffsetForBlock.get(programCounter.value)
 
+        if (compiledOffset != null) {
             val (isJumpTargetValid, target) = unpackTarget(compiledOffset)
             if (!isJumpTargetValid) {
                 return null
             }
             return target
         }
+
         if (!module.isJumpTargetValid(programCounter)) {
             return null
         }
 
-        return compileBlock(programCounter)
+
+        val finalTarget = compileBlock(programCounter)
+        logger.debug("Resolved jump target: $finalTarget")
+        return finalTarget
     }
 
     fun resolveArbitraryJump(programCounter: ProgramCounter): Target? {
@@ -244,10 +247,11 @@ class InterpretedInstance private constructor(
             return null
         }
 
-        val origin = try {
+        logger.debug("Compiled handlers: ${compiledHandlers.size}. ${programCounter}")
+        val origin = if (compiledHandlers.size > UInt.MAX_VALUE.toLong()) {
+            throw IllegalStateException("internal compiled program counter overflow: the program is too big!")
+        } else {
             compiledHandlers.size.toUInt()
-        } catch (e: Exception) {
-            throw IllegalStateException("Failed to compile block: ${e.message}")
         }
 
         logger.debug("Compiling block:")
@@ -256,13 +260,14 @@ class InterpretedInstance private constructor(
         var chargeGasIndex: Pair<ProgramCounter, Int>? = null
         var isJumpTargetValid = module.isJumpTargetValid(programCounter)
 
+        var i = 0
         for (instruction in module.instructionsBoundedAt(programCounter)) {
-            logger.debug("Instruction kind: ${instruction.kind} ${instruction.offset.value} ${instruction.nextOffset.value}")
+            i++
+            logger.debug("Instruction kind: ${instruction.kind}, ${instruction.offset.value}, ${instruction.nextOffset.value}")
+
             compiledOffsetForBlock.insert(
-                instruction.offset.value, packTarget(
-                    compiledHandlers.size.toUInt(),
-                    isJumpTargetValid
-                )
+                instruction.offset.value,
+                packTarget(compiledHandlers.size.toUInt(), isJumpTargetValid)
             )
 
             isJumpTargetValid = false
@@ -271,7 +276,6 @@ class InterpretedInstance private constructor(
                 logger.debug("  [${compiledHandlers.size}]: ${instruction.offset}: step")
                 emit(RawHandlers.step, Args.step(instruction.offset))
             }
-
 
             if (module.gasMetering() != null) {
                 if (chargeGasIndex == null) {
@@ -282,10 +286,7 @@ class InterpretedInstance private constructor(
                 instruction.kind.visit(gasVisitor)
             }
 
-
             logger.debug("  [${compiledHandlers.size}]: ${instruction.offset}: ${instruction.kind}")
-
-            // Debug assertions equivalent
             val originalLength = compiledHandlers.size
 
             instruction.kind.visit(
@@ -299,7 +300,6 @@ class InterpretedInstance private constructor(
                 )
             )
 
-            // Debug assertions equivalent
             assert(compiledHandlers.size > originalLength) {
                 "Handler size must increase after instruction visit"
             }
@@ -308,12 +308,14 @@ class InterpretedInstance private constructor(
                 break
             }
         }
+        logger.debug("Processed instructions: ${i}")
 
         chargeGasIndex?.let { (programCounter, index) ->
             val gasCost = gasVisitor.takeBlockCost()!!
             compiledArgs[index] = Args.chargeGas(programCounter, gasCost)
         }
 
+        // Convert origin back to size type for comparison, like Rust does
         if (compiledHandlers.size == origin.toInt()) {
             return null
         }
@@ -467,13 +469,18 @@ class InterpretedInstance private constructor(
             basicMemory.markDirty()
         }
 
+        logger.debug("Running impl: ${nextProgramCounterChanged}")
         if (nextProgramCounterChanged) {
+            val pc = nextProgramCounter
+            nextProgramCounter = null
             val programCounter =
-                nextProgramCounter ?: throw IllegalStateException("Failed to run: next program counter is not set")
+                pc ?: throw IllegalStateException("Failed to run: next program counter is not set")
 
             this.programCounter = programCounter
+            logger.debug("PC: ${programCounter.value}")
             this.compiledOffset = resolveArbitraryJump(programCounter)
                 ?: TARGET_OUT_OF_RANGE
+            logger.debug("Resolved jump: ${compiledOffset}")
             logger.debug("Starting execution at: ${programCounter.value} [$compiledOffset]")
         } else {
             logger.debug("Implicitly resuming at: ${programCounter.value} [$compiledOffset]")
@@ -487,9 +494,7 @@ class InterpretedInstance private constructor(
             logger.debug("Executing handler at: [$offset], cycle counter: $cycleCounter")
 
             val visitor = Visitor(this)
-            val nextOffset = handler(visitor)
-            logger.debug("Next offset: ${nextOffset}")
-            when (nextOffset) {
+            when (val nextOffset = handler(visitor)) {
                 null -> return interrupt
                 else -> {
                     offset = nextOffset

@@ -50,26 +50,20 @@ class Compiler(
         }
     }
 
-    fun emit(
-        handler: Handler,
-        args: Args
-    ) {
-        compiledHandlers.add(handler)
-        compiledArgs.add(args)
-    }
-
-
     private fun emitBranch(
         s1: RawReg,
         s2: UInt,
         targetIndex: ProgramCounter,
         handler: (ProgramCounter, ProgramCounter) -> Pair<Handler, Args>
     ) {
-        if (!module.isJumpTargetValid(targetIndex)) {
-            emit(RawHandlers.invalidBranch, Args.invalidBranch(programCounter))
+        val targetTrue = ProgramCounter(targetIndex.value)
+
+        if (!module.isJumpTargetValid(targetTrue)) {
+            instance.emit(RawHandlers.invalidBranch, Args.invalidBranch(programCounter))
         } else {
-            val (h, a) = handler(targetIndex, nextProgramCounter)
-            emit(h, a)
+            val targetFalse = this.nextProgramCounter()
+            val (h, a) = handler(targetTrue, targetFalse)
+            instance.emit(h, a)
         }
     }
 
@@ -80,7 +74,7 @@ class Compiler(
     }
 
     override fun trap() {
-        emit(
+        instance.emit(
             RawHandlers.trap,
             Args.trap(programCounter)
         )
@@ -95,7 +89,7 @@ class Compiler(
     }
 
     override fun loadImm(reg: RawReg, imm: UInt) {
-        emit(
+        instance.emit(
             RawHandlers.loadImm,
             Args.loadImm(reg, imm)
         )
@@ -151,6 +145,7 @@ class Compiler(
 
     override fun branchEqImm(s1: RawReg, s2: UInt, i: UInt) {
         emitBranch(s1, s2, ProgramCounter(i)) { targetTrue, targetFalse ->
+            logger.debug("Target true: ${targetTrue.value}, Target false: ${targetFalse.value}")
             InterpretedInstance.handleUnresolvedBranch(
                 instance = instance,
                 handler = RawHandlers.branchEqImm,
@@ -261,7 +256,7 @@ class Compiler(
     }
 
     override fun addImm32(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        emit(
+        instance.emit(
             RawHandlers.addImm32,
             Args.addImm32(reg1, reg2, imm)
         )
@@ -272,7 +267,7 @@ class Compiler(
     }
 
     override fun andImm(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        emit(
+        instance.emit(
             RawHandlers.andImm,
             Args.andImm(reg1, reg2, imm)
         )
@@ -399,7 +394,7 @@ class Compiler(
     }
 
     override fun add32(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        emit(
+        instance.emit(
             RawHandlers.add32,
             Args.add32(reg1, reg2, reg3)
         )
@@ -418,7 +413,7 @@ class Compiler(
     }
 
     override fun and(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        emit(
+        instance.emit(
             RawHandlers.and,
             Args.and(reg1, reg2, reg3)
         )
@@ -549,7 +544,7 @@ class Compiler(
     }
 
     override fun moveReg(reg1: RawReg, reg2: RawReg) {
-        emit(
+        instance.emit(
             RawHandlers.moveReg,
             Args.moveReg(reg1, reg2)
         )
