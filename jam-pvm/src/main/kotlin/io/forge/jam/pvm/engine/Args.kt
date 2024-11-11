@@ -66,6 +66,13 @@ data class Args(
             a3 = a3
         )
 
+        fun unresolvedBranchEqImm(a0: RawReg, a1: UInt, a2: ProgramCounter, a3: ProgramCounter) = Args(
+            a0 = a0.toU32(),
+            a1 = a1,
+            a2 = a2.value,
+            a3 = a3.value
+        )
+
         fun invalidBranch(a0: ProgramCounter) = Args(a0 = a0.value)
     }
 }

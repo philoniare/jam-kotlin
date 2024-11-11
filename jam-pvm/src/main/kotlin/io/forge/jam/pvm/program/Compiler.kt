@@ -6,8 +6,6 @@ import io.forge.jam.pvm.RawHandlers
 import io.forge.jam.pvm.Target
 import io.forge.jam.pvm.engine.*
 
-private typealias BranchHandlerFactory = (s1: RawReg, s2: UInt, targetTrue: ProgramCounter, targetFalse: ProgramCounter) -> Pair<Handler, Args>
-
 class Compiler(
     private val programCounter: ProgramCounter,
     private var nextProgramCounter: ProgramCounter,
@@ -19,7 +17,7 @@ class Compiler(
 
     companion object {
         private val logger = PvmLogger(Compiler::class.java)
-        private const val TARGET_OUT_OF_RANGE = 0u
+        const val TARGET_OUT_OF_RANGE = 0u
         fun trapImpl(visitor: Visitor, programCounter: ProgramCounter): Target? {
             with(visitor.inner) {
                 this.programCounter = programCounter
@@ -50,23 +48,6 @@ class Compiler(
         }
     }
 
-    private fun emitBranch(
-        s1: RawReg,
-        s2: UInt,
-        targetIndex: ProgramCounter,
-        handler: (ProgramCounter, ProgramCounter) -> Pair<Handler, Args>
-    ) {
-        val targetTrue = ProgramCounter(targetIndex.value)
-
-        if (!module.isJumpTargetValid(targetTrue)) {
-            instance.emit(RawHandlers.invalidBranch, Args.invalidBranch(programCounter))
-        } else {
-            val targetFalse = this.nextProgramCounter()
-            val (h, a) = handler(targetTrue, targetFalse)
-            instance.emit(h, a)
-        }
-    }
-
     fun nextProgramCounter(): ProgramCounter = nextProgramCounter
 
     override fun invalid() {
@@ -76,7 +57,7 @@ class Compiler(
     override fun trap() {
         instance.emit(
             RawHandlers.trap,
-            Args.trap(programCounter)
+            Args.trap(programCounter), "trap"
         )
     }
 
@@ -91,7 +72,7 @@ class Compiler(
     override fun loadImm(reg: RawReg, imm: UInt) {
         instance.emit(
             RawHandlers.loadImm,
-            Args.loadImm(reg, imm)
+            Args.loadImm(reg, imm), "loadImm"
         )
     }
 
@@ -144,18 +125,15 @@ class Compiler(
     }
 
     override fun branchEqImm(s1: RawReg, s2: UInt, i: UInt) {
-        emitBranch(s1, s2, ProgramCounter(i)) { targetTrue, targetFalse ->
-            logger.debug("Target true: ${targetTrue.value}, Target false: ${targetFalse.value}")
-            InterpretedInstance.handleUnresolvedBranch(
-                instance = instance,
-                handler = RawHandlers.branchEqImm,
-                args = Args.branchEqImm(s1, s2, targetTrue.value, targetFalse.value),
-                targetTrue = targetTrue,
-                targetFalse = targetFalse,
-                debug = true
-            ) {
-                "[${instance.compiledOffset}]: jump ${targetTrue.value} if $s1 == $s2"
-            }
+        val targetTrue = ProgramCounter(i)
+        if (!module.isJumpTargetValid(targetTrue)) {
+            instance.emit(RawHandlers.invalidBranch, Args.invalidBranch(programCounter), "invalidBranch")
+        } else {
+            val targetFalse = nextProgramCounter
+            instance.emit(
+                RawHandlers.unresolvedBranchEqImm,
+                Args.unresolvedBranchEqImm(s1, s2, targetTrue, targetFalse), "unresolvedBranchEqImm"
+            )
         }
     }
 
@@ -258,7 +236,7 @@ class Compiler(
     override fun addImm32(reg1: RawReg, reg2: RawReg, imm: UInt) {
         instance.emit(
             RawHandlers.addImm32,
-            Args.addImm32(reg1, reg2, imm)
+            Args.addImm32(reg1, reg2, imm), "addImm32"
         )
     }
 
@@ -269,7 +247,7 @@ class Compiler(
     override fun andImm(reg1: RawReg, reg2: RawReg, imm: UInt) {
         instance.emit(
             RawHandlers.andImm,
-            Args.andImm(reg1, reg2, imm)
+            Args.andImm(reg1, reg2, imm), "andImm"
         )
     }
 
@@ -396,7 +374,7 @@ class Compiler(
     override fun add32(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
         instance.emit(
             RawHandlers.add32,
-            Args.add32(reg1, reg2, reg3)
+            Args.add32(reg1, reg2, reg3), "add32"
         )
     }
 
@@ -415,7 +393,7 @@ class Compiler(
     override fun and(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
         instance.emit(
             RawHandlers.and,
-            Args.and(reg1, reg2, reg3)
+            Args.and(reg1, reg2, reg3), "and"
         )
     }
 
@@ -546,7 +524,7 @@ class Compiler(
     override fun moveReg(reg1: RawReg, reg2: RawReg) {
         instance.emit(
             RawHandlers.moveReg,
-            Args.moveReg(reg1, reg2)
+            Args.moveReg(reg1, reg2), "move_reg"
         )
     }
 

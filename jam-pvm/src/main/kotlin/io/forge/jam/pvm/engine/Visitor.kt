@@ -105,11 +105,15 @@ class Visitor(
         s2: RegImm,
         targetTrue: Target,
         targetFalse: Target,
-        crossinline callback: (ULong, ULong) -> Boolean
+        condition: (ULong, ULong) -> Boolean
     ): Target {
         val v1 = get64(s1)
         val v2 = get64(s2)
-        return if (callback(v1, v2)) targetTrue else targetFalse
+        return if (condition(v1, v2)) {
+            targetTrue
+        } else {
+            targetFalse
+        }
     }
 
     /**

@@ -5,6 +5,7 @@ import io.forge.jam.pvm.RawHandlers
 import io.forge.jam.pvm.engine.GasVisitor.Companion.trapCost
 import io.forge.jam.pvm.program.Compiler
 import io.forge.jam.pvm.program.ProgramCounter
+import io.forge.jam.pvm.program.RawReg
 import io.forge.jam.pvm.program.Reg
 
 typealias Handler = (visitor: Visitor) -> Target?
@@ -31,9 +32,45 @@ class InterpretedInstance private constructor(
     val stepTracing: Boolean
 ) {
 
-    fun emit(handler: Handler, args: Args) {
+    fun emit(handler: Handler, args: Args, name: String) {
+        logger.debug("Emitting handler: $name")
         compiledHandlers.add(handler)
         compiledArgs.add(args)
+    }
+
+    fun emitBranch(
+        s1: RawReg,
+        s2: UInt,
+        target: UInt,
+        unresolvedHandler: Handler,
+        unresolvedArgsConstructor: (RawReg, UInt, ProgramCounter, ProgramCounter) -> Args,
+        handlerName: String
+    ) {
+        val targetTrue = ProgramCounter(target)
+        logger.debug("Emit branch parameters:")
+        logger.debug("  Operation: $handlerName")
+        logger.debug("  Source 1: $s1")
+        logger.debug("  Source 2: $s2")
+        logger.debug("  Target true PC: $targetTrue")
+
+        if (!module.isJumpTargetValid(targetTrue)) {
+            logger.debug("  Invalid jump target detected at PC: $programCounter")
+            emit(
+                RawHandlers.invalidBranch,
+                Args.invalidBranch(programCounter),
+                "invalid_branch"
+            )
+            return
+        }
+
+        val targetFalse = nextProgramCounter!!
+
+        // Emit the unresolved branch handler and args
+        emit(
+            unresolvedHandler,
+            unresolvedArgsConstructor(s1, s2, targetTrue, targetFalse),
+            handlerName
+        )
     }
 
     companion object {
@@ -65,35 +102,6 @@ class InterpretedInstance private constructor(
                 stepTracing = stepTracing
             ).apply {
                 initializeModule()
-            }
-        }
-
-        fun handleUnresolvedBranch(
-            instance: InterpretedInstance,
-            handler: Handler,
-            args: Args,
-            targetTrue: ProgramCounter,
-            targetFalse: ProgramCounter,
-            debug: Boolean = false,
-            debugMessage: () -> String = { "" }
-        ): Pair<Handler, Args> {
-            if (debug) {
-                logger.debug(debugMessage())
-            }
-
-            // Get target resolved
-            val targetFalseResolved = instance.resolveJump(targetFalse) ?: TARGET_OUT_OF_RANGE
-
-            return instance.resolveJump(targetTrue)?.let { targetTrueResolved ->
-                val offset = instance.compiledOffset
-                instance.compiledHandlers[offset.toInt()] = handler
-                instance.compiledArgs[offset.toInt()] = args.copy(
-                    a2 = targetTrueResolved,
-                    a3 = targetFalseResolved
-                )
-                Pair(handler, args)
-            } ?: run {
-                Pair(RawHandlers.trap, Args.trap(instance.programCounter))
             }
         }
     }
@@ -175,7 +183,7 @@ class InterpretedInstance private constructor(
 
     fun compileOutOfRangeStub() {
         if (stepTracing) {
-            emit(RawHandlers.stepOutOfRange, Args.stepOutOfRange())
+            emit(RawHandlers.stepOutOfRange, Args.stepOutOfRange(), "step_out_of_range")
         }
         val gasCost = if (module.gasMetering() != null) {
             trapCost()
@@ -183,7 +191,7 @@ class InterpretedInstance private constructor(
             0u
         }
 
-        emit(RawHandlers.stepOutOfRange, Args.outOfRange(gasCost))
+        emit(RawHandlers.stepOutOfRange, Args.outOfRange(gasCost), "out_of_range")
     }
 
     fun run(): Result<InterruptKind> = runCatching {
@@ -274,14 +282,14 @@ class InterpretedInstance private constructor(
 
             if (stepTracing) {
                 logger.debug("  [${compiledHandlers.size}]: ${instruction.offset}: step")
-                emit(RawHandlers.step, Args.step(instruction.offset))
+                emit(RawHandlers.step, Args.step(instruction.offset), "step")
             }
 
             if (module.gasMetering() != null) {
                 if (chargeGasIndex == null) {
                     logger.debug("  [${compiledHandlers.size}]: ${instruction.offset}: charge_gas")
                     chargeGasIndex = Pair(instruction.offset, compiledHandlers.size)
-                    emit(RawHandlers.chargeGas, Args.chargeGas(instruction.offset, 0u))
+                    emit(RawHandlers.chargeGas, Args.chargeGas(instruction.offset, 0u), "charge_gas")
                 }
                 instruction.kind.visit(gasVisitor)
             }
