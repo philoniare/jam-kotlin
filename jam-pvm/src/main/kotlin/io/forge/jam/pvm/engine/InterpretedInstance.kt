@@ -189,7 +189,7 @@ class InterpretedInstance private constructor(
     }
 
     fun run(): Result<InterruptKind> = runCatching {
-        runImpl(true)
+        runImpl()
     }
 
     private fun unpackTarget(value: NonZeroUInt): Pair<Boolean, Target> {
@@ -200,8 +200,8 @@ class InterpretedInstance private constructor(
     }
 
     fun resolveJump(programCounter: ProgramCounter): Target? {
-        logger.debug("Resolving jump: ${programCounter.value}")
         compiledOffsetForBlock.get(programCounter.value)?.let { compiledOffset ->
+
             val (isJumpTargetValid, target) = unpackTarget(compiledOffset)
             if (!isJumpTargetValid) {
                 return null
@@ -239,12 +239,12 @@ class InterpretedInstance private constructor(
         return NonZeroUInt(index)
     }
 
-    fun compileBlock(programCounter: ProgramCounter?): Target? {
+    private fun compileBlock(programCounter: ProgramCounter?): Target? {
         if (programCounter?.value!! > module.codeLen()) {
             return null
         }
 
-        var origin = try {
+        val origin = try {
             compiledHandlers.size.toUInt()
         } catch (e: Exception) {
             throw IllegalStateException("Failed to compile block: ${e.message}")
@@ -256,9 +256,7 @@ class InterpretedInstance private constructor(
         var chargeGasIndex: Pair<ProgramCounter, Int>? = null
         var isJumpTargetValid = module.isJumpTargetValid(programCounter)
 
-        var i = 0
         for (instruction in module.instructionsBoundedAt(programCounter)) {
-            i++
             logger.debug("Instruction kind: ${instruction.kind} ${instruction.offset.value} ${instruction.nextOffset.value}")
             compiledOffsetForBlock.insert(
                 instruction.offset.value, packTarget(
@@ -310,8 +308,6 @@ class InterpretedInstance private constructor(
                 break
             }
         }
-
-        logger.debug("Compliled Handlers: ${compiledHandlers.size}")
 
         chargeGasIndex?.let { (programCounter, index) ->
             val gasCost = gasVisitor.takeBlockCost()!!
@@ -466,7 +462,7 @@ class InterpretedInstance private constructor(
         }
     }
 
-    private fun runImpl(debug: Boolean): InterruptKind {
+    private fun runImpl(): InterruptKind {
         if (!module.isDynamicPaging()) {
             basicMemory.markDirty()
         }
@@ -479,28 +475,28 @@ class InterpretedInstance private constructor(
             this.compiledOffset = resolveArbitraryJump(programCounter)
                 ?: TARGET_OUT_OF_RANGE
             logger.debug("Starting execution at: ${programCounter.value} [$compiledOffset]")
+        } else {
+            logger.debug("Implicitly resuming at: ${programCounter.value} [$compiledOffset]")
         }
 
         var offset = compiledOffset
         while (true) {
-            if (debug) {
-                cycleCounter++
-            }
+            cycleCounter++
 
             val handler = compiledHandlers[offset.toInt()]
             logger.debug("Executing handler at: [$offset], cycle counter: $cycleCounter")
 
             val visitor = Visitor(this)
-            when (val nextOffset = handler(visitor)) {
+            val nextOffset = handler(visitor)
+            logger.debug("Next offset: ${nextOffset}")
+            when (nextOffset) {
                 null -> return interrupt
                 else -> {
                     offset = nextOffset
-                    compiledOffset = offset
+                    this.compiledOffset = offset
                 }
             }
             return interrupt
         }
-        logger.debug("Finished execution")
     }
-
 }

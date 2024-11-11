@@ -18,7 +18,6 @@ class GasVisitor : InstructionVisitor<Unit> {
     }
 
     fun startNewBasicBlock() {
-        logger.debug("Starting new basic block: $cost")
         lastBlockCost = cost
         cost = 0u
     }
