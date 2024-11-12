@@ -1,6 +1,7 @@
 package io.forge.jam.pvm
 
 import io.forge.jam.core.encoding.TestFileLoader
+import io.forge.jam.core.toHex
 import io.forge.jam.pvm.engine.*
 import io.forge.jam.pvm.program.ProgramBlob
 import io.forge.jam.pvm.program.ProgramCounter
@@ -22,8 +23,8 @@ class PvmTest {
     @Test
     fun runTest() {
         val folderName = "pvm"
-//        val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
-        val testCases = listOf("inst_load_i8")
+        val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
+//        val testCases = listOf("inst_load_i8")
 
         for (testCase in testCases) {
             println("Running test case: $testCase")
@@ -56,8 +57,10 @@ class PvmTest {
                 instance.setReg(Reg.fromRaw(index)!!, value.toULong())
             }
 
-            inputCase.initialMemory.forEachIndexed { index, memory ->
+            inputCase.initialMemory.forEachIndexed { _, memory ->
                 instance.writeMemory(memory.address, memory.contents.toByteArray())
+                val result = instance.readMemoryInto(memory.address, byteArrayOf(0))
+                println("Result: ${result.getOrThrow().toHex()}")
             }
 
 
@@ -93,7 +96,7 @@ class PvmTest {
                 assertEquals(value, instance.reg(Reg.fromRaw(index)!!), "Register $index mismatch.")
             }
             // Validate memory update
-            inputCase.initialMemory.forEachIndexed { index, memory ->
+            inputCase.initialMemory.forEachIndexed { _, memory ->
                 val actualMemory = instance.readMemoryInto(memory.address, byteArrayOf(0))
                 assertUIntListMatchesBytes(memory.contents, actualMemory)
             }
