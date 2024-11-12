@@ -44,9 +44,26 @@ object U16LoadTy : LoadTy {
 
 object I16LoadTy : LoadTy {
     override fun fromSlice(bytes: ByteArray): ULong {
-        // Convert bytes to Short (signed) -> Long (sign extended) -> ULong
-        val value = bytes.toShort(0)
-        return Cast(Cast(value).shortToI64SignExtend()).longToUnsigned()
+        // First combine bytes in little-endian order (bytes[0] is LSB)
+        val byte0 = bytes[0].toInt() and 0xFF
+        val byte1 = bytes[1].toInt() and 0xFF
+        println("byte0: ${byte0.toString(16)}, byte1: ${byte1.toString(16)}")
+
+        val value = byte0 or (byte1 shl 8)
+        println("combined value: ${value.toString(16)}")
+
+        // Convert to Short and sign extend
+        val shortValue = (value and 0xFFFF).toShort()
+        println("as short: ${shortValue}")
+
+        // Sign extend from i16 to i64, then convert to unsigned
+        val signExtended = Cast(shortValue).shortToI64SignExtend()
+        println("sign extended: ${signExtended.toString(16)}")
+
+        val result = Cast(signExtended).longToUnsigned()
+        println("final result: ${result.toString(16)}")
+
+        return result
     }
 }
 

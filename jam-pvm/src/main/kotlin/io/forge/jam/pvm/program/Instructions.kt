@@ -60,7 +60,6 @@ data class Instructions<I : InstructionSet>(
         require(nextOffset > currentOffset) {
             "assertion failed: next_offset > self.offset"
         }
-        logger.debug("next_offset: $nextOffset, instruction: $instruction, isNextInstructionInvalid: $isNextInstructionInvalid")
 
         if (!isNextInstructionInvalid) {
             offset = nextOffset

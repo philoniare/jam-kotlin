@@ -98,7 +98,17 @@ class Compiler(
     }
 
     override fun loadI16(reg: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        if (!module.isDynamicPaging()) {
+            instance.emit(
+                RawHandlers.loadI16Basic,
+                Args.loadI16Basic(programCounter, reg, imm), "loadI16Basic"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.loadI16Dynamic,
+                Args.loadI16Dynamic(programCounter, reg, imm), "loadI16Dynamic"
+            )
+        }
     }
 
     override fun loadU32(reg: RawReg, imm: UInt) {

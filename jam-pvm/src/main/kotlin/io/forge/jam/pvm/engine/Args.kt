@@ -641,5 +641,17 @@ data class Args(
         fun unresolvedFallthrough(jumpTo: ProgramCounter) = Args(
             a0 = jumpTo.value
         )
+
+        fun loadI16Basic(programCounter: ProgramCounter, dst: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = offset
+        )
+
+        fun loadI16Dynamic(programCounter: ProgramCounter, dst: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = offset
+        )
     }
 }

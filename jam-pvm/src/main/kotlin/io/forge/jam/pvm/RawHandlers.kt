@@ -1389,4 +1389,36 @@ object RawHandlers {
             TARGET_OUT_OF_RANGE
         }
     }
+
+    val loadI16Basic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val offset = args.a2
+
+        visitor.load<I16LoadTy>(
+            programCounter,
+            dst,
+            null,
+            offset,
+            2u,
+            false
+        )
+    }
+
+    val loadI16Dynamic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val offset = args.a2
+
+        visitor.load<I16LoadTy>(
+            programCounter,
+            dst,
+            null,
+            offset,
+            2u,
+            true
+        )
+    }
 }

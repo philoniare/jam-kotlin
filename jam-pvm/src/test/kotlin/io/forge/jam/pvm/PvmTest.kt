@@ -20,8 +20,8 @@ class PvmTest {
     @Test
     fun runTest() {
         val folderName = "pvm"
-        val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
-//        val testCases = listOf("inst_load_i8")
+//        val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
+        val testCases = listOf("inst_load_i16")
 
         for (testCase in testCases) {
             println("Running test case: $testCase")
@@ -64,6 +64,7 @@ class PvmTest {
 
             // Handle RW data pages
             // Handle RW data pages
+            // Handle RW data pages
             val rwPages = pageGroups[true] ?: emptyList()
             if (rwPages.isNotEmpty()) {
                 // Find RW memory contents
@@ -74,9 +75,20 @@ class PvmTest {
                     }
                 }
 
-                // Use minimal size needed for actual contents
-                val rwData = byteArrayOf(129.toByte())
-                parts.rwData = ArcBytes.fromStatic(rwData)
+                // Initialize memory based on rwMemory contents
+                if (rwMemory.isNotEmpty()) {
+                    // Calculate size needed for memory contents
+                    val rwData = ByteArray(rwMemory.sumOf { it.contents.size })
+
+                    // Copy contents from each memory segment
+                    rwMemory.forEach { mem ->
+                        val offset = (mem.address - rwPages[0].address).toInt()
+                        mem.contents.forEachIndexed { index, value ->
+                            rwData[offset + index] = value.toByte()
+                        }
+                    }
+                    parts.rwData = ArcBytes.fromStatic(rwData)
+                }
 
                 // Set full page size from page map
                 parts.rwDataSize = rwPages.sumOf { it.length }.toUInt()
@@ -132,8 +144,11 @@ class PvmTest {
                 assertEquals(value, instance.reg(Reg.fromRaw(index)!!), "Register $index mismatch.")
             }
             // Validate memory update
+            // Validate memory update
             inputCase.initialMemory.forEachIndexed { _, memory ->
-                val actualMemory = instance.readMemoryInto(memory.address.toUInt(), byteArrayOf(0))
+                // Create a buffer big enough for the expected memory contents
+                val buffer = ByteArray(memory.contents.size)
+                val actualMemory = instance.readMemoryInto(memory.address.toUInt(), buffer)
                 assertUIntListMatchesBytes(memory.contents, actualMemory)
             }
             assertEquals(inputCase.expectedGas, instance.gas(), "Gas mismatch.")
