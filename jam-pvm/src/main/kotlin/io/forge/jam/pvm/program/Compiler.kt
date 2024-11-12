@@ -405,27 +405,51 @@ class Compiler(
     }
 
     override fun shiftLogicalLeftImm32(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        instance.emit(
+            RawHandlers.shiftLogicalLeftImm32,
+            Args.shiftLogicalLeftImm32(reg1, reg2, imm),
+            "shiftLogicalLeftImm32"
+        )
     }
 
     override fun shiftLogicalLeftImm64(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        instance.emit(
+            RawHandlers.shiftLogicalLeftImm64,
+            Args.shiftLogicalLeftImm64(reg1, reg2, imm),
+            "shiftLogicalLeftImm64"
+        )
     }
 
-    override fun shiftLogicalRightImm32(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+    override fun shiftLogicalRightImm32(d: RawReg, s1: RawReg, s2: UInt) {
+        instance.emit(
+            RawHandlers.shiftLogicalRightImm32,
+            Args.shiftLogicalRightImm32(d, s1, s2),
+            "shiftLogicalRightImm32"
+        )
     }
 
-    override fun shiftLogicalRightImm64(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+    override fun shiftLogicalRightImm64(d: RawReg, s1: RawReg, s2: UInt) {
+        instance.emit(
+            RawHandlers.shiftLogicalRightImm64,
+            Args.shiftLogicalRightImm64(d, s1, s2),
+            "shiftLogicalRightImm64"
+        )
     }
 
-    override fun shiftArithmeticRightImm32(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+    override fun shiftArithmeticRightImm32(d: RawReg, s1: RawReg, s2: UInt) {
+        instance.emit(
+            RawHandlers.shiftArithmeticRightImm32,
+            Args.shiftArithmeticRightImm32(d, s1, s2),
+            "shiftArithmeticRightImm32"
+        )
     }
 
-    override fun shiftArithmeticRightImm64(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+    override fun shiftArithmeticRightImm64(d: RawReg, s1: RawReg, s2: UInt) {
+        instance.emit(
+            RawHandlers.shiftArithmeticRightImm64,
+            Args.shiftArithmeticRightImm64(d, s1, s2),
+            "shiftArithmeticRightImm64"
+        )
     }
 
     override fun negateAndAddImm32(reg1: RawReg, reg2: RawReg, imm: UInt) {
@@ -460,28 +484,52 @@ class Compiler(
         )
     }
 
-    override fun shiftLogicalRightImmAlt32(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+    override fun shiftLogicalRightImmAlt32(d: RawReg, s2: RawReg, s1: UInt) {
+        instance.emit(
+            RawHandlers.shiftLogicalRightImmAlt32,
+            Args.shiftLogicalRightImmAlt32(d, s2, s1),
+            "shiftLogicalRightImmAlt32"
+        )
     }
 
-    override fun shiftLogicalRightImmAlt64(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+    override fun shiftLogicalRightImmAlt64(d: RawReg, s2: RawReg, s1: UInt) {
+        instance.emit(
+            RawHandlers.shiftLogicalRightImmAlt64,
+            Args.shiftLogicalRightImmAlt64(d, s2, s1),
+            "shiftLogicalRightImmAlt64"
+        )
     }
 
-    override fun shiftArithmeticRightImmAlt32(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+    override fun shiftArithmeticRightImmAlt32(d: RawReg, s2: RawReg, s1: UInt) {
+        instance.emit(
+            RawHandlers.shiftArithmeticRightImmAlt32,
+            Args.shiftArithmeticRightImmAlt32(d, s2, s1),
+            "shiftArithmeticRightImmAlt32"
+        )
     }
 
-    override fun shiftArithmeticRightImmAlt64(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+    override fun shiftArithmeticRightImmAlt64(d: RawReg, s2: RawReg, s1: UInt) {
+        instance.emit(
+            RawHandlers.shiftArithmeticRightImmAlt64,
+            Args.shiftArithmeticRightImmAlt64(d, s2, s1),
+            "shiftArithmeticRightImmAlt64"
+        )
     }
 
     override fun shiftLogicalLeftImmAlt32(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        instance.emit(
+            RawHandlers.shiftLogicalLeftImmAlt32,
+            Args.shiftLogicalLeftImmAlt32(reg1, reg2, imm),
+            "shiftLogicalLeftImmAlt32"
+        )
     }
 
     override fun shiftLogicalLeftImmAlt64(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        instance.emit(
+            RawHandlers.shiftLogicalLeftImmAlt64,
+            Args.shiftLogicalLeftImmAlt64(reg1, reg2, imm),
+            "shiftLogicalLeftImmAlt64"
+        )
     }
 
     override fun cmovIfZeroImm(reg1: RawReg, reg2: RawReg, imm: UInt) {
@@ -688,28 +736,52 @@ class Compiler(
         )
     }
 
-    override fun shiftLogicalLeft32(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented")
+    override fun shiftLogicalLeft32(d: RawReg, s1: RawReg, s2: RawReg) {
+        instance.emit(
+            RawHandlers.shiftLogicalLeft32,
+            Args.shiftLogicalLeft32(d, s1, s2),
+            "shiftLogicalLeft32"
+        )
     }
 
-    override fun shiftLogicalLeft64(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented")
+    override fun shiftLogicalLeft64(d: RawReg, s1: RawReg, s2: RawReg) {
+        instance.emit(
+            RawHandlers.shiftLogicalLeft64,
+            Args.shiftLogicalLeft64(d, s1, s2),
+            "shiftLogicalLeft64"
+        )
     }
 
-    override fun shiftLogicalRight32(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented")
+    override fun shiftLogicalRight32(d: RawReg, s1: RawReg, s2: RawReg) {
+        instance.emit(
+            RawHandlers.shiftLogicalRight32,
+            Args.shiftLogicalRight32(d, s1, s2),
+            "shiftLogicalRight32"
+        )
     }
 
-    override fun shiftLogicalRight64(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented")
+    override fun shiftLogicalRight64(d: RawReg, s1: RawReg, s2: RawReg) {
+        instance.emit(
+            RawHandlers.shiftLogicalRight64,
+            Args.shiftLogicalRight64(d, s1, s2),
+            "shiftLogicalRight64"
+        )
     }
 
-    override fun shiftArithmeticRight32(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented")
+    override fun shiftArithmeticRight32(d: RawReg, s1: RawReg, s2: RawReg) {
+        instance.emit(
+            RawHandlers.shiftArithmeticRight32,
+            Args.shiftArithmeticRight32(d, s1, s2),
+            "shiftArithmeticRight32"
+        )
     }
 
-    override fun shiftArithmeticRight64(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented")
+    override fun shiftArithmeticRight64(d: RawReg, s1: RawReg, s2: RawReg) {
+        instance.emit(
+            RawHandlers.shiftArithmeticRight64,
+            Args.shiftArithmeticRight64(d, s1, s2),
+            "shiftArithmeticRight64"
+        )
     }
 
     override fun divUnsigned32(reg1: RawReg, reg2: RawReg, reg3: RawReg) {

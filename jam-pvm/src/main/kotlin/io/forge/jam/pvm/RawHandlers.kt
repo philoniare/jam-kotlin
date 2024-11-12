@@ -1125,4 +1125,204 @@ object RawHandlers {
             if (Cast(s1).ulongToSigned() < Cast(s2).ulongToSigned()) 1uL else 0uL
         }
     }
+
+    val shiftLogicalRight32: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        logger.debug("[${visitor.inner.compiledOffset}]: shift_logical_right_32 $d = $s1 >>> $s2")
+        visitor.set3_32(d, s1.toRegImm(), s2.toRegImm()) { s1, s2 ->
+            s1.shr(s2.toInt() and 0x1F)
+        }
+    }
+
+    val shiftLogicalRight64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        logger.debug("[${visitor.inner.compiledOffset}]: shift_logical_right_64 $d = $s1 >>> $s2")
+        visitor.set3_64(d, s1.toRegImm(), s2.toRegImm()) { s1, s2 ->
+            s1.shr(Cast(s2).ulongTruncateToU32().toInt() and 0x3F)
+        }
+    }
+
+    val shiftArithmeticRight32: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        logger.debug("[${visitor.inner.compiledOffset}]: shift_arithmetic_right_32 $d = $s1 >> $s2")
+        visitor.set3_32(d, s1.toRegImm(), s2.toRegImm()) { s1, s2 ->
+            Cast(Cast(s1).uintToSigned().shr(s2.toInt() and 0x1F)).intToUnsigned()
+        }
+    }
+
+    val shiftArithmeticRight64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        logger.debug("[${visitor.inner.compiledOffset}]: shift_arithmetic_right_64 $d = $s1 >> $s2")
+        visitor.set3_64(d, s1.toRegImm(), s2.toRegImm()) { s1, s2 ->
+            Cast(Cast(s1).ulongToSigned().shr(Cast(s2).ulongTruncateToU32().toInt() and 0x3F)).longToUnsigned()
+        }
+    }
+
+    val shiftLogicalLeft32: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        logger.debug("[${visitor.inner.compiledOffset}]: shift_logical_left_32 $d = $s1 << $s2")
+        visitor.set3_32(d, s1.toRegImm(), s2.toRegImm()) { s1, s2 ->
+            s1.shl(s2.toInt() and 0x1F)
+        }
+    }
+
+    val shiftLogicalLeft64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        logger.debug("[${visitor.inner.compiledOffset}]: shift_logical_left_64 $d = $s1 << $s2")
+        visitor.set3_64(d, s1.toRegImm(), s2.toRegImm()) { s1, s2 ->
+            s1.shl(Cast(s2).ulongTruncateToU32().toInt() and 0x3F)
+        }
+    }
+
+    val shiftLogicalRightImm32: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = args.a2
+        logger.debug("[${visitor.inner.compiledOffset}]: shift_logical_right_imm_32 $d = $s1 >>> $s2")
+        visitor.set3_32(d, s1.toRegImm(), s2.intoRegImm()) { s1, s2 ->
+            s1.shr(s2.toInt() and 0x1F)
+        }
+    }
+
+    val shiftLogicalRightImm64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = args.a2
+        logger.debug("[${visitor.inner.compiledOffset}]: shift_logical_right_imm_64 $d = $s1 >>> $s2")
+        visitor.set3_64(d, s1.toRegImm(), s2.intoRegImm()) { s1, s2 ->
+            s1.shr(Cast(s2).ulongTruncateToU32().toInt() and 0x3F)
+        }
+    }
+
+    val shiftLogicalRightImmAlt32: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s2 = transmuteReg(args.a1)
+        val s1 = args.a2
+        logger.debug("[${visitor.inner.compiledOffset}]: shift_logical_right_imm_alt_32 $d = $s1 >>> $s2")
+        visitor.set3_32(d, s1.intoRegImm(), s2.toRegImm()) { s1, s2 ->
+            s1.shr(s2.toInt() and 0x1F)
+        }
+    }
+
+    val shiftLogicalRightImmAlt64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s2 = transmuteReg(args.a1)
+        val s1 = args.a2
+        logger.debug("[${visitor.inner.compiledOffset}]: shift_logical_right_imm_alt_64 $d = $s1 >>> $s2")
+        visitor.set3_64(d, s1.intoRegImm(), s2.toRegImm()) { s1, s2 ->
+            s1.shr(Cast(s2).ulongTruncateToU32().toInt() and 0x3F)
+        }
+    }
+
+    val shiftArithmeticRightImm32: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = args.a2
+        logger.debug("[${visitor.inner.compiledOffset}]: shift_arithmetic_right_imm_32 $d = $s1 >> $s2")
+        visitor.set3_32(d, s1.toRegImm(), s2.intoRegImm()) { s1, s2 ->
+            Cast(Cast(s1).uintToSigned().shr(s2.toInt() and 0x1F)).intToUnsigned()
+        }
+    }
+
+    val shiftArithmeticRightImm64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = args.a2
+        logger.debug("[${visitor.inner.compiledOffset}]: shift_arithmetic_right_imm_64 $d = $s1 >> $s2")
+        visitor.set3_64(d, s1.toRegImm(), s2.intoRegImm()) { s1, s2 ->
+            Cast(Cast(s1).ulongToSigned().shr(Cast(s2).ulongTruncateToU32().toInt() and 0x3F)).longToUnsigned()
+        }
+    }
+
+    val shiftArithmeticRightImmAlt32: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s2 = transmuteReg(args.a1)
+        val s1 = args.a2
+        logger.debug("[${visitor.inner.compiledOffset}]: shift_arithmetic_right_imm_alt_32 $d = $s1 >> $s2")
+        visitor.set3_32(d, s1.intoRegImm(), s2.toRegImm()) { s1, s2 ->
+            Cast(Cast(s1).uintToSigned().shr(s2.toInt() and 0x1F)).intToUnsigned()
+        }
+    }
+
+    val shiftArithmeticRightImmAlt64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s2 = transmuteReg(args.a1)
+        val s1 = args.a2
+        logger.debug("[${visitor.inner.compiledOffset}]: shift_arithmetic_right_imm_alt_64 $d = $s1 >> $s2")
+        visitor.set3_64(d, s1.intoRegImm(), s2.toRegImm()) { s1, s2 ->
+            Cast(Cast(s1).ulongToSigned().shr(Cast(s2).ulongTruncateToU32().toInt() and 0x3F)).longToUnsigned()
+        }
+    }
+
+    val shiftLogicalLeftImm32: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = args.a2
+        logger.debug("[${visitor.inner.compiledOffset}]: shift_logical_left_imm_32 $d = $s1 << $s2")
+        visitor.set3_32(d, s1.toRegImm(), s2.intoRegImm()) { s1, s2 ->
+            s1.shl(s2.toInt() and 0x1F)
+        }
+    }
+
+    val shiftLogicalLeftImm64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = args.a2
+        logger.debug("[${visitor.inner.compiledOffset}]: shift_logical_left_imm_64 $d = $s1 << $s2")
+        visitor.set3_64(d, s1.toRegImm(), s2.intoRegImm()) { s1, s2 ->
+            s1.shl(Cast(s2).ulongTruncateToU32().toInt() and 0x3F)
+        }
+    }
+
+    val shiftLogicalLeftImmAlt32: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s2 = transmuteReg(args.a1)
+        val s1 = args.a2
+        logger.debug("[${visitor.inner.compiledOffset}]: shift_logical_left_imm_alt_32 $d = $s1 << $s2")
+        visitor.set3_32(d, s1.intoRegImm(), s2.toRegImm()) { s1, s2 ->
+            s1.shl(s2.toInt() and 0x1F)
+        }
+    }
+
+    val shiftLogicalLeftImmAlt64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s2 = transmuteReg(args.a1)
+        val s1 = args.a2
+        logger.debug("[${visitor.inner.compiledOffset}]: shift_logical_left_imm_alt_64 $d = $s1 << $s2")
+        visitor.set3_64(d, s1.intoRegImm(), s2.toRegImm()) { s1, s2 ->
+            s1.shl(Cast(s2).ulongTruncateToU32().toInt() and 0x3F)
+        }
+    }
+
+
 }

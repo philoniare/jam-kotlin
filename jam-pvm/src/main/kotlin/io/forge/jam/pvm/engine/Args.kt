@@ -518,5 +518,113 @@ data class Args(
             a1 = s1.toU32(),
             a2 = s2.toU32()
         )
+
+        fun shiftLogicalRight32(d: RawReg, s1: RawReg, s2: RawReg) = Args(
+            a0 = d.toU32(),
+            a1 = s1.toU32(),
+            a2 = s2.toU32()
+        )
+
+        fun shiftLogicalRight64(d: RawReg, s1: RawReg, s2: RawReg) = Args(
+            a0 = d.toU32(),
+            a1 = s1.toU32(),
+            a2 = s2.toU32()
+        )
+
+        fun shiftArithmeticRight32(d: RawReg, s1: RawReg, s2: RawReg) = Args(
+            a0 = d.toU32(),
+            a1 = s1.toU32(),
+            a2 = s2.toU32()
+        )
+
+        fun shiftArithmeticRight64(d: RawReg, s1: RawReg, s2: RawReg) = Args(
+            a0 = d.toU32(),
+            a1 = s1.toU32(),
+            a2 = s2.toU32()
+        )
+
+        fun shiftLogicalLeft32(d: RawReg, s1: RawReg, s2: RawReg) = Args(
+            a0 = d.toU32(),
+            a1 = s1.toU32(),
+            a2 = s2.toU32()
+        )
+
+        fun shiftLogicalLeft64(d: RawReg, s1: RawReg, s2: RawReg) = Args(
+            a0 = d.toU32(),
+            a1 = s1.toU32(),
+            a2 = s2.toU32()
+        )
+
+        fun shiftLogicalRightImm32(d: RawReg, s1: RawReg, s2: UInt) = Args(
+            a0 = d.toU32(),
+            a1 = s1.toU32(),
+            a2 = s2
+        )
+
+        fun shiftLogicalRightImm64(d: RawReg, s1: RawReg, s2: UInt) = Args(
+            a0 = d.toU32(),
+            a1 = s1.toU32(),
+            a2 = s2
+        )
+
+        fun shiftLogicalRightImmAlt32(d: RawReg, s2: RawReg, s1: UInt) = Args(
+            a0 = d.toU32(),
+            a1 = s2.toU32(),
+            a2 = s1
+        )
+
+        fun shiftLogicalRightImmAlt64(d: RawReg, s2: RawReg, s1: UInt) = Args(
+            a0 = d.toU32(),
+            a1 = s2.toU32(),
+            a2 = s1
+        )
+
+        fun shiftArithmeticRightImm32(d: RawReg, s1: RawReg, s2: UInt) = Args(
+            a0 = d.toU32(),
+            a1 = s1.toU32(),
+            a2 = s2
+        )
+
+        fun shiftArithmeticRightImm64(d: RawReg, s1: RawReg, s2: UInt) = Args(
+            a0 = d.toU32(),
+            a1 = s1.toU32(),
+            a2 = s2
+        )
+
+        fun shiftArithmeticRightImmAlt32(d: RawReg, s2: RawReg, s1: UInt) = Args(
+            a0 = d.toU32(),
+            a1 = s2.toU32(),
+            a2 = s1
+        )
+
+        fun shiftArithmeticRightImmAlt64(d: RawReg, s2: RawReg, s1: UInt) = Args(
+            a0 = d.toU32(),
+            a1 = s2.toU32(),
+            a2 = s1
+        )
+
+        fun shiftLogicalLeftImm32(d: RawReg, s1: RawReg, s2: UInt) = Args(
+            a0 = d.toU32(),
+            a1 = s1.toU32(),
+            a2 = s2
+        )
+
+        fun shiftLogicalLeftImm64(d: RawReg, s1: RawReg, s2: UInt) = Args(
+            a0 = d.toU32(),
+            a1 = s1.toU32(),
+            a2 = s2
+        )
+
+        fun shiftLogicalLeftImmAlt32(d: RawReg, s2: RawReg, s1: UInt) = Args(
+            a0 = d.toU32(),
+            a1 = s2.toU32(),
+            a2 = s1
+        )
+
+        fun shiftLogicalLeftImmAlt64(d: RawReg, s2: RawReg, s1: UInt) = Args(
+            a0 = d.toU32(),
+            a1 = s2.toU32(),
+            a2 = s1
+        )
     }
 }
