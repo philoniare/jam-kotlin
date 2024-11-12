@@ -334,4 +334,249 @@ object RawHandlers {
             offset
         }
     }
+
+    val branchGreaterOrEqualUnsigned: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val s1 = transmuteReg(args.a0)
+        val s2 = transmuteReg(args.a1)
+        val tt = args.a2
+        val tf = args.a3
+        logger.debug("[${visitor.inner.compiledOffset}]: jump ~$tt if $s1 >=u $s2")
+        visitor.branch(s1.toRegImm(), s2.toRegImm(), tt, tf) { a, b ->
+            a >= b
+        }
+    }
+
+    val unresolvedBranchGreaterOrEqualUnsigned: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val s1 = transmuteReg(args.a0)
+        val s2 = transmuteReg(args.a1)
+        val targetTrue = ProgramCounter(args.a2)
+        val targetFalse = ProgramCounter(args.a3)
+
+        logger.debug("[${visitor.inner.compiledOffset}]: jump $targetTrue if $s1 >=u $s2")
+
+        val targetFalseResolved = visitor.inner.resolveJump(targetFalse) ?: TARGET_OUT_OF_RANGE
+        visitor.inner.resolveJump(targetTrue)?.let { targetTrueResolved ->
+            val offset = visitor.inner.compiledOffset
+            visitor.inner.compiledHandlers[offset.toInt()] = branchGreaterOrEqualUnsigned
+            visitor.inner.compiledArgs[offset.toInt()] = Args.branchGreaterOrEqualUnsigned(
+                s1.toRawReg(),
+                s2.toRawReg(),
+                targetTrueResolved,
+                targetFalseResolved
+            )
+            offset
+        }
+    }
+
+    val branchGreaterSignedImm: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val s1 = transmuteReg(args.a0)
+        val s2 = args.a1
+        val tt = args.a2
+        val tf = args.a3
+        logger.debug("[${visitor.inner.compiledOffset}]: jump ~$tt if $s1 >s $s2")
+        visitor.branch(s1.toRegImm(), s2.intoRegImm(), tt, tf) { a, b ->
+            Cast(a).ulongToSigned() > Cast(b).ulongToSigned()
+        }
+    }
+
+    val unresolvedBranchGreaterSignedImm: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val s1 = transmuteReg(args.a0)
+        val s2 = args.a1
+        val targetTrue = ProgramCounter(args.a2)
+        val targetFalse = ProgramCounter(args.a3)
+
+        logger.debug("[${visitor.inner.compiledOffset}]: jump $targetTrue if $s1 >s $s2")
+
+        val targetFalseResolved = visitor.inner.resolveJump(targetFalse) ?: TARGET_OUT_OF_RANGE
+        visitor.inner.resolveJump(targetTrue)?.let { targetTrueResolved ->
+            val offset = visitor.inner.compiledOffset
+            visitor.inner.compiledHandlers[offset.toInt()] = branchGreaterSignedImm
+            visitor.inner.compiledArgs[offset.toInt()] = Args.branchGreaterSignedImm(
+                s1.toRawReg(),
+                s2,
+                targetTrueResolved,
+                targetFalseResolved
+            )
+            offset
+        }
+    }
+
+    val branchGreaterUnsignedImm: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val s1 = transmuteReg(args.a0)
+        val s2 = args.a1
+        val tt = args.a2
+        val tf = args.a3
+        logger.debug("[${visitor.inner.compiledOffset}]: jump ~$tt if $s1 >u $s2")
+        visitor.branch(s1.toRegImm(), s2.intoRegImm(), tt, tf) { a, b ->
+            a > b
+        }
+    }
+
+    val unresolvedBranchGreaterUnsignedImm: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val s1 = transmuteReg(args.a0)
+        val s2 = args.a1
+        val targetTrue = ProgramCounter(args.a2)
+        val targetFalse = ProgramCounter(args.a3)
+
+        logger.debug("[${visitor.inner.compiledOffset}]: jump $targetTrue if $s1 >u $s2")
+
+        val targetFalseResolved = visitor.inner.resolveJump(targetFalse) ?: TARGET_OUT_OF_RANGE
+        visitor.inner.resolveJump(targetTrue)?.let { targetTrueResolved ->
+            val offset = visitor.inner.compiledOffset
+            visitor.inner.compiledHandlers[offset.toInt()] = branchGreaterUnsignedImm
+            visitor.inner.compiledArgs[offset.toInt()] = Args.branchGreaterUnsignedImm(
+                s1.toRawReg(),
+                s2,
+                targetTrueResolved,
+                targetFalseResolved
+            )
+            offset
+        }
+    }
+
+    val branchLessOrEqualUnsignedImm: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val s1 = transmuteReg(args.a0)
+        val s2 = args.a1
+        val tt = args.a2
+        val tf = args.a3
+        logger.debug("[${visitor.inner.compiledOffset}]: jump ~$tt if $s1 <=u $s2")
+        visitor.branch(s1.toRegImm(), s2.intoRegImm(), tt, tf) { a, b ->
+            a <= b
+        }
+    }
+
+    val unresolvedBranchLessOrEqualUnsignedImm: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val s1 = transmuteReg(args.a0)
+        val s2 = args.a1
+        val targetTrue = ProgramCounter(args.a2)
+        val targetFalse = ProgramCounter(args.a3)
+
+        logger.debug("[${visitor.inner.compiledOffset}]: jump $targetTrue if $s1 <=u $s2")
+
+        val targetFalseResolved = visitor.inner.resolveJump(targetFalse) ?: TARGET_OUT_OF_RANGE
+        visitor.inner.resolveJump(targetTrue)?.let { targetTrueResolved ->
+            val offset = visitor.inner.compiledOffset
+            visitor.inner.compiledHandlers[offset.toInt()] = branchLessOrEqualUnsignedImm
+            visitor.inner.compiledArgs[offset.toInt()] = Args.branchLessOrEqualUnsignedImm(
+                s1.toRawReg(),
+                s2,
+                targetTrueResolved,
+                targetFalseResolved
+            )
+            offset
+        }
+    }
+
+    val branchLessOrEqualSignedImm: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val s1 = transmuteReg(args.a0)
+        val s2 = args.a1
+        val tt = args.a2
+        val tf = args.a3
+        logger.debug("[${visitor.inner.compiledOffset}]: jump ~$tt if $s1 <=s $s2")
+        visitor.branch(s1.toRegImm(), s2.intoRegImm(), tt, tf) { a, b ->
+            Cast(a).ulongToSigned() <= Cast(b).ulongToSigned()
+        }
+    }
+
+    val unresolvedBranchLessOrEqualSignedImm: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val s1 = transmuteReg(args.a0)
+        val s2 = args.a1
+        val targetTrue = ProgramCounter(args.a2)
+        val targetFalse = ProgramCounter(args.a3)
+
+        logger.debug("[${visitor.inner.compiledOffset}]: jump $targetTrue if $s1 <=s $s2")
+
+        val targetFalseResolved = visitor.inner.resolveJump(targetFalse) ?: TARGET_OUT_OF_RANGE
+        visitor.inner.resolveJump(targetTrue)?.let { targetTrueResolved ->
+            val offset = visitor.inner.compiledOffset
+            visitor.inner.compiledHandlers[offset.toInt()] = branchLessOrEqualSignedImm
+            visitor.inner.compiledArgs[offset.toInt()] = Args.branchLessOrEqualSignedImm(
+                s1.toRawReg(),
+                s2,
+                targetTrueResolved,
+                targetFalseResolved
+            )
+            offset
+        }
+    }
+
+    val branchLessSigned: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val s1 = transmuteReg(args.a0)
+        val s2 = transmuteReg(args.a1)
+        val tt = args.a2
+        val tf = args.a3
+        logger.debug("[${visitor.inner.compiledOffset}]: jump ~$tt if $s1 <s $s2")
+        visitor.branch(s1.toRegImm(), s2.toRegImm(), tt, tf) { a, b ->
+            Cast(a).ulongToSigned() < Cast(b).ulongToSigned()
+        }
+    }
+
+    val unresolvedBranchLessSigned: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val s1 = transmuteReg(args.a0)
+        val s2 = transmuteReg(args.a1)
+        val targetTrue = ProgramCounter(args.a2)
+        val targetFalse = ProgramCounter(args.a3)
+
+        logger.debug("[${visitor.inner.compiledOffset}]: jump $targetTrue if $s1 <s $s2")
+
+        val targetFalseResolved = visitor.inner.resolveJump(targetFalse) ?: TARGET_OUT_OF_RANGE
+        visitor.inner.resolveJump(targetTrue)?.let { targetTrueResolved ->
+            val offset = visitor.inner.compiledOffset
+            visitor.inner.compiledHandlers[offset.toInt()] = branchLessSigned
+            visitor.inner.compiledArgs[offset.toInt()] = Args.branchLessSigned(
+                s1.toRawReg(),
+                s2.toRawReg(),
+                targetTrueResolved,
+                targetFalseResolved
+            )
+            offset
+        }
+    }
+
+    val branchLessSignedImm: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val s1 = transmuteReg(args.a0)
+        val s2 = args.a1
+        val tt = args.a2
+        val tf = args.a3
+        logger.debug("[${visitor.inner.compiledOffset}]: jump ~$tt if $s1 <s $s2")
+        visitor.branch(s1.toRegImm(), s2.intoRegImm(), tt, tf) { a, b ->
+            Cast(a).ulongToSigned() < Cast(b).ulongToSigned()
+        }
+    }
+
+    val unresolvedBranchLessSignedImm: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val s1 = transmuteReg(args.a0)
+        val s2 = args.a1
+        val targetTrue = ProgramCounter(args.a2)
+        val targetFalse = ProgramCounter(args.a3)
+
+        logger.debug("[${visitor.inner.compiledOffset}]: jump $targetTrue if $s1 <s $s2")
+
+        val targetFalseResolved = visitor.inner.resolveJump(targetFalse) ?: TARGET_OUT_OF_RANGE
+        visitor.inner.resolveJump(targetTrue)?.let { targetTrueResolved ->
+            val offset = visitor.inner.compiledOffset
+            visitor.inner.compiledHandlers[offset.toInt()] = branchLessSignedImm
+            visitor.inner.compiledArgs[offset.toInt()] = Args.branchLessSignedImm(
+                s1.toRawReg(),
+                s2,
+                targetTrueResolved,
+                targetFalseResolved
+            )
+            offset
+        }
+    }
 }

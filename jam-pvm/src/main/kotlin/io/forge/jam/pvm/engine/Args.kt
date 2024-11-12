@@ -151,5 +151,103 @@ data class Args(
                 a3 = a3.value
             )
 
+        fun branchGreaterOrEqualUnsigned(a0: RawReg, a1: RawReg, a2: Target, a3: Target) = Args(
+            a0 = a0.toU32(),
+            a1 = a1.toU32(),
+            a2 = a2,
+            a3 = a3
+        )
+
+        fun unresolvedBranchGreaterOrEqualUnsigned(a0: RawReg, a1: RawReg, a2: ProgramCounter, a3: ProgramCounter) =
+            Args(
+                a0 = a0.toU32(),
+                a1 = a1.toU32(),
+                a2 = a2.value,
+                a3 = a3.value
+            )
+
+        fun branchGreaterSignedImm(a0: RawReg, a1: UInt, a2: Target, a3: Target) = Args(
+            a0 = a0.toU32(),
+            a1 = a1,
+            a2 = a2,
+            a3 = a3
+        )
+
+        fun unresolvedBranchGreaterSignedImm(a0: RawReg, a1: UInt, a2: ProgramCounter, a3: ProgramCounter) = Args(
+            a0 = a0.toU32(),
+            a1 = a1,
+            a2 = a2.value,
+            a3 = a3.value
+        )
+
+        fun branchGreaterUnsignedImm(a0: RawReg, a1: UInt, a2: Target, a3: Target) = Args(
+            a0 = a0.toU32(),
+            a1 = a1,
+            a2 = a2,
+            a3 = a3
+        )
+
+        fun unresolvedBranchGreaterUnsignedImm(a0: RawReg, a1: UInt, a2: ProgramCounter, a3: ProgramCounter) = Args(
+            a0 = a0.toU32(),
+            a1 = a1,
+            a2 = a2.value,
+            a3 = a3.value
+        )
+
+        fun branchLessOrEqualUnsignedImm(a0: RawReg, a1: UInt, a2: Target, a3: Target) = Args(
+            a0 = a0.toU32(),
+            a1 = a1,
+            a2 = a2,
+            a3 = a3
+        )
+
+        fun unresolvedBranchLessOrEqualUnsignedImm(a0: RawReg, a1: UInt, a2: ProgramCounter, a3: ProgramCounter) = Args(
+            a0 = a0.toU32(),
+            a1 = a1,
+            a2 = a2.value,
+            a3 = a3.value
+        )
+
+        fun branchLessOrEqualSignedImm(a0: RawReg, a1: UInt, a2: Target, a3: Target) = Args(
+            a0 = a0.toU32(),
+            a1 = a1,
+            a2 = a2,
+            a3 = a3
+        )
+
+        fun unresolvedBranchLessOrEqualSignedImm(a0: RawReg, a1: UInt, a2: ProgramCounter, a3: ProgramCounter) = Args(
+            a0 = a0.toU32(),
+            a1 = a1,
+            a2 = a2.value,
+            a3 = a3.value
+        )
+
+        fun branchLessSigned(a0: RawReg, a1: RawReg, a2: Target, a3: Target) = Args(
+            a0 = a0.toU32(),
+            a1 = a1.toU32(),
+            a2 = a2,
+            a3 = a3
+        )
+
+        fun unresolvedBranchLessSigned(a0: RawReg, a1: RawReg, a2: ProgramCounter, a3: ProgramCounter) = Args(
+            a0 = a0.toU32(),
+            a1 = a1.toU32(),
+            a2 = a2.value,
+            a3 = a3.value
+        )
+
+        fun branchLessSignedImm(a0: RawReg, a1: UInt, a2: Target, a3: Target) = Args(
+            a0 = a0.toU32(),
+            a1 = a1,
+            a2 = a2,
+            a3 = a3
+        )
+
+        fun unresolvedBranchLessSignedImm(a0: RawReg, a1: UInt, a2: ProgramCounter, a3: ProgramCounter) = Args(
+            a0 = a0.toU32(),
+            a1 = a1,
+            a2 = a2.value,
+            a3 = a3.value
+        )
     }
 }
