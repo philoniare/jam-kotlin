@@ -76,7 +76,19 @@ class Compiler(
     }
 
     override fun loadU8(reg: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        if (!module.isDynamicPaging()) {
+            instance.emit(
+                RawHandlers.loadU8Basic,
+                Args.loadU8Basic(programCounter, reg, imm),
+                "loadU8Basic"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.loadU8Dynamic,
+                Args.loadU8Dynamic(programCounter, reg, imm),
+                "loadU8Dynamic"
+            )
+        }
     }
 
     override fun loadI8(reg: RawReg, imm: UInt) {
@@ -94,7 +106,19 @@ class Compiler(
     }
 
     override fun loadU16(reg: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        if (!module.isDynamicPaging()) {
+            instance.emit(
+                RawHandlers.loadU16Basic,
+                Args.loadU16Basic(programCounter, reg, imm),
+                "loadU16Basic"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.loadU16Dynamic,
+                Args.loadU16Dynamic(programCounter, reg, imm),
+                "loadU16Dynamic"
+            )
+        }
     }
 
     override fun loadI16(reg: RawReg, imm: UInt) {
@@ -112,15 +136,51 @@ class Compiler(
     }
 
     override fun loadU32(reg: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        if (!module.isDynamicPaging()) {
+            instance.emit(
+                RawHandlers.loadU32Basic,
+                Args.loadU32Basic(programCounter, reg, imm),
+                "loadU32Basic"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.loadU32Dynamic,
+                Args.loadU32Dynamic(programCounter, reg, imm),
+                "loadU32Dynamic"
+            )
+        }
     }
 
     override fun loadI32(reg: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        if (!module.isDynamicPaging()) {
+            instance.emit(
+                RawHandlers.loadI32Basic,
+                Args.loadI32Basic(programCounter, reg, imm),
+                "loadI32Basic"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.loadI32Dynamic,
+                Args.loadI32Dynamic(programCounter, reg, imm),
+                "loadI32Dynamic"
+            )
+        }
     }
 
     override fun loadU64(reg: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        if (!module.isDynamicPaging()) {
+            instance.emit(
+                RawHandlers.loadU64Basic,
+                Args.loadU64Basic(programCounter, reg, imm),
+                "loadU64Basic"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.loadU64Dynamic,
+                Args.loadU64Dynamic(programCounter, reg, imm),
+                "loadU64Dynamic"
+            )
+        }
     }
 
     override fun storeU8(reg: RawReg, imm: UInt) {
@@ -140,7 +200,15 @@ class Compiler(
     }
 
     override fun loadImmAndJump(reg: RawReg, imm1: UInt, imm2: UInt) {
-        TODO("Not yet implemented")
+        instance.emit(
+            RawHandlers.loadImm,
+            Args.loadImm(reg, imm1), "loadImmAndJump"
+        )
+        instance.emit(
+            RawHandlers.unresolvedJump,
+            Args.unresolvedJump(programCounter, ProgramCounter(imm2)),
+            "unresolvedJump"
+        )
     }
 
     override fun branchEq(reg1: RawReg, reg2: RawReg, imm: UInt) {
@@ -327,31 +395,115 @@ class Compiler(
     }
 
     override fun loadIndirectU8(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        if (!module.isDynamicPaging()) {
+            instance.emit(
+                RawHandlers.loadIndirectU8Basic,
+                Args.loadIndirectU8Basic(programCounter, reg1, reg2, imm),
+                "loadIndirectU8Basic"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.loadIndirectU8Dynamic,
+                Args.loadIndirectU8Dynamic(programCounter, reg1, reg2, imm),
+                "loadIndirectU8Dynamic"
+            )
+        }
     }
 
     override fun loadIndirectI8(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        if (!module.isDynamicPaging()) {
+            instance.emit(
+                RawHandlers.loadIndirectI8Basic,
+                Args.loadIndirectI8Basic(programCounter, reg1, reg2, imm),
+                "loadIndirectI8Basic"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.loadIndirectI8Dynamic,
+                Args.loadIndirectI8Dynamic(programCounter, reg1, reg2, imm),
+                "loadIndirectI8Dynamic"
+            )
+        }
     }
 
     override fun loadIndirectU16(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        if (!module.isDynamicPaging()) {
+            instance.emit(
+                RawHandlers.loadIndirectU16Basic,
+                Args.loadIndirectU16Basic(programCounter, reg1, reg2, imm),
+                "loadIndirectU16Basic"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.loadIndirectU16Dynamic,
+                Args.loadIndirectU16Dynamic(programCounter, reg1, reg2, imm),
+                "loadIndirectU16Dynamic"
+            )
+        }
     }
 
     override fun loadIndirectI16(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        if (!module.isDynamicPaging()) {
+            instance.emit(
+                RawHandlers.loadIndirectI16Basic,
+                Args.loadIndirectI16Basic(programCounter, reg1, reg2, imm),
+                "loadIndirectI16Basic"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.loadIndirectI16Dynamic,
+                Args.loadIndirectI16Dynamic(programCounter, reg1, reg2, imm),
+                "loadIndirectI16Dynamic"
+            )
+        }
     }
 
     override fun loadIndirectU32(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        if (!module.isDynamicPaging()) {
+            instance.emit(
+                RawHandlers.loadIndirectU32Basic,
+                Args.loadIndirectU32Basic(programCounter, reg1, reg2, imm),
+                "loadIndirectU32Basic"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.loadIndirectU32Dynamic,
+                Args.loadIndirectU32Dynamic(programCounter, reg1, reg2, imm),
+                "loadIndirectU32Dynamic"
+            )
+        }
     }
 
     override fun loadIndirectI32(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        if (!module.isDynamicPaging()) {
+            instance.emit(
+                RawHandlers.loadIndirectI32Basic,
+                Args.loadIndirectI32Basic(programCounter, reg1, reg2, imm),
+                "loadIndirectI32Basic"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.loadIndirectI32Dynamic,
+                Args.loadIndirectI32Dynamic(programCounter, reg1, reg2, imm),
+                "loadIndirectI32Dynamic"
+            )
+        }
     }
 
     override fun loadIndirectU64(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        if (!module.isDynamicPaging()) {
+            instance.emit(
+                RawHandlers.loadIndirectU64Basic,
+                Args.loadIndirectU64Basic(programCounter, reg1, reg2, imm),
+                "loadIndirectU64Basic"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.loadIndirectU64Dynamic,
+                Args.loadIndirectU64Dynamic(programCounter, reg1, reg2, imm),
+                "loadIndirectU64Dynamic"
+            )
+        }
     }
 
     override fun addImm32(reg1: RawReg, reg2: RawReg, imm: UInt) {
@@ -921,7 +1073,11 @@ class Compiler(
     }
 
     override fun loadImm64(reg: RawReg, imm: ULong) {
-        TODO("Not yet implemented")
+        instance.emit(
+            RawHandlers.loadImm64,
+            Args.loadImm64(reg, Cast(imm).ulongTruncateToU32(), Cast(imm shr 32).ulongTruncateToU32()),
+            "loadImm64"
+        )
     }
 
 

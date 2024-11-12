@@ -653,5 +653,169 @@ data class Args(
             a1 = dst.toU32(),
             a2 = offset
         )
+
+        fun loadIndirectI8Basic(programCounter: ProgramCounter, dst: RawReg, base: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = base.toU32(),
+            a3 = offset
+        )
+
+        fun loadIndirectI8Dynamic(programCounter: ProgramCounter, dst: RawReg, base: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = base.toU32(),
+            a3 = offset
+        )
+
+        fun loadIndirectU16Basic(programCounter: ProgramCounter, dst: RawReg, base: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = base.toU32(),
+            a3 = offset
+        )
+
+        fun loadIndirectU16Dynamic(programCounter: ProgramCounter, dst: RawReg, base: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = base.toU32(),
+            a3 = offset
+        )
+
+        fun loadIndirectI16Basic(programCounter: ProgramCounter, dst: RawReg, base: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = base.toU32(),
+            a3 = offset
+        )
+
+        fun loadIndirectI16Dynamic(programCounter: ProgramCounter, dst: RawReg, base: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = base.toU32(),
+            a3 = offset
+        )
+
+        fun loadIndirectU8Basic(programCounter: ProgramCounter, dst: RawReg, base: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = base.toU32(),
+            a3 = offset
+        )
+
+        fun loadIndirectU8Dynamic(programCounter: ProgramCounter, dst: RawReg, base: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = base.toU32(),
+            a3 = offset
+        )
+
+        fun loadIndirectU32Basic(programCounter: ProgramCounter, dst: RawReg, base: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = base.toU32(),
+            a3 = offset
+        )
+
+        fun loadIndirectU32Dynamic(programCounter: ProgramCounter, dst: RawReg, base: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = base.toU32(),
+            a3 = offset
+        )
+
+        fun loadIndirectU64Basic(programCounter: ProgramCounter, dst: RawReg, base: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = base.toU32(),
+            a3 = offset
+        )
+
+        fun loadIndirectU64Dynamic(programCounter: ProgramCounter, dst: RawReg, base: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = base.toU32(),
+            a3 = offset
+        )
+
+        fun loadU8Basic(programCounter: ProgramCounter, dst: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = offset
+        )
+
+        fun loadU8Dynamic(programCounter: ProgramCounter, dst: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = offset
+        )
+
+        fun loadU16Basic(programCounter: ProgramCounter, dst: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = offset
+        )
+
+        fun loadU16Dynamic(programCounter: ProgramCounter, dst: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = offset
+        )
+
+        fun loadU32Basic(programCounter: ProgramCounter, dst: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = offset
+        )
+
+        fun loadU32Dynamic(programCounter: ProgramCounter, dst: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = offset
+        )
+
+        fun loadImm64(dst: RawReg, immLo: UInt, immHi: UInt) = Args(
+            a0 = dst.toU32(),
+            a1 = immLo,
+            a2 = immHi
+        )
+
+        fun loadI32Basic(programCounter: ProgramCounter, dst: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = offset
+        )
+
+        fun loadI32Dynamic(programCounter: ProgramCounter, dst: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = offset
+        )
+
+        fun loadU64Basic(programCounter: ProgramCounter, dst: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = offset
+        )
+
+        fun loadU64Dynamic(programCounter: ProgramCounter, dst: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = offset
+        )
+
+        fun loadIndirectI32Basic(programCounter: ProgramCounter, dst: RawReg, base: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = base.toU32(),
+            a3 = offset
+        )
+
+        fun loadIndirectI32Dynamic(programCounter: ProgramCounter, dst: RawReg, base: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = dst.toU32(),
+            a2 = base.toU32(),
+            a3 = offset
+        )
     }
 }

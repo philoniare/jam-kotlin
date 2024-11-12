@@ -1421,4 +1421,412 @@ object RawHandlers {
             true
         )
     }
+
+    val loadIndirectI8Basic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val base = transmuteReg(args.a2)
+        val offset = args.a3
+
+        visitor.load<I8LoadTy>(
+            programCounter,
+            dst,
+            base,
+            offset,
+            1u,
+            false
+        )
+    }
+
+    val loadIndirectI8Dynamic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val base = transmuteReg(args.a2)
+        val offset = args.a3
+
+        visitor.load<I8LoadTy>(
+            programCounter,
+            dst,
+            base,
+            offset,
+            1u,
+            true
+        )
+    }
+
+    val loadIndirectU16Basic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val base = transmuteReg(args.a2)
+        val offset = args.a3
+
+        visitor.load<U16LoadTy>(
+            programCounter,
+            dst,
+            base,
+            offset,
+            2u,
+            false
+        )
+    }
+
+    val loadIndirectU16Dynamic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val base = transmuteReg(args.a2)
+        val offset = args.a3
+
+        visitor.load<U16LoadTy>(
+            programCounter,
+            dst,
+            base,
+            offset,
+            2u,
+            true
+        )
+    }
+
+    val loadIndirectI16Basic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val base = transmuteReg(args.a2)
+        val offset = args.a3
+
+        visitor.load<I16LoadTy>(
+            programCounter,
+            dst,
+            base,
+            offset,
+            2u,
+            false
+        )
+    }
+
+    val loadIndirectI16Dynamic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val base = transmuteReg(args.a2)
+        val offset = args.a3
+
+        visitor.load<I16LoadTy>(
+            programCounter,
+            dst,
+            base,
+            offset,
+            2u,
+            true
+        )
+    }
+
+    val loadIndirectU8Basic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val base = transmuteReg(args.a2)
+        val offset = args.a3
+
+        visitor.load<U8LoadTy>(
+            programCounter,
+            dst,
+            base,
+            offset,
+            1u,
+            false
+        )
+    }
+
+    val loadIndirectU8Dynamic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val base = transmuteReg(args.a2)
+        val offset = args.a3
+
+        visitor.load<U8LoadTy>(
+            programCounter,
+            dst,
+            base,
+            offset,
+            1u,
+            true
+        )
+    }
+
+    val loadIndirectU32Basic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val base = transmuteReg(args.a2)
+        val offset = args.a3
+
+        visitor.load<U32LoadTy>(
+            programCounter,
+            dst,
+            base,
+            offset,
+            4u,
+            false
+        )
+    }
+
+    val loadIndirectU32Dynamic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val base = transmuteReg(args.a2)
+        val offset = args.a3
+
+        visitor.load<U32LoadTy>(
+            programCounter,
+            dst,
+            base,
+            offset,
+            4u,
+            true
+        )
+    }
+
+    val loadIndirectU64Basic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val base = transmuteReg(args.a2)
+        val offset = args.a3
+
+        visitor.load<U64LoadTy>(
+            programCounter,
+            dst,
+            base,
+            offset,
+            8u,
+            false
+        )
+    }
+
+    val loadIndirectU64Dynamic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val base = transmuteReg(args.a2)
+        val offset = args.a3
+
+        visitor.load<U64LoadTy>(
+            programCounter,
+            dst,
+            base,
+            offset,
+            8u,
+            true
+        )
+    }
+
+    val loadU8Basic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val offset = args.a2
+
+        visitor.load<U8LoadTy>(
+            programCounter,
+            dst,
+            null,
+            offset,
+            1u,
+            false
+        )
+    }
+
+    val loadU8Dynamic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val offset = args.a2
+
+        visitor.load<U8LoadTy>(
+            programCounter,
+            dst,
+            null,
+            offset,
+            1u,
+            true
+        )
+    }
+
+    val loadU16Basic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val offset = args.a2
+
+        visitor.load<U16LoadTy>(
+            programCounter,
+            dst,
+            null,
+            offset,
+            2u,
+            false
+        )
+    }
+
+    val loadU16Dynamic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val offset = args.a2
+
+        visitor.load<U16LoadTy>(
+            programCounter,
+            dst,
+            null,
+            offset,
+            2u,
+            true
+        )
+    }
+
+    val loadU32Basic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val offset = args.a2
+
+        visitor.load<U32LoadTy>(
+            programCounter,
+            dst,
+            null,
+            offset,
+            4u,
+            false
+        )
+    }
+
+    val loadU32Dynamic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val offset = args.a2
+
+        visitor.load<U32LoadTy>(
+            programCounter,
+            dst,
+            null,
+            offset,
+            4u,
+            true
+        )
+    }
+
+    val loadI32Basic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val offset = args.a2
+
+        visitor.load<I32LoadTy>(
+            programCounter,
+            dst,
+            null,
+            offset,
+            4u,
+            false
+        )
+    }
+
+    val loadI32Dynamic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val offset = args.a2
+
+        visitor.load<I32LoadTy>(
+            programCounter,
+            dst,
+            null,
+            offset,
+            4u,
+            true
+        )
+    }
+
+    val loadU64Basic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val offset = args.a2
+
+        visitor.load<U64LoadTy>(
+            programCounter,
+            dst,
+            null,
+            offset,
+            8u,
+            false
+        )
+    }
+
+    val loadU64Dynamic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val offset = args.a2
+
+        visitor.load<U64LoadTy>(
+            programCounter,
+            dst,
+            null,
+            offset,
+            8u,
+            true
+        )
+    }
+
+    val loadIndirectI32Basic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val base = transmuteReg(args.a2)
+        val offset = args.a3
+
+        visitor.load<I32LoadTy>(
+            programCounter,
+            dst,
+            base,
+            offset,
+            4u,
+            false
+        )
+    }
+
+    val loadIndirectI32Dynamic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val dst = transmuteReg(args.a1)
+        val base = transmuteReg(args.a2)
+        val offset = args.a3
+
+        visitor.load<I32LoadTy>(
+            programCounter,
+            dst,
+            base,
+            offset,
+            4u,
+            true
+        )
+    }
+
+    val loadImm64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val dst = transmuteReg(args.a0)
+        val immLo = args.a1
+        val immHi = args.a2
+        val imm = Cast(immLo).uintToU64() or (Cast(immHi).uintToU64() shl 32)
+        visitor.set64(dst, imm)
+        visitor.goToNextInstruction()
+    }
 }
