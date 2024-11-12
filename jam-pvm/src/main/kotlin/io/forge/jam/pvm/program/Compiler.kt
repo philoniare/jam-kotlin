@@ -367,11 +367,19 @@ class Compiler(
     }
 
     override fun mulImm32(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        instance.emit(
+            RawHandlers.mulImm32,
+            Args.mulImm32(reg1, reg2, imm),
+            "mulImm32"
+        )
     }
 
     override fun mulImm64(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        instance.emit(
+            RawHandlers.mulImm64,
+            Args.mulImm64(reg1, reg2, imm),
+            "mulImm64"
+        )
     }
 
     override fun setLessThanUnsignedImm(reg1: RawReg, reg2: RawReg, imm: UInt) {
@@ -568,23 +576,67 @@ class Compiler(
     }
 
     override fun mul32(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented")
+        instance.emit(
+            RawHandlers.mul32,
+            Args.mul32(reg1, reg2, reg3),
+            "mul32"
+        )
     }
 
     override fun mul64(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented")
+        instance.emit(
+            RawHandlers.mul64,
+            Args.mul64(reg1, reg2, reg3),
+            "mul64"
+        )
     }
 
     override fun mulUpperSignedSigned(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented")
+        if (module.blob().is64Bit) {
+            instance.emit(
+                RawHandlers.mulUpperSignedSigned64,
+                Args.mulUpperSignedSigned64(reg1, reg2, reg3),
+                "mulUpperSignedSigned64"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.mulUpperSignedSigned32,
+                Args.mulUpperSignedSigned32(reg1, reg2, reg3),
+                "mulUpperSignedSigned32"
+            )
+        }
     }
 
     override fun mulUpperUnsignedUnsigned(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented")
+        if (module.blob().is64Bit) {
+            instance.emit(
+                RawHandlers.mulUpperUnsignedUnsigned64,
+                Args.mulUpperUnsignedUnsigned64(reg1, reg2, reg3),
+                "mulUpperUnsignedUnsigned64"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.mulUpperUnsignedUnsigned32,
+                Args.mulUpperUnsignedUnsigned32(reg1, reg2, reg3),
+                "mulUpperUnsignedUnsigned32"
+            )
+        }
     }
 
     override fun mulUpperSignedUnsigned(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented")
+        if (module.blob().is64Bit) {
+            instance.emit(
+                RawHandlers.mulUpperSignedUnsigned64,
+                Args.mulUpperSignedUnsigned64(reg1, reg2, reg3),
+                "mulUpperSignedUnsigned64"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.mulUpperSignedUnsigned32,
+                Args.mulUpperSignedUnsigned32(reg1, reg2, reg3),
+                "mulUpperSignedUnsigned32"
+            )
+        }
     }
 
     override fun setLessThanUnsigned(reg1: RawReg, reg2: RawReg, reg3: RawReg) {

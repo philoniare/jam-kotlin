@@ -810,4 +810,134 @@ object RawHandlers {
         val offset = args.a2
         visitor.load<I8LoadTy>(programCounter, dst, null, offset, 1u, true)
     }
+
+    val mul32: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        logger.debug("[${visitor.inner.compiledOffset}]: mul_32 $d = $s1 * $s2")
+        visitor.set3_32(d, s1.toRegImm(), s2.toRegImm()) { a, b ->
+            a.times(b)
+        }
+    }
+
+    val mul64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        logger.debug("[${visitor.inner.compiledOffset}]: mul_64 $d = $s1 * $s2")
+        visitor.set3_64(d, s1.toRegImm(), s2.toRegImm()) { a, b ->
+            a.times(b)
+        }
+    }
+
+    val mulImm32: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = args.a2
+        logger.debug("[${visitor.inner.compiledOffset}]: mul_imm_32 $d = $s1 * $s2")
+        visitor.set3_32(d, s1.toRegImm(), s2.intoRegImm()) { a, b ->
+            a.times(b)
+        }
+    }
+
+    val mulImm64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = args.a2
+        logger.debug("[${visitor.inner.compiledOffset}]: mul_imm_64 $d = $s1 * $s2")
+        visitor.set3_64(d, s1.toRegImm(), s2.intoRegImm()) { a, b ->
+            a.times(b)
+        }
+    }
+
+    val mulUpperSignedSigned32: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        logger.debug("[${visitor.inner.compiledOffset}]: mul_upper_signed_signed_32 $d = mulh($s1, $s2)")
+        visitor.set3_32(d, s1.toRegImm(), s2.toRegImm()) { a, b ->
+            Cast(
+                ArithmeticOps.mulh(
+                    Cast(a).uintToSigned(),
+                    Cast(b).uintToSigned()
+                )
+            ).intToUnsigned()
+        }
+    }
+
+    val mulUpperSignedSigned64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        logger.debug("[${visitor.inner.compiledOffset}]: mul_upper_signed_signed_64 $d = mulh64($s1, $s2)")
+        visitor.set3_64(d, s1.toRegImm(), s2.toRegImm()) { a, b ->
+            Cast(
+                ArithmeticOps.mulh64(
+                    Cast(a).ulongToSigned(),
+                    Cast(b).ulongToSigned()
+                )
+            ).longToUnsigned()
+        }
+    }
+
+    val mulUpperUnsignedUnsigned32: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        logger.debug("[${visitor.inner.compiledOffset}]: mul_upper_unsigned_unsigned_32 $d = mulhu($s1, $s2)")
+        visitor.set3_32(d, s1.toRegImm(), s2.toRegImm()) { a, b ->
+            ArithmeticOps.mulhu(a, b)
+        }
+    }
+
+    val mulUpperUnsignedUnsigned64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        logger.debug("[${visitor.inner.compiledOffset}]: mul_upper_unsigned_unsigned_64 $d = mulhu64($s1, $s2)")
+        visitor.set3_64(d, s1.toRegImm(), s2.toRegImm()) { a, b ->
+            ArithmeticOps.mulhu64(a, b)
+        }
+    }
+
+    val mulUpperSignedUnsigned32: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        logger.debug("[${visitor.inner.compiledOffset}]: mul_upper_signed_unsigned_32 $d = mulhsu($s1, $s2)")
+        visitor.set3_32(d, s1.toRegImm(), s2.toRegImm()) { a, b ->
+            Cast(
+                ArithmeticOps.mulhsu(
+                    Cast(a).uintToSigned(),
+                    b
+                )
+            ).intToUnsigned()
+        }
+    }
+
+    val mulUpperSignedUnsigned64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        logger.debug("[${visitor.inner.compiledOffset}]: mul_upper_signed_unsigned_64 $d = mulhsu64($s1, $s2)")
+        visitor.set3_64(d, s1.toRegImm(), s2.toRegImm()) { a, b ->
+            Cast(
+                ArithmeticOps.mulhsu64(
+                    Cast(a).ulongToSigned(),
+                    b
+                )
+            ).longToUnsigned()
+        }
+    }
 }

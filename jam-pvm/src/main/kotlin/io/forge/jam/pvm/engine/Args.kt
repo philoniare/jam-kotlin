@@ -353,5 +353,65 @@ data class Args(
             a1 = dst.toU32(),
             a2 = offset
         )
+
+        fun mul32(d: RawReg, s1: RawReg, s2: RawReg) = Args(
+            a0 = d.toU32(),
+            a1 = s1.toU32(),
+            a2 = s2.toU32()
+        )
+
+        fun mul64(d: RawReg, s1: RawReg, s2: RawReg) = Args(
+            a0 = d.toU32(),
+            a1 = s1.toU32(),
+            a2 = s2.toU32()
+        )
+
+        fun mulImm32(d: RawReg, s1: RawReg, s2: UInt) = Args(
+            a0 = d.toU32(),
+            a1 = s1.toU32(),
+            a2 = s2
+        )
+
+        fun mulImm64(d: RawReg, s1: RawReg, s2: UInt) = Args(
+            a0 = d.toU32(),
+            a1 = s1.toU32(),
+            a2 = s2
+        )
+
+        fun mulUpperSignedSigned32(d: RawReg, s1: RawReg, s2: RawReg) = Args(
+            a0 = d.toU32(),
+            a1 = s1.toU32(),
+            a2 = s2.toU32()
+        )
+
+        fun mulUpperSignedSigned64(d: RawReg, s1: RawReg, s2: RawReg) = Args(
+            a0 = d.toU32(),
+            a1 = s1.toU32(),
+            a2 = s2.toU32()
+        )
+
+        fun mulUpperUnsignedUnsigned32(d: RawReg, s1: RawReg, s2: RawReg) = Args(
+            a0 = d.toU32(),
+            a1 = s1.toU32(),
+            a2 = s2.toU32()
+        )
+
+        fun mulUpperUnsignedUnsigned64(d: RawReg, s1: RawReg, s2: RawReg) = Args(
+            a0 = d.toU32(),
+            a1 = s1.toU32(),
+            a2 = s2.toU32()
+        )
+
+        fun mulUpperSignedUnsigned32(d: RawReg, s1: RawReg, s2: RawReg) = Args(
+            a0 = d.toU32(),
+            a1 = s1.toU32(),
+            a2 = s2.toU32()
+        )
+
+        fun mulUpperSignedUnsigned64(d: RawReg, s1: RawReg, s2: RawReg) = Args(
+            a0 = d.toU32(),
+            a1 = s1.toU32(),
+            a2 = s2.toU32()
+        )
     }
 }
