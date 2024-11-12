@@ -447,7 +447,10 @@ class Compiler(
     }
 
     override fun cmovIfZeroImm(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        instance.emit(
+            RawHandlers.cmovIfZeroImm,
+            Args.cmovIfZeroImm(reg1, reg2, imm), "cmovIfZeroImm"
+        )
     }
 
     override fun cmovIfNotZeroImm(reg1: RawReg, reg2: RawReg, imm: UInt) {
@@ -649,7 +652,10 @@ class Compiler(
     }
 
     override fun cmovIfZero(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented")
+        instance.emit(
+            RawHandlers.cmovIfZero,
+            Args.cmovIfZero(reg1, reg2, reg3), "cmovIfZero"
+        )
     }
 
     override fun cmovIfNotZero(reg1: RawReg, reg2: RawReg, reg3: RawReg) {

@@ -305,5 +305,17 @@ data class Args(
             a2 = a2.value,
             a3 = a3.value
         )
+
+        fun cmovIfZeroImm(a0: RawReg, a1: RawReg, a2: UInt) = Args(
+            a0 = a0.toU32(),
+            a1 = a1.toU32(),
+            a2 = a2
+        )
+
+        fun cmovIfZero(a0: RawReg, a1: RawReg, a2: RawReg) = Args(
+            a0 = a0.toU32(),
+            a1 = a1.toU32(),
+            a2 = a2.toU32()
+        )
     }
 }
