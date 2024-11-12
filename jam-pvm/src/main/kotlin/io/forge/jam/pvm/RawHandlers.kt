@@ -741,4 +741,58 @@ object RawHandlers {
         }
         visitor.goToNextInstruction()
     }
+
+    val divSigned32: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        logger.debug("[${visitor.inner.compiledOffset}]: div_signed_32 $d = $s1 / $s2")
+        visitor.set3_32(d, s1.toRegImm(), s2.toRegImm()) { a, b ->
+            Cast(
+                ArithmeticOps.div(
+                    Cast(a).uintToSigned(),
+                    Cast(b).uintToSigned()
+                )
+            ).intToUnsigned()
+        }
+    }
+
+    val divSigned64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        logger.debug("[${visitor.inner.compiledOffset}]: div_signed_64 $d = $s1 / $s2")
+        visitor.set3_64(d, s1.toRegImm(), s2.toRegImm()) { a, b ->
+            Cast(
+                ArithmeticOps.div64(
+                    Cast(a).ulongToSigned(),
+                    Cast(b).ulongToSigned()
+                )
+            ).longToUnsigned()
+        }
+    }
+
+    val divUnsigned32: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        logger.debug("[${visitor.inner.compiledOffset}]: div_unsigned_32 $d = $s1 / $s2")
+        visitor.set3_32(d, s1.toRegImm(), s2.toRegImm()) { a, b ->
+            ArithmeticOps.divu(a, b)
+        }
+    }
+
+    val divUnsigned64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        logger.debug("[${visitor.inner.compiledOffset}]: div_unsigned_64 $d = $s1 / $s2")
+        visitor.set3_64(d, s1.toRegImm(), s2.toRegImm()) { a, b ->
+            ArithmeticOps.divu64(a, b)
+        }
+    }
 }

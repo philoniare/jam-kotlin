@@ -620,19 +620,35 @@ class Compiler(
     }
 
     override fun divUnsigned32(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented")
+        instance.emit(
+            RawHandlers.divUnsigned32,
+            Args.divUnsigned32(reg1, reg2, reg3),
+            "div_unsigned_32"
+        )
     }
 
     override fun divUnsigned64(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented")
+        instance.emit(
+            RawHandlers.divUnsigned64,
+            Args.divUnsigned64(reg1, reg2, reg3),
+            "div_unsigned_64"
+        )
     }
 
     override fun divSigned32(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented")
+        instance.emit(
+            RawHandlers.divSigned32,
+            Args.divSigned32(reg1, reg2, reg3),
+            "div_signed_32"
+        )
     }
 
     override fun divSigned64(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented")
+        instance.emit(
+            RawHandlers.divSigned64,
+            Args.divSigned64(reg1, reg2, reg3),
+            "div_signed_64"
+        )
     }
 
     override fun remUnsigned32(reg1: RawReg, reg2: RawReg, reg3: RawReg) {

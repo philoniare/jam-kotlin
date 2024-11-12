@@ -317,5 +317,29 @@ data class Args(
             a1 = a1.toU32(),
             a2 = a2.toU32()
         )
+
+        fun divSigned32(a0: RawReg, a1: RawReg, a2: RawReg) = Args(
+            a0 = a0.toU32(),
+            a1 = a1.toU32(),
+            a2 = a2.toU32()
+        )
+
+        fun divSigned64(a0: RawReg, a1: RawReg, a2: RawReg) = Args(
+            a0 = a0.toU32(),
+            a1 = a1.toU32(),
+            a2 = a2.toU32()
+        )
+
+        fun divUnsigned32(a0: RawReg, a1: RawReg, a2: RawReg) = Args(
+            a0 = a0.toU32(),
+            a1 = a1.toU32(),
+            a2 = a2.toU32()
+        )
+
+        fun divUnsigned64(a0: RawReg, a1: RawReg, a2: RawReg) = Args(
+            a0 = a0.toU32(),
+            a1 = a1.toU32(),
+            a2 = a2.toU32()
+        )
     }
 }
