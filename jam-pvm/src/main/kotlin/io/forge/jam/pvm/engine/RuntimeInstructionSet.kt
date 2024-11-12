@@ -66,6 +66,7 @@ data class RuntimeInstructionSet(
                 this[15] = validateInstruction(arrayOf(I_64, I_32))
                 this[44] = validateInstruction(arrayOf(I_64, I_32))
                 this[32] = validateInstruction(arrayOf(I_64, I_32))
+                this[45] = validateInstruction(arrayOf(I_64, I_32))
                 this[52] = validateInstruction(arrayOf(I_64, I_32))
                 this[46] = validateInstruction(arrayOf(I_64, I_32))
                 this[53] = validateInstruction(arrayOf(I_64, I_32))
