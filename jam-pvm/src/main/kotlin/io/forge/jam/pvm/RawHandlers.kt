@@ -579,4 +579,144 @@ object RawHandlers {
             offset
         }
     }
+
+    val branchLessUnsigned: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val s1 = transmuteReg(args.a0)
+        val s2 = transmuteReg(args.a1)
+        val tt = args.a2
+        val tf = args.a3
+        logger.debug("[${visitor.inner.compiledOffset}]: jump ~$tt if $s1 <u $s2")
+        visitor.branch(s1.toRegImm(), s2.toRegImm(), tt, tf) { a, b ->
+            a < b
+        }
+    }
+
+    val unresolvedBranchLessUnsigned: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val s1 = transmuteReg(args.a0)
+        val s2 = transmuteReg(args.a1)
+        val targetTrue = ProgramCounter(args.a2)
+        val targetFalse = ProgramCounter(args.a3)
+
+        logger.debug("[${visitor.inner.compiledOffset}]: jump $targetTrue if $s1 <u $s2")
+
+        val targetFalseResolved = visitor.inner.resolveJump(targetFalse) ?: TARGET_OUT_OF_RANGE
+        visitor.inner.resolveJump(targetTrue)?.let { targetTrueResolved ->
+            val offset = visitor.inner.compiledOffset
+            visitor.inner.compiledHandlers[offset.toInt()] = branchLessUnsigned
+            visitor.inner.compiledArgs[offset.toInt()] = Args.branchLessUnsigned(
+                s1.toRawReg(),
+                s2.toRawReg(),
+                targetTrueResolved,
+                targetFalseResolved
+            )
+            offset
+        }
+    }
+
+    val branchLessUnsignedImm: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val s1 = transmuteReg(args.a0)
+        val s2 = args.a1
+        val tt = args.a2
+        val tf = args.a3
+        logger.debug("[${visitor.inner.compiledOffset}]: jump ~$tt if $s1 <u $s2")
+        visitor.branch(s1.toRegImm(), s2.intoRegImm(), tt, tf) { a, b ->
+            a < b
+        }
+    }
+
+    val unresolvedBranchLessUnsignedImm: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val s1 = transmuteReg(args.a0)
+        val s2 = args.a1
+        val targetTrue = ProgramCounter(args.a2)
+        val targetFalse = ProgramCounter(args.a3)
+
+        logger.debug("[${visitor.inner.compiledOffset}]: jump $targetTrue if $s1 <u $s2")
+
+        val targetFalseResolved = visitor.inner.resolveJump(targetFalse) ?: TARGET_OUT_OF_RANGE
+        visitor.inner.resolveJump(targetTrue)?.let { targetTrueResolved ->
+            val offset = visitor.inner.compiledOffset
+            visitor.inner.compiledHandlers[offset.toInt()] = branchLessUnsignedImm
+            visitor.inner.compiledArgs[offset.toInt()] = Args.branchLessUnsignedImm(
+                s1.toRawReg(),
+                s2,
+                targetTrueResolved,
+                targetFalseResolved
+            )
+            offset
+        }
+    }
+
+    val branchNotEq: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val s1 = transmuteReg(args.a0)
+        val s2 = transmuteReg(args.a1)
+        val tt = args.a2
+        val tf = args.a3
+        logger.debug("[${visitor.inner.compiledOffset}]: jump ~$tt if $s1 != $s2")
+        visitor.branch(s1.toRegImm(), s2.toRegImm(), tt, tf) { a, b ->
+            a != b
+        }
+    }
+
+    val unresolvedBranchNotEq: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val s1 = transmuteReg(args.a0)
+        val s2 = transmuteReg(args.a1)
+        val targetTrue = ProgramCounter(args.a2)
+        val targetFalse = ProgramCounter(args.a3)
+
+        logger.debug("[${visitor.inner.compiledOffset}]: jump $targetTrue if $s1 != $s2")
+
+        val targetFalseResolved = visitor.inner.resolveJump(targetFalse) ?: TARGET_OUT_OF_RANGE
+        visitor.inner.resolveJump(targetTrue)?.let { targetTrueResolved ->
+            val offset = visitor.inner.compiledOffset
+            visitor.inner.compiledHandlers[offset.toInt()] = branchNotEq
+            visitor.inner.compiledArgs[offset.toInt()] = Args.branchNotEq(
+                s1.toRawReg(),
+                s2.toRawReg(),
+                targetTrueResolved,
+                targetFalseResolved
+            )
+            offset
+        }
+    }
+
+    val branchNotEqImm: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val s1 = transmuteReg(args.a0)
+        val s2 = args.a1
+        val tt = args.a2
+        val tf = args.a3
+        logger.debug("[${visitor.inner.compiledOffset}]: jump ~$tt if $s1 != $s2")
+        visitor.branch(s1.toRegImm(), s2.intoRegImm(), tt, tf) { a, b ->
+            a != b
+        }
+    }
+
+    val unresolvedBranchNotEqImm: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val s1 = transmuteReg(args.a0)
+        val s2 = args.a1
+        val targetTrue = ProgramCounter(args.a2)
+        val targetFalse = ProgramCounter(args.a3)
+
+        logger.debug("[${visitor.inner.compiledOffset}]: jump $targetTrue if $s1 != $s2")
+
+        val targetFalseResolved = visitor.inner.resolveJump(targetFalse) ?: TARGET_OUT_OF_RANGE
+        visitor.inner.resolveJump(targetTrue)?.let { targetTrueResolved ->
+            val offset = visitor.inner.compiledOffset
+            visitor.inner.compiledHandlers[offset.toInt()] = branchNotEqImm
+            visitor.inner.compiledArgs[offset.toInt()] = Args.branchNotEqImm(
+                s1.toRawReg(),
+                s2,
+                targetTrueResolved,
+                targetFalseResolved
+            )
+            offset
+        }
+    }
 }
