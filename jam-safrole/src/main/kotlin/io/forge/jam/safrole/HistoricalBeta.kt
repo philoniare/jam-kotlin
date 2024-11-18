@@ -8,7 +8,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class HistoricalBeta(
-    @SerialName("hash")
+    @SerialName("header_hash")
     @Serializable(with = ByteArrayHexSerializer::class)
     val hash: ByteArray,
 
