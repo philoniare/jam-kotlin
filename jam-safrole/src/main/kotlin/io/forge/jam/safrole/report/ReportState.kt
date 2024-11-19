@@ -23,4 +23,19 @@ data class ReportState(
     @SerialName("services")
     @Serializable(with = ServiceListSerializer::class)
     val services: List<Pair<Long, Service>>
-)
+) {
+    fun deepCopy(): ReportState {
+        return ReportState(
+            availAssignments = availAssignments.map { it?.copy() },
+            currValidators = currValidators.map { it.copy() },
+            prevValidators = prevValidators.map { it.copy() },
+            recentBlocks = recentBlocks.map { it.copy() },
+            authPools = authPools.map { innerList ->
+                innerList.map { it.clone() }
+            },
+            services = services.map { (id, service) ->
+                Pair(id, service.copy())
+            }
+        )
+    }
+}

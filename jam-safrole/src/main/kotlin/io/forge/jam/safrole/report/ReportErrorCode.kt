@@ -7,4 +7,6 @@ import kotlinx.serialization.Serializable
 enum class ReportErrorCode {
     @SerialName("anchor_not_recent")
     ANCHOR_NOT_RECENT,
+
+    
 }
