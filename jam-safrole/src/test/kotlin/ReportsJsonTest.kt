@@ -1,9 +1,6 @@
 package io.forge.jam.core.encoding
 
-import io.forge.jam.safrole.report.ReportCase
-import io.forge.jam.safrole.report.ReportOutput
-import io.forge.jam.safrole.report.ReportState
-import io.forge.jam.safrole.report.ReportStateTransition
+import io.forge.jam.safrole.report.*
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -192,6 +189,11 @@ class ReportsJsonTest {
             )
 
             val report = ReportStateTransition(
+                ReportStateConfig(
+                    MAX_LOOKUP_ANCHOR_AGE = 14_000L,
+                    MAX_AUTH_POOL_ITEMS = 8,
+                    MAX_ACCUMULATION_GAS = 100_000L
+                )
             )
             val (postState, output) = report.transition(inputCase.input, inputCase.preState)
             assertReportOutputEquals(inputCase.output, output, testCase)
