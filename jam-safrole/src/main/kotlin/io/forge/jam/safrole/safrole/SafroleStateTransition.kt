@@ -504,6 +504,7 @@ class SafroleStateTransition(private val config: SafroleConfig) {
         // 5.5. Generate epoch mark (eq. 72)
         val epochMark = EpochMark(
             entropy = postState.eta[1],
+            ticketsEntropy = byteArrayOf(0),
             validators = postState.gammaK.map { it.bandersnatch }
         )
 
