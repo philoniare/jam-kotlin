@@ -1,6 +1,8 @@
 package io.forge.jam.safrole
 
+import io.forge.jam.core.Encodable
 import io.forge.jam.core.EpochMark
+import io.forge.jam.core.encodeList
 import io.forge.jam.core.serializers.ByteArrayListHexSerializer
 import io.forge.jam.core.toHex
 import kotlinx.serialization.SerialName
@@ -15,7 +17,13 @@ data class OutputMarks(
     @SerialName("offenders_mark")
     @Serializable(with = ByteArrayListHexSerializer::class)
     val offendersMark: List<ByteArray>? = null,
-) {
+) : Encodable {
+    override fun encode(): ByteArray {
+        val epochMarkBytes = epochMark?.encode() ?: ByteArray(0)
+        val ticketsMarkBytes = if (ticketsMark != null) encodeList(ticketsMark) else ByteArray(0)
+        return epochMarkBytes
+    }
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is OutputMarks) return false

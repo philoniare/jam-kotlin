@@ -1,5 +1,6 @@
 package io.forge.jam.safrole.safrole
 
+import io.forge.jam.core.Encodable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -11,4 +12,12 @@ data class SafroleCase(
     val output: SafroleOutput,
     @SerialName("post_state")
     val postState: SafroleState
-)
+) : Encodable {
+    override fun encode(): ByteArray {
+        val inputBytes = input.encode()
+        val preStateBytes = preState.encode()
+        val outputBytes = output.encode()
+        val postStateBytes = postState.encode()
+        return inputBytes + preStateBytes + outputBytes + postStateBytes
+    }
+}

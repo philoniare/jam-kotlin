@@ -4,32 +4,38 @@ import io.forge.jam.core.serializers.ByteArrayListSerializer
 import kotlinx.serialization.Serializable
 
 @Serializable(with = ByteArrayListSerializer::class)
-class ByteArrayList : AbstractMutableList<ByteArray>() {
-    private val items = mutableListOf<ByteArray>()
+class ByteArrayList : AbstractMutableList<EncodableByteArray>(), Encodable, Cloneable {
+    private val items = mutableListOf<EncodableByteArray>()
+
+    public override fun clone(): ByteArrayList {
+        val clone = ByteArrayList()
+        clone.items.addAll(items.map { it.clone() })
+        return clone
+    }
 
     override val size: Int get() = items.size
 
-    override fun contains(element: ByteArray): Boolean {
+    override fun contains(element: EncodableByteArray): Boolean {
         return items.any { it.contentEquals(element) }
     }
 
-    override fun add(element: ByteArray): Boolean {
+    override fun add(element: EncodableByteArray): Boolean {
         return items.add(element.clone())
     }
 
-    override fun add(index: Int, element: ByteArray) {
+    override fun add(index: Int, element: EncodableByteArray) {
         items.add(index, element.clone())
     }
 
-    override fun removeAt(index: Int): ByteArray {
+    override fun removeAt(index: Int): EncodableByteArray {
         return items.removeAt(index)
     }
 
-    override fun set(index: Int, element: ByteArray): ByteArray {
+    override fun set(index: Int, element: EncodableByteArray): EncodableByteArray {
         return items.set(index, element.clone())
     }
 
-    override fun get(index: Int): ByteArray {
+    override fun get(index: Int): EncodableByteArray {
         return items[index].clone()
     }
 
@@ -37,15 +43,19 @@ class ByteArrayList : AbstractMutableList<ByteArray>() {
         items.clear()
     }
 
-    override fun indexOf(element: ByteArray): Int {
+    override fun indexOf(element: EncodableByteArray): Int {
         return items.indexOfFirst { it.contentEquals(element) }
     }
 
-    override fun lastIndexOf(element: ByteArray): Int {
+    override fun lastIndexOf(element: EncodableByteArray): Int {
         return items.indexOfLast { it.contentEquals(element) }
     }
 
-    fun toList(): List<ByteArray> = items.map { it.clone() }
+    fun toList(): List<EncodableByteArray> = items.map { it.clone() }
+
+    override fun encode(): ByteArray {
+        return items.fold(byteArrayOf()) { acc, bytes -> acc + bytes }
+    }
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

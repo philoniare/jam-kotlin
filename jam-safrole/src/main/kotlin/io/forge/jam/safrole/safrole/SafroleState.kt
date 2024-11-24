@@ -1,7 +1,10 @@
 package io.forge.jam.safrole.safrole
 
+import io.forge.jam.core.ByteArrayList
+import io.forge.jam.core.Encodable
+import io.forge.jam.core.encodeFixedWidthInteger
+import io.forge.jam.core.encodeList
 import io.forge.jam.core.serializers.ByteArrayHexSerializer
-import io.forge.jam.core.serializers.ByteArrayListHexSerializer
 import io.forge.jam.safrole.*
 import io.forge.jam.safrole.serializer.NullableAvailabilityAssignmentListSerializer
 import kotlinx.serialization.SerialName
@@ -12,9 +15,8 @@ data class SafroleState(
     // Current timeslot
     var tau: Long,
 
-    @Serializable(with = ByteArrayListHexSerializer::class)
     // Entropy accumulator
-    val eta: MutableList<ByteArray> = mutableListOf(),
+    val eta: ByteArrayList = ByteArrayList(),
 
     // Previous epoch validators
     var lambda: List<ValidatorKey> = emptyList(),
@@ -46,11 +48,11 @@ data class SafroleState(
     @Serializable(with = NullableAvailabilityAssignmentListSerializer::class)
     var rho: MutableList<AvailabilityAssignment?>? = null,
     var psi: Psi? = null
-) {
+) : Encodable {
     fun deepCopy(): SafroleState {
         return SafroleState(
             tau = tau,
-            eta = eta.map { it.clone() }.toMutableList(),
+            eta = eta.clone(),
             lambda = lambda.map { it.copy() },
             kappa = kappa.map { it.copy() },
             gammaK = gammaK.map { it.copy() },
@@ -61,5 +63,20 @@ data class SafroleState(
             rho = rho?.map { it?.copy() }?.toMutableList(),
             psi = psi?.copy()
         )
+    }
+
+    override fun encode(): ByteArray {
+        val tauBytes = encodeFixedWidthInteger(tau, 4, true)
+        val etaBytes = encodeList(eta.toList())
+        val lambdaBytes = encodeList(lambda)
+        val kappaBytes = encodeList(kappa)
+        val gammaKBytes = encodeList(gammaK)
+        val iotaBytes = encodeList(iota)
+        val gammaABytes = encodeList(gammaA)
+        val gammaSBytes = gammaS.encode()
+        val gammaZBytes = gammaZ
+        val rhoBytes = rho?.let { encodeList(it) } ?: byteArrayOf(0)
+        val psiBytes = psi?.encode() ?: byteArrayOf(0)
+        return tauBytes + etaBytes + lambdaBytes + kappaBytes + gammaKBytes + iotaBytes + gammaABytes + gammaSBytes + gammaZBytes + rhoBytes + psiBytes
     }
 }

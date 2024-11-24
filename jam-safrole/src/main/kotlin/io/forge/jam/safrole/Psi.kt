@@ -1,32 +1,37 @@
 package io.forge.jam.safrole
 
 import io.forge.jam.core.ByteArrayList
+import io.forge.jam.core.Encodable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
 data class Psi(
     // Good/Valid Reports
-    @SerialName("psi_g")
-    val psiG: ByteArrayList = ByteArrayList(),
+    @SerialName("good")
+    val good: ByteArrayList = ByteArrayList(),
 
     // Bad/Invalid Reports
-    @SerialName("psi_b")
-    val psiB: ByteArrayList = ByteArrayList(),
+    @SerialName("bad")
+    val bad: ByteArrayList = ByteArrayList(),
 
     // Wonky/Unknown Reports
-    @SerialName("psi_w")
-    val psiW: ByteArrayList = ByteArrayList(),
+    @SerialName("wonky")
+    val wonky: ByteArrayList = ByteArrayList(),
 
     // Offending validators
-    @SerialName("psi_o")
-    val psiO: ByteArrayList = ByteArrayList(),
-) {
+    @SerialName("offenders")
+    val offenders: ByteArrayList = ByteArrayList(),
+) : Encodable {
 
     fun copy(): Psi = Psi(
-        psiG = ByteArrayList().apply { addAll(psiG) },
-        psiB = ByteArrayList().apply { addAll(psiB) },
-        psiW = ByteArrayList().apply { addAll(psiW) },
-        psiO = ByteArrayList().apply { addAll(psiO) }
+        good = ByteArrayList().apply { addAll(good) },
+        bad = ByteArrayList().apply { addAll(bad) },
+        wonky = ByteArrayList().apply { addAll(wonky) },
+        offenders = ByteArrayList().apply { addAll(offenders) }
     )
+
+    override fun encode(): ByteArray {
+        return good.encode() + bad.encode() + wonky.encode() + offenders.encode()
+    }
 }

@@ -10,7 +10,6 @@ class MerkleTreeTest {
         val testVectors = TestFileLoader.loadJsonData<List<TrieTestVector>>("trie")
         for (vector in testVectors) {
             val actualOutput = merkle(vector.input)
-            println("Test: ${vector.output.toHex()} Actual: ${actualOutput.toHex()}")
             assert(vector.output.contentEquals(actualOutput))
         }
     }

@@ -174,7 +174,7 @@ class SafroleStateTransition(private val config: SafroleConfig) {
                 }
 
 
-                if (state.psi?.psiO?.any { it.contentEquals(culprit.key) } == true) {
+                if (state.psi?.offenders?.any { it.contentEquals(culprit.key) } == true) {
                     return SafroleErrorCode.OFFENDER_ALREADY_REPORTED
                 }
             }
@@ -265,9 +265,9 @@ class SafroleStateTransition(private val config: SafroleConfig) {
             }
 
             // Validate if any verdict target has already been judged
-            if (state.psi?.psiG?.contains(target) == true ||
-                state.psi?.psiB?.contains(target) == true ||
-                state.psi?.psiW?.contains(target) == true
+            if (state.psi?.good?.contains(target) == true ||
+                state.psi?.bad?.contains(target) == true ||
+                state.psi?.wonky?.contains(target) == true
             ) {
                 return SafroleErrorCode.ALREADY_JUDGED
             }
@@ -314,7 +314,7 @@ class SafroleStateTransition(private val config: SafroleConfig) {
                 return SafroleErrorCode.BAD_SIGNATURE
             }
 
-            if (state.psi?.psiO?.any { it.contentEquals(fault.key) } == true) {
+            if (state.psi?.offenders?.any { it.contentEquals(fault.key) } == true) {
                 return SafroleErrorCode.OFFENDER_ALREADY_REPORTED
             }
         }
@@ -334,10 +334,10 @@ class SafroleStateTransition(private val config: SafroleConfig) {
         // Initialize post_state variables
         if (postState.psi == null) {
             postState.psi = Psi(
-                psiG = ByteArrayList(),
-                psiB = ByteArrayList(),
-                psiW = ByteArrayList(),
-                psiO = ByteArrayList()
+                good = ByteArrayList(),
+                bad = ByteArrayList(),
+                wonky = ByteArrayList(),
+                offenders = ByteArrayList()
             )
         }
 
@@ -367,44 +367,44 @@ class SafroleStateTransition(private val config: SafroleConfig) {
 
             // Update PSI sets based on vote count
             when (positiveVotes) {
-                superMajority -> postState.psi!!.psiG.add(reportHash)
-                0 -> postState.psi!!.psiB.add(reportHash)
-                oneThird -> postState.psi!!.psiW.add(reportHash)
+                superMajority -> postState.psi!!.good.add(reportHash)
+                0 -> postState.psi!!.bad.add(reportHash)
+                oneThird -> postState.psi!!.wonky.add(reportHash)
             }
         }
 
         // Verify that all culprit targets are marked as bad before processing them
         for (culprit in dispute.culprits) {
-            if (culprit.target !in postState.psi!!.psiB) {
+            if (culprit.target !in postState.psi!!.bad) {
                 return Pair(emptyList(), SafroleErrorCode.CULPRITS_VERDICT_NOT_BAD)
             }
         }
 
         // Process culprits
         for (culprit in dispute.culprits) {
-            val targetInPsiB = postState.psi!!.psiB.any { it.contentEquals(culprit.target) }
-            val keyInPsiO = postState.psi!!.psiO.any { it.contentEquals(culprit.key) }
+            val targetInPsiB = postState.psi!!.bad.any { it.contentEquals(culprit.target) }
+            val keyInPsiO = postState.psi!!.offenders.any { it.contentEquals(culprit.key) }
 
             // Add culprit if report is bad and validator not already punished
             if (targetInPsiB && !keyInPsiO) {
-                postState.psi!!.psiO.add(culprit.key)
+                postState.psi!!.offenders.add(culprit.key)
                 offendersMark.add(culprit.key)
             }
         }
 
         // Process faults
         for (fault in dispute.faults) {
-            val isBad = fault.target in postState.psi!!.psiB
-            val isGood = fault.target in postState.psi!!.psiG
+            val isBad = fault.target in postState.psi!!.bad
+            val isGood = fault.target in postState.psi!!.good
 
             // A fault exists if:
             // - Report is in psiG but validator voted false
             // - Report is in psiB but validator voted true
             val voteConflicts = (isGood && !fault.vote) || (isBad && fault.vote)
-            val notPunished = fault.key !in postState.psi!!.psiO
+            val notPunished = fault.key !in postState.psi!!.offenders
 
             if (voteConflicts && notPunished) {
-                postState.psi!!.psiO.add(fault.key)
+                postState.psi!!.offenders.add(fault.key)
                 offendersMark.add(fault.key)
             }
         }
@@ -413,7 +413,12 @@ class SafroleStateTransition(private val config: SafroleConfig) {
         for (i in postState.rho!!.indices) {
             val report = postState.rho!![i] ?: continue
 
-            val reportHash = blake2b256(report.report.authorizerHash)
+            val reportHash = blake2b256(report.report.encode())
+            println(
+                "Encoded: ${
+                    report.report.encode().toHex()
+                } ReportHash: ${reportHash.toHex()}. Bad: ${postState.psi!!.bad.joinToString { it.toHex() }}"
+            )
 
             // Find matching verdict if any
             val verdict = dispute.verdicts.find { it.target.contentEquals(reportHash) }
@@ -426,6 +431,11 @@ class SafroleStateTransition(private val config: SafroleConfig) {
                 if (positiveVotes < superMajority) {
                     postState.rho!![i] = null
                 }
+            }
+
+            if (postState.psi!!.bad.any { it.contentEquals(reportHash) } ||
+                postState.psi!!.wonky.any { it.contentEquals(reportHash) }) {
+                postState.rho!![i] = null
             }
         }
         return Pair(offendersMark, null)

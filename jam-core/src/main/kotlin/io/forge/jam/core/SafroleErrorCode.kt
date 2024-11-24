@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-enum class SafroleErrorCode {
+enum class SafroleErrorCode : Encodable {
     @SerialName("bad-slot")
     BAD_SLOT,
 
@@ -63,5 +63,9 @@ enum class SafroleErrorCode {
     NOT_ENOUGH_FAULTS,
 
     @SerialName("faults-not-sorted-unique")
-    FAULTS_NOT_SORTED_UNIQUE,
+    FAULTS_NOT_SORTED_UNIQUE;
+
+    override fun encode(): ByteArray {
+        return byteArrayOf(ordinal.toByte())
+    }
 }

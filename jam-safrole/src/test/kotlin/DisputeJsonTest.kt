@@ -55,46 +55,49 @@ class DisputeJsonTest {
         assertEquals(expectedCounts, actualCounts, message)
     }
 
-    fun assertDisputeStateEquals(expected: SafroleState, actual: SafroleState) {
-        assertEquals(expected.tau, actual.tau, "Mismatch in tau.")
+    fun assertDisputeStateEquals(expected: SafroleState, actual: SafroleState, testCase: String) {
+        assertEquals(expected.tau, actual.tau, "Mismatch in tau. TestCase: $testCase")
 
-        assertEquals(expected.eta.size, actual.eta.size, "Mismatch in eta size")
+        assertEquals(expected.eta.size, actual.eta.size, "Mismatch in eta size. TestCase: $testCase")
         for (i in expected.eta.indices) {
             assertArrayEquals(
                 expected.eta[i],
                 actual.eta[i],
-                "Mismatch in eta at index $i. Expected: ${expected.eta[i].toHex()}, Actual: ${actual.eta[i].toHex()}"
+                "Mismatch in eta at index $i. Expected: ${expected.eta[i].toHex()}, Actual: ${actual.eta[i].toHex()}. TestCase: $testCase"
             )
         }
 
-        assertEquals(expected.lambda, actual.lambda, "Mismatch in lambda")
-        assertEquals(expected.kappa, actual.kappa, "Mismatch in kappa")
-        assertEquals(expected.gammaK, actual.gammaK, "Mismatch in gammaK")
-        assertEquals(expected.iota, actual.iota, "Mismatch in iota")
-        assertEquals(expected.gammaA, actual.gammaA, "Mismatch in gammaA")
-        assertEquals(expected.gammaS, actual.gammaS, "Mismatch in gammaS")
-        assertArrayEquals(expected.gammaZ, actual.gammaZ, "Mismatch in gammaZ")
+        assertEquals(expected.lambda, actual.lambda, "Mismatch in lambda. TestCase: $testCase")
+        assertEquals(expected.kappa, actual.kappa, "Mismatch in kappa. TestCase: $testCase")
+        assertEquals(expected.gammaK, actual.gammaK, "Mismatch in gammaK. TestCase: $testCase")
+        assertEquals(expected.iota, actual.iota, "Mismatch in iota. TestCase: $testCase")
+        assertEquals(expected.gammaA, actual.gammaA, "Mismatch in gammaA. TestCase: $testCase")
+        assertEquals(expected.gammaS, actual.gammaS, "Mismatch in gammaS. TestCase: $testCase")
+        assertArrayEquals(expected.gammaZ, actual.gammaZ, "Mismatch in gammaZ. TestCase: $testCase")
 
         // Check rho
-        assertEquals(expected.rho?.size, actual.rho?.size, "Mismatch in rho size")
+        assertEquals(expected.rho?.size, actual.rho?.size, "Mismatch in rho size. TestCase: $testCase")
         if (expected.rho != null && actual.rho != null) {
             for (i in expected.rho!!.indices) {
-                assertEquals(expected.rho!![i], actual.rho!![i], "Mismatch in rho at index $i")
+                assertEquals(expected.rho!![i], actual.rho!![i], "Mismatch in rho at index $i. TestCase: $testCase")
             }
         }
 
         // Check psi
-        assertEquals(expected.psi!!.psiB, actual.psi!!.psiB, "Mismatch in psiB")
-        assertEquals(expected.psi!!.psiG, actual.psi!!.psiG, "Mismatch in psiG")
-        assertListOfByteArraysEqualsIgnoreOrder(expected.psi!!.psiO, actual.psi!!.psiO, "Mismatch in psiO")
-        assertEquals(expected.psi!!.psiW, actual.psi!!.psiW, "Mismatch in psiW")
+        assertEquals(expected.psi!!.bad, actual.psi!!.bad, "Mismatch in bad. TestCase: $testCase")
+        assertEquals(expected.psi!!.good, actual.psi!!.good, "Mismatch in good. TestCase: $testCase")
+        assertListOfByteArraysEqualsIgnoreOrder(
+            expected.psi!!.offenders,
+            actual.psi!!.offenders,
+            "Mismatch in offenders. TestCase: $testCase"
+        )
+        assertEquals(expected.psi!!.wonky, actual.psi!!.wonky, "Mismatch in wonky. TestCase: $testCase")
     }
 
     @Test
     fun testTinyDisputes() {
         val folderName = "disputes/tiny"
         val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
-        println("TestCases: $testCases")
 
         for (testCase in testCases) {
             val (inputCase) = TestFileLoader.loadTestData<SafroleCase>(
@@ -114,7 +117,7 @@ class DisputeJsonTest {
 
             assertDisputeOutputEquals(inputCase.output, output, testCase)
 
-            assertDisputeStateEquals(inputCase.postState, postState)
+            assertDisputeStateEquals(inputCase.postState, postState, testCase)
         }
     }
 
@@ -141,7 +144,7 @@ class DisputeJsonTest {
 
             assertDisputeOutputEquals(inputCase.output, output, testCase)
 
-            assertDisputeStateEquals(inputCase.postState, postState)
+            assertDisputeStateEquals(inputCase.postState, postState, testCase)
         }
     }
 }
