@@ -2,9 +2,9 @@ import io.forge.jam.core.JamByteArray
 import org.bouncycastle.jcajce.provider.digest.Blake2b
 
 // Blake2b-256 hash function
-fun blakeHash(data: JamByteArray): ByteArray {
+fun blakeHash(data: ByteArray): ByteArray {
     val digest = Blake2b.Blake2b256()
-    digest.update(data.bytes, 0, data.size)
+    digest.update(data, 0, data.size)
     return digest.digest()
 }
 
@@ -17,17 +17,18 @@ fun blakeHash(data: JamByteArray): ByteArray {
  * @return Combined fork node (64 bytes)
  * @throws IllegalArgumentException if inputs are not 32 bytes
  */
-fun fork(l: ByteArray, r: ByteArray): ByteArray {
+fun fork(l: JamByteArray, r: JamByteArray): JamByteArray {
     require(l.size == 32) { "Left child must be 32 bytes" }
     require(r.size == 32) { "Right child must be 32 bytes" }
 
     val head = (l[0].toInt() and 0xfe).toByte()
-
-    return ByteArray(64).apply {
+    val bytes = ByteArray(64).apply {
         this[0] = head
         l.copyInto(this, 1, 1, 32)
         r.copyInto(this, 32, 0, 32)
     }
+
+    return JamByteArray(bytes)
 }
 
 /**
@@ -41,10 +42,9 @@ fun fork(l: ByteArray, r: ByteArray): ByteArray {
  * @return Leaf node (64 bytes)
  * @throws IllegalArgumentException if key is empty
  */
-fun leaf(k: JamByteArray, v: JamByteArray): ByteArray {
+fun leaf(k: JamByteArray, v: JamByteArray): JamByteArray {
     require(!k.isEmpty()) { "Key cannot be empty" }
-
-    return ByteArray(64).apply {
+    val bytes = ByteArray(64).apply {
         if (v.size <= 32) {
             // Set bit pattern 01 and encode length in upper 6 bits
             this[0] = (0b01 or (v.size shl 2)).toByte()
@@ -63,24 +63,27 @@ fun leaf(k: JamByteArray, v: JamByteArray): ByteArray {
             k.copyInto(this, 1, 0, k.size - 1)
 
             // Hash the value and copy to last 32 bytes
-            val hash = blakeHash(v)
+            val hash = blakeHash(v.bytes)
             hash.copyInto(this, 32, 0, 32)
         }
     }
+
+    return JamByteArray(bytes)
 }
+
 
 // Bit extraction function
 fun bit(k: JamByteArray, i: Int): Boolean {
-    return (k.bytes[i shr 3].toInt() and (1 shl (7 - (i and 7)))) != 0
+    return (k.bytes[i shr 3].toInt() and (1 shl (i and 7))) != 0
 }
 
 // GP (289): Merkle function
-fun merkle(kvMap: Map<JamByteArray, JamByteArray>, i: Int = 0): ByteArray {
+fun merkle(kvMap: Map<JamByteArray, JamByteArray>, i: Int = 0): JamByteArray {
     if (kvMap.isEmpty()) {
-        return ByteArray(32) { 0 }
+        return JamByteArray(ByteArray(32) { 0 })
     }
 
-    val encoded = if (kvMap.size == 1) {
+    val encoded: JamByteArray = if (kvMap.size == 1) {
         val entry = kvMap.entries.first()
         leaf(entry.key, entry.value)
     } else {
@@ -97,5 +100,5 @@ fun merkle(kvMap: Map<JamByteArray, JamByteArray>, i: Int = 0): ByteArray {
         fork(merkle(l, i + 1), merkle(r, i + 1))
     }
     require(encoded.size == 64) { "Encoded length must be 64 bytes" }
-    return blakeHash(encoded)
+    return JamByteArray(blakeHash(encoded.bytes))
 }
