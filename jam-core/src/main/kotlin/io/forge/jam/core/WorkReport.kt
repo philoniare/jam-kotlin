@@ -24,14 +24,23 @@ data class WorkReport(
     override fun encode(): ByteArray {
         val packageSpecBytes = packageSpec.encode()
         val contextBytes = context.encode()
-        val discriminatorBytes = byteArrayOf(69, 0)
         val coreIndexBytes = encodeFixedWidthInteger(coreIndex, 2, false)
         val authorizerHashBytes = authorizerHash.bytes
-        val authOutputLengthBytes = encodeFixedWidthInteger(authOutput.size, 1, false)
+        // Auth output - 1 byte length prefix
+        val authOutputLengthBytes = encodeFixedWidthInteger(authOutput.size.toLong(), 1, false)
         val authOutputBytes = authOutput.bytes
-        val segmentRootLookupBytes = encodeList(segmentRootLookup)
-        val resultsBytes = encodeList(results)
-        return packageSpecBytes + discriminatorBytes + contextBytes + coreIndexBytes + authorizerHashBytes + authOutputLengthBytes +
-            authOutputBytes + segmentRootLookupBytes + resultsBytes
+        // Segment root lookup - 1 byte length prefix
+        val segmentRootLookupBytes = encodeFixedWidthInteger(segmentRootLookup.size.toLong(), 1, false)
+        val segmentRootLookupListBytes = encodeList(segmentRootLookup, false)
+        // Results - 1 byte length prefix
+        val resultsLengthBytes = encodeFixedWidthInteger(results.size.toLong(), 1, false)
+        val resultsListBytes = encodeList(results, false)
+        return packageSpecBytes +
+            contextBytes +
+            coreIndexBytes +
+            authorizerHashBytes +
+            authOutputLengthBytes + authOutputBytes +
+            segmentRootLookupBytes + segmentRootLookupListBytes +
+            resultsLengthBytes + resultsListBytes
     }
 }

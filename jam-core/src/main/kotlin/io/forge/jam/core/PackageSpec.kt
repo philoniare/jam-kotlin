@@ -14,13 +14,16 @@ data class PackageSpec(
     val erasureRoot: JamByteArray,
     @Serializable(with = JamByteArrayHexSerializer::class)
     @SerialName("exports_root")
-    val exportsRoot: JamByteArray
+    val exportsRoot: JamByteArray,
+    @SerialName("exports_count")
+    val exportsCount: Long
 ) : Encodable {
     override fun encode(): ByteArray {
         val hashBytes = hash.bytes
         val lenBytes = encodeFixedWidthInteger(length, 4, false)
         val erasureRootBytes = erasureRoot.bytes
         val exportsRootBytes = exportsRoot.bytes
-        return hashBytes + lenBytes + erasureRootBytes + exportsRootBytes
+        val exportsCountBytes = encodeFixedWidthInteger(exportsCount, 2, false)
+        return hashBytes + lenBytes + erasureRootBytes + exportsRootBytes + exportsCountBytes
     }
 }

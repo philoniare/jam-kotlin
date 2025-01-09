@@ -29,19 +29,44 @@ fun Int.toLEBytes(size: Int = 4): ByteArray {
 fun Boolean.toByte(): Byte = if (this) 1.toByte() else 0.toByte()
 
 fun <T : Encodable> encodeNullable(item: T?): ByteArray {
-    return item?.encode() ?: byteArrayOf(0)
+    return if (item == null) {
+        byteArrayOf(0)
+    } else {
+        byteArrayOf(1) + item.encode()
+    }
 }
 
-// Encode a list of Encodable items with length prefix
-fun <T : Encodable> encodeList(list: List<T?>, includeLength: Boolean = true): ByteArray {
+/**
+ * Encode a list of non-optional Encodable items
+ */
+fun <T : Encodable> encodeList(list: List<T>, includeLength: Boolean = true): ByteArray {
     val itemsBytes = list.fold(ByteArray(0)) { acc, item ->
-        acc + encodeNullable(item)
+        acc + item.encode()
     }
     if (includeLength) {
         val lengthBytes = encodeFixedWidthInteger(list.size, 1, false)
         return lengthBytes + itemsBytes
     } else {
         return itemsBytes
+    }
+}
+
+/**
+ * Encode a list of optional Encodable items
+ */
+fun <T : Encodable> encodeOptionalList(list: List<T?>, includeLength: Boolean = true): ByteArray {
+    val itemsBytes = list.fold(ByteArray(0)) { acc, item ->
+        acc + if (item == null) {
+            byteArrayOf(0)
+        } else {
+            byteArrayOf(1) + item.encode()
+        }
+    }
+
+    return if (includeLength) {
+        encodeFixedWidthInteger(list.size, 1, false) + itemsBytes
+    } else {
+        itemsBytes
     }
 }
 

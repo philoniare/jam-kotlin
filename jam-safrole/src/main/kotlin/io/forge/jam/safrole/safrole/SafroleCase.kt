@@ -16,8 +16,11 @@ data class SafroleCase(
     override fun encode(): ByteArray {
         val inputBytes = input.encode()
         val preStateBytes = preState.encode()
+        println("preState: ${preStateBytes.toList()}")
         val outputBytes = output.encode()
+        println("output: ${outputBytes.toList()}")
         val postStateBytes = postState.encode()
+        println("postState: ${postStateBytes.toList()}")
         return inputBytes + preStateBytes + outputBytes + postStateBytes
     }
 }

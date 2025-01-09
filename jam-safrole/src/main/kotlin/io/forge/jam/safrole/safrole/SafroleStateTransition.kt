@@ -84,10 +84,10 @@ class SafroleStateTransition(private val config: SafroleConfig) {
             }
 
             // Calculate epoch data (eq. 47)
-            val prevEpoch = preState.tau / config.epochDuration
-            val prevPhase = preState.tau % config.epochDuration
-            val newEpoch = input.slot / config.epochDuration
-            val newPhase = input.slot % config.epochDuration
+            val prevEpoch = preState.tau / config.epochLength
+            val prevPhase = preState.tau % config.epochLength
+            val newEpoch = input.slot / config.epochLength
+            val newPhase = input.slot % config.epochLength
 
 
             // Check for tickets_mark condition
@@ -95,7 +95,7 @@ class SafroleStateTransition(private val config: SafroleConfig) {
             if (newEpoch == prevEpoch &&
                 prevPhase < config.ticketCutoff &&
                 newPhase >= config.ticketCutoff &&
-                postState.gammaA.size.toLong() == config.epochDuration
+                postState.gammaA.size.toLong() == config.epochLength
             ) {
                 ticketsMark = transformTicketsSequence(postState.gammaA)
             }
@@ -146,7 +146,7 @@ class SafroleStateTransition(private val config: SafroleConfig) {
         disputes: Dispute,
         state: SafroleState,
     ): SafroleErrorCode? {
-        val currentEpoch = state.tau / config.epochDuration
+        val currentEpoch = state.tau / config.epochLength
         // 1. First validate signatures
         // This comes from equation 101 which requires valid signatures:
         // "s ∈ E_k ⟨X_G ⌢ r⟩"
@@ -193,7 +193,7 @@ class SafroleStateTransition(private val config: SafroleConfig) {
             }
 
             val target = verdict.target
-            val currentEpochIndex = state.tau / config.epochDuration
+            val currentEpochIndex = state.tau / config.epochLength
             val validatorSet = if (verdict.age == currentEpochIndex) {
                 state.kappa
             } else {
@@ -328,6 +328,7 @@ class SafroleStateTransition(private val config: SafroleConfig) {
     ): Pair<List<JamByteArray>, SafroleErrorCode?> {
         // Track new offenders for the mark
         val offendersMark = mutableListOf<JamByteArray>()
+        val newOffenders = mutableSetOf<JamByteArray>()
         // Validate culprits
         val errorResult = validateDisputes(dispute, postState)
         if (errorResult != null) {
@@ -390,7 +391,7 @@ class SafroleStateTransition(private val config: SafroleConfig) {
 
             // Add culprit if report is bad and validator not already punished
             if (targetInPsiB && !keyInPsiO) {
-                postState.psi!!.offenders.add(culprit.key)
+                newOffenders.add(culprit.key)
                 offendersMark.add(culprit.key)
             }
         }
@@ -407,7 +408,7 @@ class SafroleStateTransition(private val config: SafroleConfig) {
             val notPunished = fault.key !in postState.psi!!.offenders
 
             if (voteConflicts && notPunished) {
-                postState.psi!!.offenders.add(fault.key)
+                newOffenders.add(fault.key)
                 offendersMark.add(fault.key)
             }
         }
@@ -417,12 +418,6 @@ class SafroleStateTransition(private val config: SafroleConfig) {
             val report = postState.rho!![i] ?: continue
 
             val reportHash = blake2b256(JamByteArray(report.report.encode()))
-            println(
-                "Encoded: ${
-                    report.report.encode().toHex()
-                } ReportHash: ${reportHash.toHex()}. Bad: ${postState.psi!!.bad.joinToString { it.toHex() }}"
-            )
-
             // Find matching verdict if any
             val verdict = dispute.verdicts.find { it.target.contentEquals(reportHash) }
 
@@ -441,6 +436,16 @@ class SafroleStateTransition(private val config: SafroleConfig) {
                 postState.rho!![i] = null
             }
         }
+
+        val sortedOffenders = newOffenders.sortedWith { a, b ->
+            a.compareUnsigned(b)
+        }
+
+        // Add sorted offenders to both state and mark
+        sortedOffenders.forEach { offender ->
+            postState.psi!!.offenders.add(offender)
+        }
+
         return Pair(offendersMark, null)
     }
 
@@ -528,7 +533,7 @@ class SafroleStateTransition(private val config: SafroleConfig) {
         if (
             newEpoch == prevEpoch + 1 && // Moving to next epoch only
             prevPhase >= config.ticketCutoff && // Previous phase cutoff
-            preState.gammaA.size == config.epochDuration.toInt() // Accumulator full
+            preState.gammaA.size == config.epochLength.toInt() // Accumulator full
         ) {
             // Use accumulated tickets
             val ticketSequence = transformTicketsSequence(preState.gammaA)
@@ -608,35 +613,10 @@ class SafroleStateTransition(private val config: SafroleConfig) {
         if (newTickets.isNotEmpty()) {
             postState.gammaA = (postState.gammaA + newTickets)
                 .sortedWith(Comparator { a, b -> a.id.compareTo(b.id) })
-                .take(config.epochDuration.toInt())
+                .take(config.epochLength.toInt())
         }
 
         return null
-    }
-
-    /**
-     * Implements equation 77 from gray paper.
-     * Verifies that tickets are strictly ordered by their VRF output identifier
-     * with no duplicates allowed.
-     *
-     * @param tickets The list of tickets to check ordering for
-     * @return true if tickets are in strict ascending order by id, false otherwise
-     */
-    private fun hasStrictlyIncreasingIdentifiers(tickets: List<TicketBody>): Boolean {
-        if (tickets.size <= 1) return true
-
-        // Compare each pair of adjacent tickets
-        for (i in 0 until tickets.size - 1) {
-            val current = tickets[i].id
-            val next = tickets[i + 1].id
-
-            // Must be strictly increasing (eq. 77: [x_y __ x ∈ n])
-            if (current.compareTo(next) >= 0) {
-                return false
-            }
-        }
-
-        return true
     }
 
     /**
@@ -682,10 +662,10 @@ class SafroleStateTransition(private val config: SafroleConfig) {
         entropy: JamByteArray,
         validators: List<ValidatorKey>
     ): List<JamByteArray> {
-        val result = ArrayList<JamByteArray>(config.epochDuration.toInt())
+        val result = ArrayList<JamByteArray>(config.epochLength.toInt())
         val bandersnatchKeys = validators.map { it.bandersnatch }
 
-        for (i in 0 until config.epochDuration.toInt()) {
+        for (i in 0 until config.epochLength.toInt()) {
             // Little-endian encode the index i
             val indexBytes = ByteArray(4)
             indexBytes[0] = (i and 0xFF).toByte()

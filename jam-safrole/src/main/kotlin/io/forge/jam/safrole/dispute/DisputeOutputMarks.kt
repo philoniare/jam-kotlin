@@ -1,0 +1,36 @@
+package io.forge.jam.safrole.dispute
+
+import io.forge.jam.core.Encodable
+import io.forge.jam.core.JamByteArray
+import io.forge.jam.core.encodeList
+import io.forge.jam.core.serializers.JamByteArrayListHexSerializer
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class DisputeOutputMarks(
+    @SerialName("offenders_mark")
+    @Serializable(with = JamByteArrayListHexSerializer::class)
+    val offendersMark: List<JamByteArray>? = null,
+) : Encodable {
+    override fun encode(): ByteArray {
+        val offendersMarkBytes = if (offendersMark != null) encodeList(offendersMark) else ByteArray(0)
+        return offendersMarkBytes
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is DisputeOutputMarks) return false
+        return offendersMark == other.offendersMark
+    }
+
+    override fun hashCode(): Int {
+        return offendersMark?.hashCode() ?: 0
+    }
+
+    override fun toString(): String {
+        val offendersMarkHex = offendersMark?.joinToString(", ") { it.toHex() } ?: "null"
+        return "DisputeOutputMarks(offendersMark=[$offendersMarkHex])"
+    }
+}
+

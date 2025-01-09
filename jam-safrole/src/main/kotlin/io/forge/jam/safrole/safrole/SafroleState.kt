@@ -78,7 +78,7 @@ data class SafroleState(
         val gammaSBytes = gammaS.encode()
         val gammaZBytes = gammaZ.bytes
         val postOffendersBytes = postOffenders?.let { encodeList(it) } ?: byteArrayOf(0)
-        val rhoBytes = rho?.let { encodeList(it) } ?: byteArrayOf(0)
+        val rhoBytes = rho?.let { encodeOptionalList(it) } ?: byteArrayOf(0)
         val psiBytes = psi?.encode() ?: byteArrayOf(0)
         return tauBytes + etaBytes + lambdaBytes + kappaBytes + gammaKBytes + iotaBytes + gammaABytes + gammaSBytes + gammaZBytes + postOffendersBytes + rhoBytes + psiBytes
     }

@@ -15,7 +15,7 @@ data class AvailabilityAssignment(
 ) : Encodable {
     override fun encode(): ByteArray {
         val reportBytes = report.encode()
-        val timeoutBytes = encodeFixedWidthInteger(timeout, 4, true)
+        val timeoutBytes = encodeFixedWidthInteger(timeout, 4, false)
         return reportBytes + timeoutBytes
     }
 
