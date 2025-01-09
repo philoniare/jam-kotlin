@@ -12,8 +12,10 @@ data class WorkItem(
     val codeHash: JamByteArray,
     @Serializable(with = JamByteArrayHexSerializer::class)
     val payload: JamByteArray,
-    @SerialName("gas_limit")
-    val gasLimit: Long,
+    @SerialName("refine_gas_limit")
+    val refineGasLimit: Long,
+    @SerialName("accumulate_gas_limit")
+    val accumulateGasLimit: Long,
     @SerialName("import_segments")
     val importSegments: List<WorkItemImportSegment>,
     val extrinsic: List<WorkItemExtrinsic>,
@@ -22,11 +24,12 @@ data class WorkItem(
 ) : Encodable {
     override fun encode(): ByteArray {
         val serviceBytes = encodeFixedWidthInteger(service, 4, false)
-        val gasLimitBytes = encodeFixedWidthInteger(gasLimit, 8, false)
+        val refineGasLimitBytes = encodeFixedWidthInteger(refineGasLimit, 8, false)
+        val accumulateGasLimitBytes = encodeFixedWidthInteger(accumulateGasLimit, 8, false)
         val importSegmentsBytes = encodeList(importSegments)
         val extrinsicBytes = encodeList(extrinsic)
         val exportCountBytes = encodeFixedWidthInteger(exportCount, 2, false)
         val payloadLengthBytes = encodeFixedWidthInteger(payload.size, 1, false)
-        return serviceBytes + codeHash.bytes + payloadLengthBytes + payload.bytes + gasLimitBytes + importSegmentsBytes + extrinsicBytes + exportCountBytes
+        return serviceBytes + codeHash.bytes + payloadLengthBytes + payload.bytes + refineGasLimitBytes + accumulateGasLimitBytes + importSegmentsBytes + extrinsicBytes + exportCountBytes
     }
 }
