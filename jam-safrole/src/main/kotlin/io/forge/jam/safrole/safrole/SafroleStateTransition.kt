@@ -497,15 +497,12 @@ class SafroleStateTransition(private val config: SafroleConfig) {
         postState.kappa = preState.gammaK
 
         // 5.3. Load new pending validators
-        println("Checking validators, ${preState.postOffenders}")
         postState.gammaK = preState.iota.map { validator ->
             val isOffender = preState.postOffenders?.any { offender ->
-                println("Comparing offender: ${offender.toHex()} with validator ed25519: ${validator.ed25519.toHex()}")
                 offender.contentEquals(validator.ed25519)
             } == true
 
             if (isOffender) {
-                println("Found offender match - zeroing validator")
                 ValidatorKey(
                     bandersnatch = JamByteArray(ByteArray(32) { 0 }),
                     ed25519 = JamByteArray(ByteArray(32) { 0 }),
@@ -561,39 +558,48 @@ class SafroleStateTransition(private val config: SafroleConfig) {
             return SafroleErrorCode.UNEXPECTED_TICKET
         }
 
+        var previousId: JamByteArray? = null
         val newTickets = mutableListOf<TicketBody>()
 
         for (ticket in tickets) {
-            // Check for valid attempt value
-            if (ticket.attempt > 1) {
-                return SafroleErrorCode.BAD_TICKET_ATTEMPT
-            }
-
-
             // Verify ring VRF proof
-            val ticketId =
-                verifyRingProof(ticket.signature.bytes, postState.gammaZ.bytes, postState.eta[2].bytes, ticket.attempt)
+            val ticketId = verifyRingProof(
+                ticket.signature.bytes,
+                postState.gammaZ.bytes,
+                postState.eta[2].bytes,
+                ticket.attempt
+            )
             if (ticketId.all { it == 0.toByte() }) {
                 return SafroleErrorCode.BAD_TICKET_PROOF
             }
 
-            val ticketBody = TicketBody(
-                id = JamByteArray(ticketId),
-                attempt = ticket.attempt
-            )
+            val currentId = JamByteArray(ticketId)
 
-            // Check uniqueness (eq. 78)
-            if (postState.gammaA.any { it.id.contentEquals(ticketBody.id) }) {
-                return SafroleErrorCode.DUPLICATE_TICKET
+            // Check ordering against previous ticket (eq. 77)
+            previousId?.let { prev ->
+                if (prev.compareTo(currentId) >= 0) {
+                    return SafroleErrorCode.BAD_TICKET_ORDER
+                }
             }
 
-            newTickets.add(ticketBody)
+            newTickets.add(
+                TicketBody(
+                    id = currentId,
+                    attempt = ticket.attempt
+                )
+            )
+            previousId = currentId
         }
 
-
-        // Verify ordering
-        if (!hasStrictlyIncreasingIdentifiers(newTickets)) {
-            return SafroleErrorCode.BAD_TICKET_ORDER
+        for (ticket in newTickets) {
+            // Check attempt value
+            if (ticket.attempt > 1) {
+                return SafroleErrorCode.BAD_TICKET_ATTEMPT
+            }
+            // Check uniqueness (eq. 78)
+            if (postState.gammaA.any { it.id.contentEquals(ticket.id) }) {
+                return SafroleErrorCode.DUPLICATE_TICKET
+            }
         }
 
         // Update accumulator with new tickets (eq. 79)

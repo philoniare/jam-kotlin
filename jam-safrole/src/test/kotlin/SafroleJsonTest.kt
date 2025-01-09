@@ -16,8 +16,8 @@ class SafroleJsonTest {
         }
     }
 
-    fun assertSafroleStateEquals(expected: SafroleState, actual: SafroleState) {
-        assertEquals(expected.tau, actual.tau, "Mismatch in tau.")
+    fun assertSafroleStateEquals(expected: SafroleState, actual: SafroleState, testCase: String) {
+        assertEquals(expected.tau, actual.tau, "Mismatch in tau.  TestCase: $testCase")
 
         assertEquals(expected.eta.size, actual.eta.size, "Mismatch in eta size")
         for (i in expected.eta.indices) {
@@ -65,6 +65,7 @@ class SafroleJsonTest {
             assertSafroleStateEquals(
                 inputCase.postState,
                 postState,
+                testCase,
             )
         }
     }
