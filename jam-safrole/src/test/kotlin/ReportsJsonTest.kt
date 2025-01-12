@@ -210,7 +210,9 @@ class ReportsJsonTest {
                     MAX_CORES = 2,
                     MAX_DEPENDENCIES = 100,
                     MIN_GUARANTORS = 3,
-                    ROTATION_PERIOD = 4
+                    ROTATION_PERIOD = 4,
+                    MAX_VALIDATORS = 6,
+                    EPOCH_LENGTH = 12
                 )
             )
             val (postState, output) = report.transition(inputCase.input, inputCase.preState)

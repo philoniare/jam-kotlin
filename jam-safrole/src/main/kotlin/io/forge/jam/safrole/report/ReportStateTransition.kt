@@ -7,6 +7,9 @@ import io.forge.jam.safrole.AvailabilityAssignment
 import io.forge.jam.safrole.ValidatorKey
 import io.forge.jam.safrole.historical.HistoricalBeta
 import keccakHash
+import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
+import org.bouncycastle.crypto.signers.Ed25519Signer
+import kotlin.math.abs
 
 
 class ReportStateTransition(private val config: ReportStateConfig) {
@@ -107,6 +110,94 @@ class ReportStateTransition(private val config: ReportStateConfig) {
         return null
     }
 
+    private fun validateSignature(
+        signature: JamByteArray,
+        validatorKey: JamByteArray,
+        message: ByteArray,
+        prefix: ByteArray
+    ): Boolean {
+        return try {
+            val publicKey = Ed25519PublicKeyParameters(validatorKey.bytes, 0)
+            val signer = Ed25519Signer()
+            signer.init(false, publicKey)
+            signer.update(prefix, 0, prefix.size)
+            signer.update(message, 0, message.size)
+            signer.verifySignature(signature.bytes)
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Validates guarantor signatures according to JAM protocol specification.
+     * Implements validation rules from section 11.4, equation 11.26.
+     */
+    fun validateGuarantorSignatures(
+        guarantee: GuaranteeExtrinsic,
+        currValidators: List<ValidatorKey>,
+        prevValidators: List<ValidatorKey>,
+        currentSlot: Long,
+        entropyPool: List<JamByteArray>
+    ): ReportErrorCode? {
+        // Validate minimum number of signatures
+        if (guarantee.signatures.size !in 2..3) {
+            return ReportErrorCode.BAD_SIGNATURE
+        }
+
+        val isCurrent = (guarantee.slot / config.ROTATION_PERIOD) == (currentSlot / config.ROTATION_PERIOD)
+        val isEpochChanging = (currentSlot % config.EPOCH_LENGTH) < config.ROTATION_PERIOD
+        val currCoreAssignments = calculateCoreAssignments(
+            currentSlot,
+            currValidators,
+            entropyPool[2]
+        )
+
+        val prevCoreAssignments = calculateCoreAssignments(
+            currentSlot - config.ROTATION_PERIOD,
+            if (isEpochChanging) prevValidators else currValidators,
+            if (isEpochChanging) entropyPool[3] else entropyPool[2]
+        )
+
+        val reportHash = guarantee.report.authorizerHash.bytes
+        val signaturePrefix = "jam_guarantee".toByteArray()
+
+        for (signature in guarantee.signatures) {
+            // Validate validator index
+            val validatorIndex = signature.validatorIndex.toInt()
+            val validatorKey = if (isCurrent) {
+                currValidators.getOrNull(validatorIndex)?.ed25519
+            } else {
+                prevValidators.getOrNull(validatorIndex)?.ed25519
+            } ?: return ReportErrorCode.BAD_SIGNATURE
+
+            try {
+                val publicKey = Ed25519PublicKeyParameters(validatorKey.bytes, 0)
+                val signer = Ed25519Signer()
+                signer.init(false, publicKey)
+                signer.update(signaturePrefix, 0, signaturePrefix.size)
+                signer.update(reportHash, 0, reportHash.size)
+
+                if (!signer.verifySignature(signature.signature.bytes)) {
+                    return ReportErrorCode.BAD_SIGNATURE
+                }
+            } catch (e: Exception) {
+                return ReportErrorCode.BAD_SIGNATURE
+            }
+
+            val assignments = if (isCurrent) {
+                currCoreAssignments
+            } else {
+                prevCoreAssignments
+            }
+            val assignedCore = assignments[validatorIndex]
+            if (assignedCore != guarantee.report.coreIndex.toInt()) {
+                return ReportErrorCode.BAD_CORE_INDEX
+            }
+        }
+
+        return null
+    }
+
 
     /**
      * Validates work report according to JAM protocol specifications.
@@ -136,7 +227,7 @@ class ReportStateTransition(private val config: ReportStateConfig) {
         for (result in workReport.results) {
             // Validate service exists
             val service = services.find { it.id == result.serviceId } ?: return ReportErrorCode.BAD_SERVICE_ID
-            
+
             // Validate code hash matches service state (eq. 156)
             if (!result.codeHash.contentEquals(service.info.codeHash)) {
                 return ReportErrorCode.BAD_CODE_HASH
@@ -166,6 +257,49 @@ class ReportStateTransition(private val config: ReportStateConfig) {
         }
 
         return null
+    }
+
+    private fun <T> Array<T>.shuffle(random: RandomGenerator) {
+        for (i in size - 1 downTo 1) {
+            val j = random.nextInt(i + 1)
+            val temp = this[i]
+            this[i] = this[j]
+            this[j] = temp
+        }
+    }
+
+    private class RandomGenerator(private val seed: JamByteArray) {
+        private var index = 0
+
+        fun nextInt(bound: Int): Int {
+            // Use the next 4 bytes of the seed as randomness
+            val bytes = seed.bytes.copyOfRange(index, index + 4)
+            index = (index + 4) % seed.bytes.size
+
+            val value = bytes[0].toInt() and 0xFF shl 24 or
+                (bytes[1].toInt() and 0xFF shl 16) or
+                (bytes[2].toInt() and 0xFF shl 8) or
+                (bytes[3].toInt() and 0xFF)
+
+            return abs(value) % bound
+        }
+    }
+
+    private fun calculateCoreAssignments(
+        timeslot: Long,
+        validator: List<ValidatorKey>,
+        randomness: JamByteArray
+    ): List<Int> {
+        val source = Array(config.MAX_VALIDATORS) { i -> (config.MAX_CORES * i / config.MAX_VALIDATORS).toInt() }
+        source.shuffle(RandomGenerator(randomness))
+
+        // Calculate rotation offset
+        val n = (timeslot % config.EPOCH_LENGTH) / config.ROTATION_PERIOD
+
+        // Apply rotation and return core assignments
+        return source.map { value ->
+            ((value + n) % config.MAX_CORES).toInt()
+        }
     }
 
     /**
@@ -205,6 +339,16 @@ class ReportStateTransition(private val config: ReportStateConfig) {
                 return Pair(postState, ReportOutput(err = it))
             }
 
+            validateGuarantorSignatures(
+                guarantee,
+                preState.currValidators,
+                preState.prevValidators,
+                currentSlot,
+                preState.entropy
+            )?.let {
+                return Pair(postState, ReportOutput(err = it))
+            }
+            
             // Validate core is not already occupied
             if (pendingReports.any { it.coreIndex == guarantee.report.coreIndex }) {
                 return Pair(postState, ReportOutput(err = ReportErrorCode.CORE_ENGAGED))

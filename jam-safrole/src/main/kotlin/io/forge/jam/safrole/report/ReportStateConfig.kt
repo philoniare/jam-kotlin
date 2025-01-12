@@ -9,4 +9,6 @@ data class ReportStateConfig(
     val MAX_SERVICE_ID: Long = 0xFFFFFFFF,
     val MIN_GUARANTORS: Int,
     val ROTATION_PERIOD: Long,
+    val MAX_VALIDATORS: Int,
+    val EPOCH_LENGTH: Int,
 )
