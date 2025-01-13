@@ -168,11 +168,16 @@ class ReportStateTransition(private val config: ReportStateConfig) {
      */
     fun validateWorkReport(
         workReport: WorkReport,
+        guaranteeSlot: Long,
+        currentSlot: Long,
         services: List<ServiceItem>,
         authPools: List<List<JamByteArray>>,
-        currentSlot: Long,
         pendingReports: List<WorkReport>
     ): ReportErrorCode? {
+        if (guaranteeSlot > currentSlot) {
+            return ReportErrorCode.FUTURE_REPORT_SLOT
+        }
+
         // Validate core index is within bounds (eq. 143)
         if (workReport.coreIndex >= config.MAX_CORES) {
             return ReportErrorCode.BAD_CORE_INDEX
@@ -409,9 +414,10 @@ class ReportStateTransition(private val config: ReportStateConfig) {
             // Validate the work report
             validateWorkReport(
                 guarantee.report,
+                guarantee.slot,
+                currentSlot,
                 preState.services,
                 preState.authPools,
-                currentSlot,
                 pendingReports
             )?.let {
                 return Pair(postState, ReportOutput(err = it))
