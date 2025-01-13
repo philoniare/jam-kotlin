@@ -32,28 +32,25 @@ class AuthorizationStateTransition(private val config: AuthConfig) {
                     mutablePool.removeAt(idx)
                 }
             }
-
-            // Get new item from queue using rotation
-            val queueIndex = input.slot.toInt() % coreQueue.size
-            val newItem = coreQueue[queueIndex]
-            mutablePool.add(newItem)
-
-            // Add new item and ensure size constraints
-            while (mutablePool.size > POOL_SIZE) {
-                mutablePool.removeAt(0)
-            }
-
-            // Pad with zero hashes if needed
-            val allAreZero = mutablePool.all { it == JamByteArray(ZERO_HASH) }
             if (mutablePool.isEmpty()) {
-                mutablePool.clear()
                 mutablePool.add(JamByteArray(ZERO_HASH))
             } else {
+                // Pad with zero hashes if needed
+                val allAreZero = mutablePool.all { it == JamByteArray(ZERO_HASH) }
                 if (allAreZero) {
                     mutablePool.add(JamByteArray(ZERO_HASH))
+                } else {
+                    // Get new item from queue using rotation
+                    val queueIndex = input.slot.toInt() % coreQueue.size
+                    val newItem = coreQueue[queueIndex]
+                    mutablePool.add(newItem)
+
+                    // Add new item and ensure size constraints
+                    while (mutablePool.size > POOL_SIZE) {
+                        mutablePool.removeAt(0)
+                    }
                 }
             }
-
             mutablePool
         }
 
