@@ -144,6 +144,14 @@ class ReportStateTransition(private val config: ReportStateConfig) {
             return ReportErrorCode.BAD_SIGNATURE
         }
 
+        for (signature in guarantee.signatures) {
+            // Validate validator index
+            val validatorIndex = signature.validatorIndex.toInt()
+            if (validatorIndex < 0 || validatorIndex >= currValidators.size || validatorIndex >= prevValidators.size) {
+                return ReportErrorCode.BAD_VALIDATOR_INDEX
+            }
+        }
+
         val isCurrent = (guarantee.slot / config.ROTATION_PERIOD) == (currentSlot / config.ROTATION_PERIOD)
         val isEpochChanging = (currentSlot % config.EPOCH_LENGTH) < config.ROTATION_PERIOD
         val currCoreAssignments = calculateCoreAssignments(
@@ -348,7 +356,7 @@ class ReportStateTransition(private val config: ReportStateConfig) {
             )?.let {
                 return Pair(postState, ReportOutput(err = it))
             }
-            
+
             // Validate core is not already occupied
             if (pendingReports.any { it.coreIndex == guarantee.report.coreIndex }) {
                 return Pair(postState, ReportOutput(err = ReportErrorCode.CORE_ENGAGED))
