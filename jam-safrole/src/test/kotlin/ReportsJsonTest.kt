@@ -23,11 +23,6 @@ class ReportsJsonTest {
     }
 
     fun assertReportOutputEquals(expected: ReportOutput, actual: ReportOutput, testCase: String) {
-        println("Testing case: $testCase")
-        println("Expected: $expected")
-        println("Actual: $actual")
-
-        // First verify that both outputs are in the same state (error or success)
         when {
             expected.err != null && actual.err == null -> {
                 fail("$testCase: Expected error ${expected.err} but got success")
@@ -38,14 +33,11 @@ class ReportsJsonTest {
             }
 
             expected.err != null && actual.err != null -> {
-                // Both have errors - compare them
                 assertEquals(expected.err, actual.err, "$testCase: Error codes don't match")
-                // Early return since we don't need to check marks when we have errors
                 return
             }
         }
 
-        // At this point, both should have ok values (no errors)
         if (expected.ok == null && actual.ok != null) {
             fail("$testCase: Expected null ok but got ${actual.ok}")
         }
@@ -53,7 +45,6 @@ class ReportsJsonTest {
             fail("$testCase: Expected ${expected.ok} but got null ok")
         }
 
-        // Compare output marks if present
         expected.ok?.let { expectedMarks ->
             actual.ok?.let { actualMarks ->
                 // Compare reported packages

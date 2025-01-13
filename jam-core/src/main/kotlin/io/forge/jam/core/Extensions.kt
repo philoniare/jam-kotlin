@@ -102,29 +102,6 @@ fun Long.toByteArray(size: Int): ByteArray {
     return result
 }
 
-/**
- * Encodes a natural number x according to JAM protocol encoding:
- * - For x = 0: Returns [0]
- * - For values that can fit in l bytes (where 2^(7l) ≤ x < 2^(7(l+1))):
- *   Returns [(2^8 - 2^(8-l)) + (x/2^(8l))] followed by l bytes of x in little-endian
- * - For values needing full 8 bytes: Returns [255] followed by all 8 bytes
- */
-fun encodeLength(length: Long): ByteArray {
-    return when {
-        length == 0L -> byteArrayOf(0)
-        length < 128 -> byteArrayOf(-128, length.toByte())
-        length < 16384 -> {
-            byteArrayOf(
-                -64,  // 0xC0 prefix for 2 bytes
-                (length and 0xFF).toByte(),
-                ((length shr 8) and 0xFF).toByte()
-            )
-        }
-        // ... handle larger lengths
-        else -> throw IllegalArgumentException("Length too large")
-    }
-}
-
 fun encodeFixedWidthInteger(value: Number, byteSize: Int = 4, hasDiscriminator: Boolean = true): ByteArray {
     val buffer = ByteBuffer.allocate(byteSize)
         .order(ByteOrder.LITTLE_ENDIAN)
