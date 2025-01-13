@@ -4,6 +4,7 @@ import blakeHash
 import io.forge.jam.core.GuaranteeExtrinsic
 import io.forge.jam.core.JamByteArray
 import io.forge.jam.core.WorkReport
+import io.forge.jam.core.jamComputeShuffle
 import io.forge.jam.safrole.AvailabilityAssignment
 import io.forge.jam.safrole.ValidatorKey
 import io.forge.jam.safrole.historical.HistoricalBeta
@@ -232,32 +233,16 @@ class ReportStateTransition(private val config: ReportStateConfig) {
         return null
     }
 
-    private fun <T> Array<T>.shuffle(random: RandomGenerator) {
-        for (i in size - 1 downTo 1) {
-            val j = random.nextInt(i + 1)
-            val temp = this[i]
-            this[i] = this[j]
-            this[j] = temp
-        }
-    }
-
     private fun calculateCoreAssignments(
         timeslot: Long,
         validators: List<ValidatorKey>,
         randomness: JamByteArray
     ): List<Int> {
-//        validateRotationInput(timeslot, validators)
-
-        // Calculate base assignments - one core per 3 validators
-        val validatorsPerCore = validators.size / config.MAX_CORES
-
-        // Create initial sequential assignments
-        val baseAssignments = Array(validators.size) { validatorIndex ->
+        val baseAssignments = (0 until validators.size).map { validatorIndex ->
             (validatorIndex * config.MAX_CORES / validators.size).toInt()
         }
-
-        // Create deterministic shuffle
-        baseAssignments.shuffle(RandomGenerator(randomness))
+        var shuffledIndices = jamComputeShuffle(validators.size, randomness)
+        val shuffledAssignments = shuffledIndices.map { baseAssignments[it] }
 
         // Calculate rotation
         val rotationIndex = (timeslot / config.ROTATION_PERIOD).toInt()
@@ -294,21 +279,17 @@ class ReportStateTransition(private val config: ReportStateConfig) {
         val isCurrent = (guarantee.slot / config.ROTATION_PERIOD) == (currentSlot / config.ROTATION_PERIOD)
         val assignments = if (isCurrent) currAssignments else prevAssignments
         val validators = if (isCurrent) currValidators else prevValidators
+        var hasValidCoreAssignment = false
 
-        // First verify all validator indices are valid
+        // Verify at least one validator is assigned to the reported core
         for (signature in guarantee.signatures) {
             val validatorIndex = signature.validatorIndex.toInt()
+
             if (validatorIndex < 0 || validatorIndex >= validators.size) {
                 return ReportErrorCode.BAD_VALIDATOR_INDEX
             }
-        }
 
-        // Verify at least one validator is assigned to the reported core
-        var hasValidCoreAssignment = false
-        for (signature in guarantee.signatures) {
-            val validatorIndex = signature.validatorIndex.toInt()
             val assignedCore = assignments[validatorIndex]
-
             if (assignedCore == reportedCore) {
                 hasValidCoreAssignment = true
             }
@@ -334,24 +315,10 @@ class ReportStateTransition(private val config: ReportStateConfig) {
 
         // Return BAD_CORE_INDEX only if no validator was assigned to the reported core
         if (!hasValidCoreAssignment) {
-            return ReportErrorCode.BAD_CORE_INDEX
+            return ReportErrorCode.WRONG_ASSIGNMENT
         }
 
         return null
-    }
-
-    private class RandomGenerator(private val seed: JamByteArray) {
-        private var counter = 0
-
-        fun nextInt(bound: Int): Int {
-            // Ensure positive value
-            val hash = blakeHash(seed.bytes + counter.toBigInteger().toByteArray())
-            counter++
-            val value = hash.fold(0L) { acc, byte ->
-                (acc * 256 + (byte.toLong() and 0xFF))
-            }
-            return Math.floorMod(value, bound.toLong()).toInt()
-        }
     }
 
     // Helper extension function for safe modulo
