@@ -109,6 +109,52 @@ class ReportStateTransition(private val config: ReportStateConfig) {
         return null
     }
 
+    /**
+     * Checks if a work package with the given hash has already been reported in recent history.
+     * This validates against section 4.8.2 of the JAM protocol specification.
+     */
+    private fun checkWorkPackageDuplicates(
+        packageHash: JamByteArray,
+        recentBlocks: List<HistoricalBeta>
+    ): Boolean {
+        // Check if package hash exists in any recent block's reported work packages
+        return recentBlocks.any { block ->
+            block.reported.any { report ->
+                report.hash.contentEquals(packageHash)
+            }
+        }
+    }
+
+    /**
+     * Validates that guarantee extrinsics have no duplicate packages.
+     *
+     * @param guarantees List of guarantees to validate
+     * @param recentBlocks Recent block history (β)
+     * @return ReportErrorCode if validation fails, null if successful
+     */
+    private fun validateNoDuplicatePackages(
+        guarantees: List<GuaranteeExtrinsic>,
+        recentBlocks: List<HistoricalBeta>
+    ): ReportErrorCode? {
+        // Check each guarantee's work package hash
+        guarantees.forEach { guarantee ->
+            val packageHash = guarantee.report.packageSpec.hash
+
+            // Check if package exists in recent history
+            if (checkWorkPackageDuplicates(packageHash, recentBlocks)) {
+                return ReportErrorCode.DUPLICATE_PACKAGE
+            }
+
+            // Check if package hash exists in segment root lookups
+            guarantee.report.segmentRootLookup.forEach { lookup ->
+                if (checkWorkPackageDuplicates(lookup.workPackageHash, recentBlocks)) {
+                    return ReportErrorCode.DUPLICATE_PACKAGE
+                }
+            }
+        }
+
+        return null
+    }
 
     /**
      * Validates work report according to JAM protocol specifications.
@@ -336,6 +382,11 @@ class ReportStateTransition(private val config: ReportStateConfig) {
     ): Pair<ReportState, ReportOutput> {
         val postState = preState.deepCopy()
         val currentSlot = input.slot
+
+        // Check for duplicate packages first
+        validateNoDuplicatePackages(input.guarantees, preState.recentBlocks)?.let {
+            return Pair(postState, ReportOutput(err = it))
+        }
 
         // Validate anchor and context
         validateAnchor(input.guarantees, preState.recentBlocks, currentSlot)?.let {
