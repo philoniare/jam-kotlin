@@ -115,8 +115,13 @@ class ReportStateTransition(private val config: ReportStateConfig) {
      */
     private fun checkWorkPackageDuplicates(
         packageHash: JamByteArray,
-        recentBlocks: List<HistoricalBeta>
+        recentBlocks: List<HistoricalBeta>,
+        seenHashes: MutableSet<JamByteArray>
     ): Boolean {
+        if (!seenHashes.add(packageHash)) {
+            return true
+        }
+
         // Check if package hash exists in any recent block's reported work packages
         return recentBlocks.any { block ->
             block.reported.any { report ->
@@ -136,18 +141,19 @@ class ReportStateTransition(private val config: ReportStateConfig) {
         guarantees: List<GuaranteeExtrinsic>,
         recentBlocks: List<HistoricalBeta>
     ): ReportErrorCode? {
+        val seenHashes = mutableSetOf<JamByteArray>()
         // Check each guarantee's work package hash
         guarantees.forEach { guarantee ->
             val packageHash = guarantee.report.packageSpec.hash
 
             // Check if package exists in recent history
-            if (checkWorkPackageDuplicates(packageHash, recentBlocks)) {
+            if (checkWorkPackageDuplicates(packageHash, recentBlocks, seenHashes)) {
                 return ReportErrorCode.DUPLICATE_PACKAGE
             }
 
             // Check if package hash exists in segment root lookups
             guarantee.report.segmentRootLookup.forEach { lookup ->
-                if (checkWorkPackageDuplicates(lookup.workPackageHash, recentBlocks)) {
+                if (checkWorkPackageDuplicates(lookup.workPackageHash, recentBlocks, seenHashes)) {
                     return ReportErrorCode.DUPLICATE_PACKAGE
                 }
             }
