@@ -74,6 +74,9 @@ class ReportStateTransition(private val config: ReportStateConfig) {
         recentBlocks: List<HistoricalBeta>,
         currentSlot: Long
     ): ReportErrorCode? {
+        val currentBatchReports = guarantees.associate { guarantee ->
+            guarantee.report.packageSpec.hash to guarantee.report.packageSpec.exportsRoot
+        }
         guarantees.forEach { guarantee ->
             val context = guarantee.report.context
 
@@ -109,11 +112,27 @@ class ReportStateTransition(private val config: ReportStateConfig) {
             // Validate prerequisites exist in recent history
             if (context.prerequisites.isNotEmpty()) {
                 val prerequisitesExist = context.prerequisites.all { prerequisite ->
-                    recentBlocks.any { block ->
+                    // Check in current batch first
+                    val existsInCurrentBatch = currentBatchReports.any { (hash, exportsRoot) ->
+                        hash.contentEquals(prerequisite.bytes) &&
+                            guarantee.report.segmentRootLookup.all { lookup ->
+                                !lookup.workPackageHash.contentEquals(prerequisite.bytes) ||
+                                    lookup.segmentTreeRoot.contentEquals(exportsRoot)
+                            }
+                    }
+
+                    // If not in current batch, check recent blocks
+                    val existsInHistory = recentBlocks.any { block ->
                         block.reported.any { reported ->
-                            reported.hash.contentEquals(prerequisite.bytes)
+                            reported.hash.contentEquals(prerequisite.bytes) &&
+                                guarantee.report.segmentRootLookup.all { lookup ->
+                                    !lookup.workPackageHash.contentEquals(prerequisite.bytes) ||
+                                        lookup.segmentTreeRoot.contentEquals(reported.exportsRoot)
+                                }
                         }
                     }
+
+                    existsInCurrentBatch || existsInHistory
                 }
                 if (!prerequisitesExist) {
                     return ReportErrorCode.DEPENDENCY_MISSING
@@ -150,29 +169,74 @@ class ReportStateTransition(private val config: ReportStateConfig) {
 
     /**
      * Validates that guarantee extrinsics have no duplicate packages.
-     *
-     * @param guarantees List of guarantees to validate
-     * @param recentBlocks Recent block history (β)
-     * @return ReportErrorCode if validation fails, null if successful
      */
     private fun validateNoDuplicatePackages(
         guarantees: List<GuaranteeExtrinsic>,
         recentBlocks: List<HistoricalBeta>
     ): ReportErrorCode? {
-        val seenHashes = mutableSetOf<JamByteArray>()
-        // Check each guarantee's work package hash
-        guarantees.forEach { guarantee ->
-            val packageHash = guarantee.report.packageSpec.hash
+        val seenHashes = mutableSetOf<String>() // Using String to avoid ByteArray equality issues
 
-            // Check if package exists in recent history
-            if (checkWorkPackageDuplicates(packageHash, recentBlocks, seenHashes, false)) {
+        // Check each guarantee's package hash
+        for (guarantee in guarantees) {
+            val packageHashHex = guarantee.report.packageSpec.hash.toHex()
+
+            // If we've seen this hash before, it's a duplicate
+            if (!seenHashes.add(packageHashHex)) {
                 return ReportErrorCode.DUPLICATE_PACKAGE
             }
 
-            // Check if package hash exists in segment root lookups
-            guarantee.report.segmentRootLookup.forEach { lookup ->
-                if (checkWorkPackageDuplicates(lookup.workPackageHash, recentBlocks, seenHashes, true)) {
-                    return ReportErrorCode.DUPLICATE_PACKAGE
+            // Check if package exists in recent history
+            if (recentBlocks.any { block ->
+                    block.reported.any { report ->
+                        report.hash.contentEquals(guarantee.report.packageSpec.hash)
+                    }
+                }) {
+                return ReportErrorCode.DUPLICATE_PACKAGE
+            }
+        }
+
+        // Validate segment root lookups and prerequisites
+        for (guarantee in guarantees) {
+            // Check each segment root lookup
+            for (lookup in guarantee.report.segmentRootLookup) {
+                // Check if the lookup hash exists in current batch
+                val lookupHashHex = lookup.workPackageHash.toHex()
+                if (seenHashes.contains(lookupHashHex)) {
+                    val foundGuarantee = guarantees.find {
+                        it.report.packageSpec.hash.toHex() == lookupHashHex
+                    }
+                    // Verify segment root matches if found in current batch
+                    if (foundGuarantee != null &&
+                        !lookup.segmentTreeRoot.contentEquals(foundGuarantee.report.packageSpec.exportsRoot)
+                    ) {
+                        return ReportErrorCode.SEGMENT_ROOT_LOOKUP_INVALID
+                    }
+                } else {
+                    // If not in current batch, check history
+                    val foundInHistory = recentBlocks.any { block ->
+                        block.reported.any { report ->
+                            report.hash.contentEquals(lookup.workPackageHash) &&
+                                report.exportsRoot.contentEquals(lookup.segmentTreeRoot)
+                        }
+                    }
+                    if (!foundInHistory) {
+                        return ReportErrorCode.SEGMENT_ROOT_LOOKUP_INVALID
+                    }
+                }
+            }
+
+            // Validate prerequisites exist
+            for (prerequisite in guarantee.report.context.prerequisites) {
+                val prerequisiteHex = prerequisite.toHex()
+                val existsInCurrentBatch = seenHashes.contains(prerequisiteHex)
+                val existsInHistory = recentBlocks.any { block ->
+                    block.reported.any { report ->
+                        report.hash.contentEquals(prerequisite)
+                    }
+                }
+
+                if (!existsInCurrentBatch && !existsInHistory) {
+                    return ReportErrorCode.DEPENDENCY_MISSING
                 }
             }
         }
@@ -199,6 +263,19 @@ class ReportStateTransition(private val config: ReportStateConfig) {
         val existingAssignment = availAssignments.getOrNull(workReport.coreIndex.toInt())
         if (existingAssignment?.report != null) {
             return ReportErrorCode.CORE_ENGAGED
+        }
+
+        val totalOutputSize = workReport.authOutput.bytes.size + workReport.results.sumOf { result ->
+            result.result.ok?.bytes?.size ?: 0
+        }
+        // Maximum size limit WR ≡ 48·2^10 bytes (48 KiB)
+        if (totalOutputSize > 48 * 1024) {
+            return ReportErrorCode.WORK_REPORT_TOO_BIG
+        }
+
+        val totalAccumulateGas = workReport.results.sumOf { it.accumulateGas }
+        if (totalAccumulateGas > config.MAX_ACCUMULATION_GAS) {
+            return ReportErrorCode.WORK_REPORT_GAS_TOO_HIGH
         }
 
         // Validate core index is within bounds (eq. 143)
@@ -238,12 +315,9 @@ class ReportStateTransition(private val config: ReportStateConfig) {
 
         // Validate dependencies (eq. 150-152)
         val prerequisites = workReport.context.prerequisites
-        if (prerequisites.size > config.MAX_DEPENDENCIES) {
-            return ReportErrorCode.TOO_MANY_DEPENDENCIES
-        }
-
-        // Validate segment root lookups (eq. 153-155)
-        if (workReport.segmentRootLookup.size + prerequisites.size > config.MAX_DEPENDENCIES) {
+        val segmentLookups = workReport.segmentRootLookup
+        val totalDependencies = prerequisites.size + segmentLookups.size
+        if (totalDependencies > config.MAX_DEPENDENCIES) {
             return ReportErrorCode.TOO_MANY_DEPENDENCIES
         }
 
@@ -251,22 +325,28 @@ class ReportStateTransition(private val config: ReportStateConfig) {
     }
 
     private fun calculateCoreAssignments(
-        timeslot: Long,
+        isCurrent: Boolean,
+        slot: Long,
         validators: List<ValidatorKey>,
         randomness: JamByteArray
     ): List<Int> {
-        val baseAssignments = (0 until validators.size).map { validatorIndex ->
-            (validatorIndex * config.MAX_CORES / validators.size).toInt()
+        // Initial assignments based on equation 133 from gray paper
+        // Every 3 consecutive validators get assigned to the same core
+        val baseAssignments = (0 until validators.size).map { i ->
+            i / 3 // Integer division to group by 3
         }
-        var shuffledIndices = jamComputeShuffle(validators.size, randomness)
-        val shuffledAssignments = shuffledIndices.map { baseAssignments[it] }
 
-        // Calculate rotation
-        val rotationIndex = (timeslot / config.ROTATION_PERIOD).toInt()
+        // Compute shuffled indices according to equation 134
+        val shuffledIndices = jamComputeShuffle(validators.size, randomness)
 
-        // Apply rotation
-        return baseAssignments.map { core ->
-            Math.floorMod(core + rotationIndex, config.MAX_CORES)
+        // Apply rotation according to equation 135
+        val rotationIndex = (slot / config.ROTATION_PERIOD).toInt()
+
+        // Calculate final assignments according to equation 136
+        return (0 until validators.size).map { validatorIndex ->
+            val shuffledPos = shuffledIndices[validatorIndex].toInt()
+            val baseCore = baseAssignments[shuffledPos]
+            Math.floorMod(baseCore + rotationIndex, config.MAX_CORES)
         }
     }
 
@@ -277,50 +357,83 @@ class ReportStateTransition(private val config: ReportStateConfig) {
         currentSlot: Long,
         entropyPool: List<JamByteArray>
     ): ReportErrorCode? {
+        println("=== Validating Guarantor Signatures ===")
+        println("Report Core: ${guarantee.report.coreIndex}")
+        println("Current Slot: $currentSlot")
+
         val reportRotation = guarantee.slot / config.ROTATION_PERIOD
         val currentRotation = currentSlot / config.ROTATION_PERIOD
 
-        println("ReportEpoch: ${reportRotation}, CurrentEpoch: $currentRotation, cond: ${reportRotation < currentRotation - 1}")
+        println("Report Rotation: $reportRotation")
+        println("Current Rotation: $currentRotation")
+
         if (reportRotation < currentRotation - 1) {
+            println("ERROR: Report from rotation before last")
             return ReportErrorCode.REPORT_EPOCH_BEFORE_LAST
         }
 
-        // Validate minimum number of signatures
         if (guarantee.signatures.size !in 2..3) {
+            println("ERROR: Invalid signature count: ${guarantee.signatures.size}")
             return ReportErrorCode.INSUFFICIENT_GUARANTEES
         }
 
         val validatorIndices = guarantee.signatures.map { it.validatorIndex }
+        println("Validator Indices: $validatorIndices")
+
         if (!validatorIndices.isSortedAndUnique()) {
+            println("ERROR: Validator indices not sorted or unique")
             return ReportErrorCode.NOT_SORTED_OR_UNIQUE_GUARANTORS
         }
 
         val reportedCore = guarantee.report.coreIndex.toInt()
+        println("Reported Core: $reportedCore")
 
-        // Calculate current and previous assignments
-        val currAssignments = calculateCoreAssignments(currentSlot, currValidators, entropyPool[2])
-        val prevAssignments = if ((currentSlot % config.EPOCH_LENGTH) < config.ROTATION_PERIOD) {
-            calculateCoreAssignments(currentSlot - config.ROTATION_PERIOD, prevValidators, entropyPool[3])
-        } else {
-            calculateCoreAssignments(currentSlot - config.ROTATION_PERIOD, currValidators, entropyPool[2])
+        // Calculate and log assignments
+        val isCurrent = (guarantee.slot / config.ROTATION_PERIOD) == (currentSlot / config.ROTATION_PERIOD)
+        println("Using Current Rotation: $isCurrent")
+
+        val assignments = calculateCoreAssignments(
+            isCurrent,
+            guarantee.slot,
+            if (isCurrent) currValidators else prevValidators,
+            if (isCurrent) entropyPool[2] else entropyPool[3]
+        )
+        val validators = if (isCurrent) currValidators else prevValidators
+
+        val coreToValidators = assignments.withIndex()
+            .groupBy({ it.value }, { it.index })
+        println("Core assignments: ${coreToValidators[reportedCore]}")
+
+        println("Assignments for signatures:")
+        guarantee.signatures.forEach { sig ->
+            val validatorIndex = sig.validatorIndex.toInt()
+            val assignedCore = assignments.getOrNull(validatorIndex)
+            println("Validator $validatorIndex assigned to core: $assignedCore")
         }
 
-        // Calculate which set of assignments to use
-        val isCurrent = (guarantee.slot / config.ROTATION_PERIOD) == (currentSlot / config.ROTATION_PERIOD)
-        val assignments = if (isCurrent) currAssignments else prevAssignments
-        val validators = if (isCurrent) currValidators else prevValidators
         var hasValidCoreAssignment = false
 
-        // Verify at least one validator is assigned to the reported core
+        println("Checking assignments for core $reportedCore")
+        println(
+            "Base assignments before rotation: ${
+                (0 until validators.size).map { i ->
+                    (config.MAX_CORES.toDouble() * i / validators.size).toInt()
+                }
+            }")
+
+        // Verify signatures and core assignments
         for (signature in guarantee.signatures) {
             val validatorIndex = signature.validatorIndex.toInt()
+            val assignedCore = assignments[validatorIndex]
 
             if (validatorIndex < 0 || validatorIndex >= validators.size) {
+                println("ERROR: Invalid validator index: $validatorIndex")
                 return ReportErrorCode.BAD_VALIDATOR_INDEX
             }
 
-            val assignedCore = assignments[validatorIndex]
+            println("Validator $validatorIndex assigned to core $assignedCore")
             if (assignedCore == reportedCore) {
+                println("Found valid core assignment for validator $validatorIndex")
                 hasValidCoreAssignment = true
             }
 
@@ -336,18 +449,21 @@ class ReportStateTransition(private val config: ReportStateConfig) {
                 signer.update(signatureMessage, 0, signatureMessage.size)
 
                 if (!signer.verifySignature(signature.signature.bytes)) {
+                    println("ERROR: Invalid signature for validator $validatorIndex")
                     return ReportErrorCode.BAD_SIGNATURE
                 }
             } catch (e: Exception) {
+                println("ERROR: Signature verification failed with exception: ${e.message}")
                 return ReportErrorCode.BAD_SIGNATURE
             }
         }
 
-        // Return BAD_CORE_INDEX only if no validator was assigned to the reported core
         if (!hasValidCoreAssignment) {
+            println("ERROR: No valid core assignment found for any guarantor")
             return ReportErrorCode.WRONG_ASSIGNMENT
         }
 
+        println("=== Signature Validation Successful ===")
         return null
     }
 

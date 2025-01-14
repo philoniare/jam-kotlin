@@ -12,8 +12,6 @@ class TestCaseEncoding {
         val (testCase, expectedOutputBytes) = TestFileLoader.loadTestData<ReportCase>("reports/tiny/big_work_report_output-1")
 
         // Compare the concatenated encoded bytes with the expected output bytes
-//        testCase.encode()
-//        assert(false)
         assertContentEquals(
             expectedOutputBytes,
             testCase.encode(),

@@ -195,10 +195,8 @@ class ReportsJsonTest {
             val report = ReportStateTransition(
                 ReportStateConfig(
                     MAX_LOOKUP_ANCHOR_AGE = 14_000L,
-                    MAX_AUTH_POOL_ITEMS = 8,
                     MAX_CORES = 2,
-                    MAX_DEPENDENCIES = 100,
-                    MIN_GUARANTORS = 3,
+                    MAX_DEPENDENCIES = 8,
                     ROTATION_PERIOD = 4,
                     MAX_VALIDATORS = 6,
                     EPOCH_LENGTH = 12
@@ -211,30 +209,30 @@ class ReportsJsonTest {
         }
     }
 
-//    @Test
-//    fun testFullDisputes() {
-//        val folderName = "disputes/full"
-//        val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
-//
-//        for (testCase in testCases) {
-//            val (inputCase) = TestFileLoader.loadTestData<SafroleCase>(
-//                "$folderName/$testCase",
-//                ".bin"
-//            )
-//
-//            val safrole = SafroleStateTransition(
-//                SafroleConfig(
-//                    epochLength = 600,
-//                    ticketCutoff = 500,
-//                    ringSize = 6,
-//                    validatorCount = 1023
-//                )
-//            )
-//            val (postState, output) = safrole.transition(inputCase.input, inputCase.preState)
-//
-//            assertDisputeOutputEquals(inputCase.output, output, testCase)
-//
-//            assertDisputeStateEquals(inputCase.postState, postState)
-//        }
-//    }
+    @Test
+    fun testFullReports() {
+        val folderName = "reports/full"
+        val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
+
+        for (testCase in testCases) {
+            val (inputCase) = TestFileLoader.loadTestData<ReportCase>(
+                "$folderName/$testCase",
+                ".bin"
+            )
+
+            val report = ReportStateTransition(
+                ReportStateConfig(
+                    MAX_LOOKUP_ANCHOR_AGE = 14_000L,
+                    MAX_CORES = 341,
+                    MAX_DEPENDENCIES = 8,
+                    ROTATION_PERIOD = 10,
+                    MAX_VALIDATORS = 1023,
+                    EPOCH_LENGTH = 600
+                )
+            )
+            val (postState, output) = report.transition(inputCase.input, inputCase.preState)
+            assertReportOutputEquals(inputCase.output, output, testCase)
+            assertReportStateEquals(inputCase.postState, postState, testCase)
+        }
+    }
 }
