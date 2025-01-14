@@ -57,6 +57,9 @@ enum class ReportErrorCode : Encodable {
     @SerialName("out_of_order_guarantee")
     OUT_OF_ORDER_GUARANTEE,
 
+    @SerialName("not_sorted_or_unique_guarantors")
+    NOT_SORTED_OR_UNIQUE_GUARANTORS,
+
     @SerialName("report_epoch_before_last")
     REPORT_EPOCH_BEFORE_LAST,
 
@@ -65,6 +68,9 @@ enum class ReportErrorCode : Encodable {
 
     @SerialName("work_report_gas_too_high")
     WORK_REPORT_GAS_TOO_HIGH,
+
+    @SerialName("work_report_too_big")
+    WORK_REPORT_TOO_BIG,
 
     @SerialName("too_many_dependencies")
     TOO_MANY_DEPENDENCIES,

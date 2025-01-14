@@ -51,7 +51,7 @@ class ReportsJsonTest {
                 assertEquals(
                     expectedMarks.reported.size,
                     actualMarks.reported.size,
-                    "$testCase: Mismatch in reported packages list size"
+                    "$testCase: Mismatch in reported packages list size. Reported: ${actualMarks.reported}"
                 )
 
                 // Compare each ReportPackage

@@ -12,6 +12,20 @@ import keccakHash
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
 import org.bouncycastle.crypto.signers.Ed25519Signer
 
+// Extension function to check if a list of validator indices is sorted and contains no duplicates
+private fun List<Long>.isSortedAndUnique(): Boolean {
+    if (isEmpty()) return true
+
+    var prev = get(0)
+    for (i in 1 until size) {
+        val curr = get(i)
+        if (curr <= prev) {
+            return false
+        }
+        prev = curr
+    }
+    return true
+}
 
 class ReportStateTransition(private val config: ReportStateConfig) {
 
@@ -117,11 +131,14 @@ class ReportStateTransition(private val config: ReportStateConfig) {
     private fun checkWorkPackageDuplicates(
         packageHash: JamByteArray,
         recentBlocks: List<HistoricalBeta>,
-        seenHashes: MutableSet<JamByteArray>
+        seenHashes: MutableSet<JamByteArray>,
+        isLookupHash: Boolean = false
     ): Boolean {
         if (!seenHashes.add(packageHash)) {
             return true
         }
+
+        if (isLookupHash) return false
 
         // Check if package hash exists in any recent block's reported work packages
         return recentBlocks.any { block ->
@@ -148,13 +165,13 @@ class ReportStateTransition(private val config: ReportStateConfig) {
             val packageHash = guarantee.report.packageSpec.hash
 
             // Check if package exists in recent history
-            if (checkWorkPackageDuplicates(packageHash, recentBlocks, seenHashes)) {
+            if (checkWorkPackageDuplicates(packageHash, recentBlocks, seenHashes, false)) {
                 return ReportErrorCode.DUPLICATE_PACKAGE
             }
 
             // Check if package hash exists in segment root lookups
             guarantee.report.segmentRootLookup.forEach { lookup ->
-                if (checkWorkPackageDuplicates(lookup.workPackageHash, recentBlocks, seenHashes)) {
+                if (checkWorkPackageDuplicates(lookup.workPackageHash, recentBlocks, seenHashes, true)) {
                     return ReportErrorCode.DUPLICATE_PACKAGE
                 }
             }
@@ -260,9 +277,22 @@ class ReportStateTransition(private val config: ReportStateConfig) {
         currentSlot: Long,
         entropyPool: List<JamByteArray>
     ): ReportErrorCode? {
+        val reportRotation = guarantee.slot / config.ROTATION_PERIOD
+        val currentRotation = currentSlot / config.ROTATION_PERIOD
+
+        println("ReportEpoch: ${reportRotation}, CurrentEpoch: $currentRotation, cond: ${reportRotation < currentRotation - 1}")
+        if (reportRotation < currentRotation - 1) {
+            return ReportErrorCode.REPORT_EPOCH_BEFORE_LAST
+        }
+
         // Validate minimum number of signatures
         if (guarantee.signatures.size !in 2..3) {
-            return ReportErrorCode.BAD_SIGNATURE
+            return ReportErrorCode.INSUFFICIENT_GUARANTEES
+        }
+
+        val validatorIndices = guarantee.signatures.map { it.validatorIndex }
+        if (!validatorIndices.isSortedAndUnique()) {
+            return ReportErrorCode.NOT_SORTED_OR_UNIQUE_GUARANTORS
         }
 
         val reportedCore = guarantee.report.coreIndex.toInt()
@@ -331,6 +361,16 @@ class ReportStateTransition(private val config: ReportStateConfig) {
         return Math.floorMod(this, other.toLong()).toInt()
     }
 
+    private fun validateGuaranteesOrder(guarantees: List<GuaranteeExtrinsic>): ReportErrorCode? {
+        for (i in 0 until guarantees.size - 1) {
+            val currentCore = guarantees[i].report.coreIndex
+            val nextCore = guarantees[i + 1].report.coreIndex
+            if (currentCore >= nextCore) {
+                return ReportErrorCode.OUT_OF_ORDER_GUARANTEE
+            }
+        }
+        return null
+    }
 
     /**
      * Performs state transition according to JAM protocol specifications.
@@ -342,6 +382,10 @@ class ReportStateTransition(private val config: ReportStateConfig) {
     ): Pair<ReportState, ReportOutput> {
         val postState = preState.deepCopy()
         val currentSlot = input.slot
+
+        validateGuaranteesOrder(input.guarantees)?.let {
+            return Pair(postState, ReportOutput(err = it))
+        }
 
         // Check for duplicate packages first
         validateNoDuplicatePackages(input.guarantees, preState.recentBlocks)?.let {
@@ -396,11 +440,6 @@ class ReportStateTransition(private val config: ReportStateConfig) {
                     guarantee.report.packageSpec.exportsRoot
                 )
             )
-
-            // Add any segment root lookups
-            guarantee.report.segmentRootLookup.forEach { lookup ->
-                reportPackages.add(ReportPackage(lookup.workPackageHash, lookup.segmentTreeRoot))
-            }
 
             // Collect valid guarantor Ed25519 keys
             guarantee.signatures.forEach { signature ->
