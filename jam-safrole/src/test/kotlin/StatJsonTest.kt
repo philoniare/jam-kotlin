@@ -8,7 +8,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class StatJsonTest {
-    private fun assertStateStateEquals(expected: StatState, actual: StatState, testCase: String) {
+    private fun assertStatStateEquals(expected: StatState, actual: StatState, testCase: String) {
 
         assertEquals(expected.tau, actual.tau, "tau values should match")
         assertEquals(expected.kappaPrime.size, actual.kappaPrime.size, "kappaPrime list sizes should match")
@@ -64,7 +64,7 @@ class StatJsonTest {
 
             val stf = StatStateTransition(StatConfig(EPOCH_LENGTH = 12))
             val (postState, output) = stf.transition(inputCase.input, inputCase.preState)
-            assertStateStateEquals(inputCase.postState, postState, testCase)
+            assertStatStateEquals(inputCase.postState, postState, testCase)
         }
     }
 
@@ -81,7 +81,7 @@ class StatJsonTest {
 
             val stf = StatStateTransition(StatConfig(EPOCH_LENGTH = 600))
             val (postState, output) = stf.transition(inputCase.input, inputCase.preState)
-            assertStateStateEquals(inputCase.postState, postState, testCase)
+            assertStatStateEquals(inputCase.postState, postState, testCase)
         }
     }
 }
