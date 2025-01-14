@@ -2,7 +2,6 @@ package io.forge.jam.safrole.assurance
 
 import blakeHash
 import io.forge.jam.core.AssuranceExtrinsic
-import io.forge.jam.core.JamByteArray
 import io.forge.jam.core.WorkReport
 import io.forge.jam.safrole.ValidatorKey
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
@@ -16,37 +15,33 @@ fun ByteArray.isBitSet(position: Int): Boolean {
 }
 
 class AssuranceStateTransition(private val assuranceConfig: AssuranceConfig) {
-    private val JAM_AVAILABLE_PREFIX = "\$jam_available"
+    private val JAM_AVAILABLE_PREFIX = "jam_available"
     private fun log(message: String) {
         println("[AssuranceStateTransition] $message")
     }
 
     private fun verifyAssuranceSignature(
-        parentHash: JamByteArray,
         assurance: AssuranceExtrinsic,
         validatorKey: ValidatorKey
     ): Boolean {
-        val signatureMessage = buildSignatureMessage(parentHash, assurance)
+        return try {
+            // First create combined data and hash it
+            val serializedData = assurance.anchor.bytes + assurance.bitfield.bytes
+            val dataHash = blakeHash(serializedData)
 
-        try {
+            // Create final message by prepending context
+            val signatureMessage = JAM_AVAILABLE_PREFIX.toByteArray() + dataHash
+
+            // Verify using Ed25519
             val publicKey = Ed25519PublicKeyParameters(validatorKey.ed25519.bytes, 0)
             val signer = Ed25519Signer()
             signer.init(false, publicKey)
             signer.update(signatureMessage, 0, signatureMessage.size)
 
-            if (!signer.verifySignature(assurance.signature.bytes)) {
-                return false
-            }
+            signer.verifySignature(assurance.signature.bytes)
         } catch (e: Exception) {
-            return false
+            false
         }
-        return true
-    }
-
-    private fun buildSignatureMessage(parentHash: JamByteArray, assurance: AssuranceExtrinsic): ByteArray {
-        val serializedData = assurance.anchor.bytes + assurance.bitfield.bytes
-        val dataHash = blakeHash(serializedData)
-        return JAM_AVAILABLE_PREFIX.toByteArray() + dataHash
     }
 
     private fun validateSortedAndUniqueValidators(assurances: List<AssuranceExtrinsic>): Boolean {
@@ -74,7 +69,7 @@ class AssuranceStateTransition(private val assuranceConfig: AssuranceConfig) {
             }
 
             // Verify signature
-            if (!verifyAssuranceSignature(input.parent, assurance, state.currValidators[assurance.validatorIndex])) {
+            if (!verifyAssuranceSignature(assurance, state.currValidators[assurance.validatorIndex])) {
                 return AssuranceErrorCode.BAD_SIGNATURE
             }
         }

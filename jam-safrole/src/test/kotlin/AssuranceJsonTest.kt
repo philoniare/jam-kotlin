@@ -79,7 +79,7 @@ class AssuranceJsonTest {
     private fun assertAssuranceOutputEquals(expected: AssuranceOutput, actual: AssuranceOutput, testCase: String) {
         when {
             expected.ok != null -> {
-                assertNotNull(actual.ok, "Expected OK output but got error in test case: $testCase")
+                assertNotNull(actual.ok, "Expected OK output but got error in test case: $testCase. $actual")
                 assertNull(actual.err, "Expected OK output but got both OK and error in test case: $testCase")
 
                 assertEquals(
