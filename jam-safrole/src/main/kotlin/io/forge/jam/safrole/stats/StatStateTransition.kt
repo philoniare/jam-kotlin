@@ -2,32 +2,26 @@ package io.forge.jam.safrole.stats
 
 private const val SLOTS_PER_EPOCH = 600
 
-class StatStateTransition {
+class StatStateTransition(private val statConfig: StatConfig) {
     fun transition(
         input: StatInput,
         preState: StatState
     ): Pair<StatState, StatOutput?> {
         val postState = preState.copy()
-        val preEpoch = preState.tau / SLOTS_PER_EPOCH
-        val postEpoch = input.slot / SLOTS_PER_EPOCH
+        val preEpoch = preState.tau / statConfig.EPOCH_LENGTH
+        val postEpoch = input.slot / statConfig.EPOCH_LENGTH
         if (postEpoch > preEpoch) {
             // Rotate stats on epoch transition
             postState.pi.last = postState.pi.current
             postState.pi.current = List(postState.pi.current.size) { StatCount() }
         }
+        println("slot: ${input.slot}, Tau: ${preState.tau}, Post: ${postEpoch}, pre: $preEpoch")
 
-        // Update current epoch stats for block author
-        postState.pi.current[input.authorIndex.toInt()].blocks++
-
-        // Update tickets
-        input.extrinsic.tickets.forEach { _ ->
-            postState.pi.current[input.authorIndex.toInt()].tickets++
-        }
-
-        // Update preimages
-        input.extrinsic.preimages.forEach { preimage ->
-            postState.pi.current[input.authorIndex.toInt()].preImages++
-            postState.pi.current[input.authorIndex.toInt()].preImagesSize += preimage.blob.size
+        with(postState.pi.current[input.authorIndex.toInt()]) {
+            blocks++
+            tickets += input.extrinsic.tickets.size
+            preImages += input.extrinsic.preimages.size
+            preImagesSize += input.extrinsic.preimages.sumOf { it.blob.size }
         }
 
         // Update guarantees
