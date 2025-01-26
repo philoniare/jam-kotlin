@@ -1,6 +1,13 @@
 package io.forge.jam.pvm
 
-import io.forge.jam.core.compareTo
+fun ByteArray.compareTo(other: ByteArray): Int {
+    val minLength = minOf(size, other.size)
+    for (i in 0 until minLength) {
+        val diff = (this[i].toInt() and 0xFF) - (other[i].toInt() and 0xFF)
+        if (diff != 0) return diff
+    }
+    return size - other.size
+}
 
 /**
  * Represents a 32-byte hash value with various utility implementations
