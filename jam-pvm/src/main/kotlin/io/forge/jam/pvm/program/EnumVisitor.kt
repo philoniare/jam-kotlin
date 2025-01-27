@@ -1,6 +1,7 @@
 package io.forge.jam.pvm.program
 
 import io.forge.jam.pvm.PvmLogger
+import io.forge.jam.pvm.U128
 import io.forge.jam.pvm.engine.InstructionSet
 
 data class EnumVisitor<I : InstructionSet>(override val instructionSet: I) :
@@ -9,7 +10,7 @@ data class EnumVisitor<I : InstructionSet>(override val instructionSet: I) :
         private val logger = PvmLogger(EnumVisitor::class.java)
     }
 
-    override fun dispatch(opcode: UInt, chunk: ULong, offset: UInt, skip: UInt): Instruction {
+    override fun dispatch(opcode: UInt, chunk: U128, offset: UInt, skip: UInt): Instruction {
         if (instructionSet.opcodeFromU8(opcode.toUByte()) == null) {
             logger.debug("Invalid Opcode: ${opcode}, ${opcode.toUByte()}")
             return Instruction.Invalid

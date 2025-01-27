@@ -148,11 +148,17 @@ class ProgramTest {
     /**
      * Helper function to generate a chunk from bytes
      */
-    private fun generateChunk(vararg bytes: Int): ULong {
-        var result = 0UL
-        for (i in bytes.indices) {
-            result = result or ((bytes[i].toULong() and 0xFFUL) shl (i * 8))
+    private fun generateChunk(vararg bytes: Int): U128 {
+        var low = 0UL
+        for (i in 0 until minOf(8, bytes.size)) {
+            low = low or ((bytes[i].toULong() and 0xFFUL) shl (i * 8))
         }
-        return result
+
+        var high = 0UL
+        for (i in 8 until minOf(16, bytes.size)) {
+            high = high or ((bytes[i].toULong() and 0xFFUL) shl ((i - 8) * 8))
+        }
+
+        return U128(low, high)
     }
 }

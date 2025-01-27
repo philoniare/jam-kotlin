@@ -1,6 +1,7 @@
 package io.forge.jam.pvm.program
 
 import io.forge.jam.pvm.PvmLogger
+import io.forge.jam.pvm.U128
 import io.forge.jam.pvm.engine.InstructionSet
 import io.forge.jam.pvm.engine.RuntimeInstructionSet
 import io.forge.jam.pvm.readSimpleVarint
@@ -47,10 +48,8 @@ class Program {
             val skip = parseBitmaskFast(bitmask, offset) ?: throw IllegalStateException("Failed to parse bitmask")
             val opcode = chunk[0].toInt() and 0xFF
 
-            // Convert next 16 bytes to u128 equivalent (as ULong in Kotlin)
-            val chunkValue = chunk.drop(1).take(16).foldIndexed(0UL) { index, acc, byte ->
-                acc or (byte.toULong() and 0xFFUL shl (index * 8))
-            }
+            // Create U128 from 16 bytes in little-endian order
+            val chunkValue = U128.fromLEBytes(chunk.toByteArray(), 1)
 
             assert(skip <= BITMASK_MAX.toUInt()) { "Skip value exceeds maximum allowed" }
             assert(
@@ -104,13 +103,11 @@ class Program {
             }
 
             val t = ByteArray(16)
-            chunk.drop(1).take(15).forEachIndexed { index, byte ->
+            chunk.drop(1).take(16).forEachIndexed { index, byte ->
                 t[index] = byte
             }
 
-            val chunkValue = t.take(8).foldIndexed(0UL) { index, acc, byte ->
-                acc or (byte.toULong() and 0xFFUL shl (index * 8))
-            }
+            val chunkValue = U128.fromLEBytes(t)
 
             assert(
                 opcodeVisitor.instructionSet.opcodeFromU8(opcode.toUByte()) != null ||
@@ -194,7 +191,7 @@ class Program {
         ): Instruction {
             return opcodeVisitor.dispatch(
                 opcode = INVALID_INSTRUCTION_INDEX,
-                chunk = 0UL,
+                chunk = U128(0u, 0u),
                 offset = offset,
                 skip = 0u
             )
@@ -327,33 +324,35 @@ class Program {
         /**
          * Reads immediate argument from chunk
          */
-        fun readArgsImm(chunk: ULong, skip: UInt): UInt =
+        fun readArgsImm(chunk: U128, skip: UInt): UInt =
             readSimpleVarint(chunk.toUInt(), skip)
 
         /**
          * Reads offset argument from chunk
          */
-        fun readArgsOffset(chunk: ULong, instructionOffset: UInt, skip: UInt): UInt =
-            instructionOffset + readArgsImm(chunk, skip) // UInt addition wraps automatically
+        fun readArgsOffset(chunk: U128, instructionOffset: UInt, skip: UInt): UInt =
+            instructionOffset + readArgsImm(chunk, skip)
 
         /**
          * Reads two immediate arguments from chunk
          */
-        fun readArgsImm2(chunk: ULong, skip: UInt): Pair<UInt, UInt> {
+        fun readArgsImm2(chunk: U128, skip: UInt): Pair<UInt, UInt> {
             val (imm1Bits, imm1Skip, imm2Bits) = TABLE_1.get(skip, chunk.toUInt())
-            var shiftedChunk = chunk shr 8
-            val imm1 = signExtendAt(shiftedChunk.toUInt(), imm1Bits)
-            shiftedChunk = shiftedChunk shr imm1Skip.toInt()
-            val imm2 = signExtendAt(shiftedChunk.toUInt(), imm2Bits)
+            val shiftedChunk = chunk shr 8
+            val chunk64 = shiftedChunk.low
+            val imm1 = signExtendAt(chunk64.toUInt(), imm1Bits)
+            val finalChunk = chunk64 shr imm1Skip.toInt()
+            val imm2 = signExtendAt(finalChunk.toUInt(), imm2Bits)
             return Pair(imm1, imm2)
         }
 
         /**
          * Reads register and immediate arguments from chunk
          */
-        fun readArgsRegImm(chunk: ULong, skip: UInt): Pair<RawReg, UInt> {
-            val reg = RawReg(chunk.toUInt())
-            val shiftedChunk = chunk shr 8
+        fun readArgsRegImm(chunk: U128, skip: UInt): Pair<RawReg, UInt> {
+            val chunk64 = chunk.low
+            val reg = RawReg(chunk64.toUInt())
+            val shiftedChunk = chunk64 shr 8
             val (_, _, immBits) = TABLE_1.get(skip, 0u)
             val imm = signExtendAt(shiftedChunk.toUInt(), immBits)
             return Pair(reg, imm)
@@ -362,13 +361,14 @@ class Program {
         /**
          * Reads register and two immediate arguments from chunk
          */
-        fun readArgsRegImm2(chunk: ULong, skip: UInt): Triple<RawReg, UInt, UInt> {
+        fun readArgsRegImm2(chunk: U128, skip: UInt): Triple<RawReg, UInt, UInt> {
             val reg = RawReg(chunk.toUInt())
             val (imm1Bits, imm1Skip, imm2Bits) = TABLE_1.get(skip, chunk.toUInt() shr 4)
             var shiftedChunk = chunk shr 8
-            val imm1 = signExtendAt(shiftedChunk.toUInt(), imm1Bits)
-            shiftedChunk = shiftedChunk shr imm1Skip.toInt()
-            val imm2 = signExtendAt(shiftedChunk.toUInt(), imm2Bits)
+            val chunk64 = shiftedChunk.low
+            val imm1 = signExtendAt(chunk64.toUInt(), imm1Bits)
+            val finalChunk = chunk64 shr imm1Skip.toInt()
+            val imm2 = signExtendAt(finalChunk.toUInt(), imm2Bits)
             return Triple(reg, imm1, imm2)
         }
 
@@ -376,7 +376,7 @@ class Program {
          * Reads register and immediate offset arguments from chunk
          */
         fun readArgsRegImmOffset(
-            chunk: ULong,
+            chunk: U128,
             instructionOffset: UInt,
             skip: UInt
         ): Triple<RawReg, UInt, UInt> {
@@ -387,7 +387,7 @@ class Program {
         /**
          * Reads two registers and two immediate arguments from chunk
          */
-        fun readArgsRegs2Imm2(chunk: ULong, skip: UInt): Quadruple<RawReg, RawReg, UInt, UInt> {
+        fun readArgsRegs2Imm2(chunk: U128, skip: UInt): Quadruple<RawReg, RawReg, UInt, UInt> {
             val value = chunk.toUInt()
             val reg1 = RawReg(value)
             val reg2 = RawReg(value shr 4)
@@ -395,20 +395,22 @@ class Program {
 
             val (imm1Bits, imm1Skip, imm2Bits) = TABLE_2.get(skip, imm1Aux)
             var shiftedChunk = chunk shr 16
-            val imm1 = signExtendAt(shiftedChunk.toUInt(), imm1Bits)
-            shiftedChunk = shiftedChunk shr imm1Skip.toInt()
-            val imm2 = signExtendAt(shiftedChunk.toUInt(), imm2Bits)
+            val chunk64 = shiftedChunk.low
+            val imm1 = signExtendAt(chunk64.toUInt(), imm1Bits)
+            val finalChunk = chunk64 shr imm1Skip.toInt()
+            val imm2 = signExtendAt(finalChunk.toUInt(), imm2Bits)
             return Quadruple(reg1, reg2, imm1, imm2)
         }
 
         /**
          * Reads two registers and immediate argument from chunk
          */
-        fun readArgsRegs2Imm(chunk: ULong, skip: UInt): Triple<RawReg, RawReg, UInt> {
-            val value = chunk.toUInt()
+        fun readArgsRegs2Imm(chunk: U128, skip: UInt): Triple<RawReg, RawReg, UInt> {
+            val chunk64 = chunk.low
+            val value = chunk64.toUInt()
             val reg1 = RawReg(value)
             val reg2 = RawReg(value shr 4)
-            val shiftedChunk = chunk shr 8
+            val shiftedChunk = chunk64 shr 8
             val (_, _, immBits) = TABLE_1.get(skip, 0u)
             val imm = signExtendAt(shiftedChunk.toUInt(), immBits)
             return Triple(reg1, reg2, imm)
@@ -418,7 +420,7 @@ class Program {
          * Reads two registers and offset argument from chunk
          */
         fun readArgsRegs2Offset(
-            chunk: ULong,
+            chunk: U128,
             instructionOffset: UInt,
             skip: UInt
         ): Triple<RawReg, RawReg, UInt> {
@@ -429,19 +431,21 @@ class Program {
         /**
          * Reads three registers from chunk
          */
-        fun readArgsRegs3(chunk: ULong): Triple<RawReg, RawReg, RawReg> {
+        fun readArgsRegs3(chunk: U128): Triple<RawReg, RawReg, RawReg> {
             val value = chunk.toUInt()
+            val reg2 = RawReg(value)
+            val reg3 = RawReg(value shr 4)
+            val reg1 = RawReg(value shr 8)
+
             return Triple(
-                RawReg(value shr 8),
-                RawReg(value),
-                RawReg(value shr 4)
+                reg1, reg2, reg3
             )
         }
 
         /**
          * Reads two registers from chunk
          */
-        fun readArgsRegs2(chunk: ULong): Pair<RawReg, RawReg> {
+        fun readArgsRegs2(chunk: U128): Pair<RawReg, RawReg> {
             val value = chunk.toUInt()
             return Pair(RawReg(value), RawReg(value shr 4))
         }
@@ -449,21 +453,10 @@ class Program {
         /**
          * Reads register and 64-bit immediate arguments from chunk
          */
-        fun readArgsRegImm64(chunk: ULong, skip: UInt): Pair<RawReg, ULong> {
+        fun readArgsRegImm64(chunk: U128, skip: UInt): Pair<RawReg, ULong> {
             val reg = RawReg(chunk.toUInt())
-            val shiftedChunk = chunk shr 8
-            val immLength = (skip.toInt() - 1).coerceIn(0, 8).toUInt()
-            var imm = shiftedChunk
-            if (immLength == 0u) {
-                imm = 0u
-            } else {
-                val bitsToCut = (8u - immLength) * 8u
-                // Simulate Rust's wrapping behavior for 64-bit values
-                imm = ((imm.toLong() shl bitsToCut.toInt()) shr bitsToCut.toInt()).toULong()
-            }
+            val imm = (chunk shr 8).low
             return Pair(reg, imm)
         }
     }
-
-
 }

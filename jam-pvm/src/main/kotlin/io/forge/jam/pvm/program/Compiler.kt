@@ -1279,12 +1279,12 @@ class Compiler(
     }
 
     override fun loadImm64(reg: RawReg, imm: ULong) {
+        val immLo = Cast(imm).ulongTruncateToU32()
+        val immHi = Cast(imm shr 32).ulongTruncateToU32()
         instance.emit(
             RawHandlers.loadImm64,
-            Args.loadImm64(reg, Cast(imm).ulongTruncateToU32(), Cast(imm shr 32).ulongTruncateToU32()),
+            Args.loadImm64(reg, immLo, immHi),
             "loadImm64"
         )
     }
-
-
 }
