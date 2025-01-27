@@ -106,7 +106,6 @@ class PvmTest {
             instance.setNextProgramCounter(programCounter)
 
             inputCase.initialRegs.forEachIndexed { index, value ->
-                println("Actual regs: ${instance.reg(Reg.fromRaw(7)!!)} ${value.toULong()}")
                 instance.setReg(Reg.fromRaw(index)!!, value.toULong())
             }
 
@@ -141,7 +140,6 @@ class PvmTest {
             // Validate reg values
             println("ExpectedRegs: ${inputCase.expectedRegs}")
             inputCase.expectedRegs.forEachIndexed { index, value ->
-                println("Actual regs: $index ${instance.reg(Reg.fromRaw(index)!!)}")
                 assertEquals(value, instance.reg(Reg.fromRaw(index)!!), "Register $index mismatch.")
             }
             // Validate memory update

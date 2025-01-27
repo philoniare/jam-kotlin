@@ -855,7 +855,10 @@ class Compiler(
     }
 
     override fun add64(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented")
+        instance.emit(
+            RawHandlers.add64,
+            Args.add64(reg1, reg2, reg3), "add64"
+        )
     }
 
     override fun sub32(reg1: RawReg, reg2: RawReg, reg3: RawReg) {

@@ -19,7 +19,8 @@ fun transmuteReg(value: UInt): Reg {
         ?: throw IllegalStateException("Failed to transmute value to Reg")
 }
 
-fun wrappingAdd(a: UInt, b: UInt): UInt = a.plus(b).toUInt()
+fun wrappingAddUInt(a: UInt, b: UInt): UInt = a.plus(b).toUInt()
+fun wrappingAddULong(a: ULong, b: ULong): ULong = a.plus(b).toULong()
 
 fun getArgs(visitor: Visitor): Args =
     visitor.inner.compiledArgs[visitor.inner.compiledOffset.toInt()]
@@ -100,7 +101,16 @@ object RawHandlers {
         val d = transmuteReg(args.a0)
         val s1 = transmuteReg(args.a1)
         val s2 = transmuteReg(args.a2)
-        visitor.set3_32(d, s1.toRegImm(), s2.toRegImm(), ::wrappingAdd)
+        visitor.set3_32(d, s1.toRegImm(), s2.toRegImm(), ::wrappingAddUInt)
+    }
+
+    val add64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        logger.debug("Args: $args")
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        visitor.set3_64(d, s1.toRegImm(), s2.toRegImm(), ::wrappingAddULong)
     }
 
     val addImm32: Handler = { visitor ->
@@ -108,7 +118,7 @@ object RawHandlers {
         val d = transmuteReg(args.a0)
         val s1 = transmuteReg(args.a1)
         val s2 = args.a2
-        visitor.set3_32(d, s1.toRegImm(), s2.intoRegImm(), ::wrappingAdd)
+        visitor.set3_32(d, s1.toRegImm(), s2.intoRegImm(), ::wrappingAddUInt)
     }
 
     val and: Handler = { visitor ->
