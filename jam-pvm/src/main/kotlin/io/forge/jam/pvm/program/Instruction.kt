@@ -10,6 +10,7 @@ import io.forge.jam.pvm.writeSimpleVarint64
 sealed class Instruction {
     data object Panic : Instruction()
     data object Fallthrough : Instruction()
+    data object Memset : Instruction()
     data class JumpIndirect(val reg: RawReg, val imm: UInt) : Instruction()
     data class LoadImm(val reg: RawReg, val imm: UInt) : Instruction()
     data class LoadU8(val reg: RawReg, val imm: UInt) : Instruction()
@@ -79,6 +80,12 @@ sealed class Instruction {
     data class ShiftLogicalLeftImmAlt64(val reg1: RawReg, val reg2: RawReg, val imm: UInt) : Instruction()
     data class CmovIfZeroImm(val reg1: RawReg, val reg2: RawReg, val imm: UInt) : Instruction()
     data class CmovIfNotZeroImm(val reg1: RawReg, val reg2: RawReg, val imm: UInt) : Instruction()
+
+    data class RotateRightImm32(val reg1: RawReg, val reg2: RawReg, val imm: UInt) : Instruction()
+    data class RotateRightImmAlt32(val reg1: RawReg, val reg2: RawReg, val imm: UInt) : Instruction()
+    data class RotateRightImm64(val reg1: RawReg, val reg2: RawReg, val imm: UInt) : Instruction()
+    data class RotateRightImmAlt64(val reg1: RawReg, val reg2: RawReg, val imm: UInt) : Instruction()
+
     data class BranchEq(val reg1: RawReg, val reg2: RawReg, val imm: UInt) : Instruction()
     data class BranchNotEq(val reg1: RawReg, val reg2: RawReg, val imm: UInt) : Instruction()
     data class BranchLessUnsigned(val reg1: RawReg, val reg2: RawReg, val imm: UInt) : Instruction()
@@ -115,6 +122,18 @@ sealed class Instruction {
     data class RemSigned64(val reg1: RawReg, val reg2: RawReg, val reg3: RawReg) : Instruction()
     data class CmovIfZero(val reg1: RawReg, val reg2: RawReg, val reg3: RawReg) : Instruction()
     data class CmovIfNotZero(val reg1: RawReg, val reg2: RawReg, val reg3: RawReg) : Instruction()
+    data class AndInverted(val reg1: RawReg, val reg2: RawReg, val reg3: RawReg) : Instruction()
+    data class OrInverted(val reg1: RawReg, val reg2: RawReg, val reg3: RawReg) : Instruction()
+    data class Xnor(val reg1: RawReg, val reg2: RawReg, val reg3: RawReg) : Instruction()
+    data class Maximum(val reg1: RawReg, val reg2: RawReg, val reg3: RawReg) : Instruction()
+    data class MaximumUnsigned(val reg1: RawReg, val reg2: RawReg, val reg3: RawReg) : Instruction()
+    data class Minimum(val reg1: RawReg, val reg2: RawReg, val reg3: RawReg) : Instruction()
+    data class MinimumUnsigned(val reg1: RawReg, val reg2: RawReg, val reg3: RawReg) : Instruction()
+    data class RotateLeft32(val reg1: RawReg, val reg2: RawReg, val reg3: RawReg) : Instruction()
+    data class RotateLeft64(val reg1: RawReg, val reg2: RawReg, val reg3: RawReg) : Instruction()
+    data class RotateRight32(val reg1: RawReg, val reg2: RawReg, val reg3: RawReg) : Instruction()
+    data class RotateRight64(val reg1: RawReg, val reg2: RawReg, val reg3: RawReg) : Instruction()
+
     data class Jump(val imm: UInt) : Instruction()
     data class Ecalli(val imm: UInt) : Instruction()
     data class StoreImmU8(val imm1: UInt, val imm2: UInt) : Instruction()
@@ -123,6 +142,17 @@ sealed class Instruction {
     data class StoreImmU64(val imm1: UInt, val imm2: UInt) : Instruction()
     data class MoveReg(val reg1: RawReg, val reg2: RawReg) : Instruction()
     data class Sbrk(val reg1: RawReg, val reg2: RawReg) : Instruction()
+    data class CountLeadingZeroBits32(val reg1: RawReg, val reg2: RawReg) : Instruction()
+    data class CountLeadingZeroBits64(val reg1: RawReg, val reg2: RawReg) : Instruction()
+    data class CountTrailingZeroBits32(val reg1: RawReg, val reg2: RawReg) : Instruction()
+    data class CountTrailingZeroBits64(val reg1: RawReg, val reg2: RawReg) : Instruction()
+    data class CountSetBits32(val reg1: RawReg, val reg2: RawReg) : Instruction()
+    data class CountSetBits64(val reg1: RawReg, val reg2: RawReg) : Instruction()
+    data class SignExtend8(val reg1: RawReg, val reg2: RawReg) : Instruction()
+    data class SignExtend16(val reg1: RawReg, val reg2: RawReg) : Instruction()
+    data class ZeroExtend16(val reg1: RawReg, val reg2: RawReg) : Instruction()
+    data class ReverseByte(val reg1: RawReg, val reg2: RawReg) : Instruction()
+
     data class LoadImmAndJumpIndirect(val reg1: RawReg, val reg2: RawReg, val imm1: UInt, val imm2: UInt) :
         Instruction()
 
