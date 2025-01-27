@@ -121,6 +121,14 @@ object RawHandlers {
         visitor.set3_32(d, s1.toRegImm(), s2.intoRegImm(), ::wrappingAddUInt)
     }
 
+    val addImm64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = args.a2
+        visitor.set3_64(d, s1.toRegImm(), s2.intoRegImm(), ::wrappingAddULong)
+    }
+
     val and: Handler = { visitor ->
         val args = getArgs(visitor)
         val d = transmuteReg(args.a0)

@@ -566,7 +566,10 @@ class Compiler(
     }
 
     override fun addImm64(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        instance.emit(
+            RawHandlers.addImm64,
+            Args.addImm64(reg1, reg2, imm), "addImm64"
+        )
     }
 
     override fun andImm(reg1: RawReg, reg2: RawReg, imm: UInt) {
