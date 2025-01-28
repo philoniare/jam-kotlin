@@ -2116,4 +2116,147 @@ object RawHandlers {
         visitor.store<U64StoreTy>(programCounter, value.intoRegImm(), base, offset, true)
     }
 
+    val storeIndirectU8Basic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val src = transmuteReg(args.a1)
+        val base = transmuteReg(args.a2)
+        val offset = args.a3
+
+        logger.debug("[${visitor.inner.compiledOffset}]: store_indirect_u8_basic [$base + 0x${offset.toString(16)}] = $src")
+
+        visitor.store<U8StoreTy>(
+            programCounter,
+            src.toRegImm(),
+            base,
+            offset,
+            false
+        )
+    }
+
+    val storeIndirectU8Dynamic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val src = transmuteReg(args.a1)
+        val base = transmuteReg(args.a2)
+        val offset = args.a3
+
+        logger.debug("[${visitor.inner.compiledOffset}]: store_indirect_u8_dynamic [$base + 0x${offset.toString(16)}] = $src")
+
+        visitor.store<U8StoreTy>(
+            programCounter,
+            src.toRegImm(),
+            base,
+            offset,
+            true
+        )
+    }
+
+    val storeIndirectU16Basic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val src = transmuteReg(args.a1)
+        val base = transmuteReg(args.a2)
+        val offset = args.a3
+
+        logger.debug("[${visitor.inner.compiledOffset}]: store_indirect_u16_basic [$base + 0x${offset.toString(16)}] = $src")
+
+        visitor.store<U16StoreTy>(
+            programCounter,
+            src.toRegImm(),
+            base,
+            offset,
+            false
+        )
+    }
+
+    val storeIndirectU16Dynamic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val src = transmuteReg(args.a1)
+        val base = transmuteReg(args.a2)
+        val offset = args.a3
+
+        logger.debug("[${visitor.inner.compiledOffset}]: store_indirect_u16_dynamic [$base + 0x${offset.toString(16)}] = $src")
+
+        visitor.store<U16StoreTy>(
+            programCounter,
+            src.toRegImm(),
+            base,
+            offset,
+            true
+        )
+    }
+
+    val storeIndirectU32Basic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val src = transmuteReg(args.a1)
+        val base = transmuteReg(args.a2)
+        val offset = args.a3
+
+        logger.debug("[${visitor.inner.compiledOffset}]: store_indirect_u32_basic [$base + 0x${offset.toString(16)}] = $src")
+
+        visitor.store<U32StoreTy>(
+            programCounter,
+            src.toRegImm(),
+            base,
+            offset,
+            false
+        )
+    }
+
+    val storeIndirectU32Dynamic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val src = transmuteReg(args.a1)
+        val base = transmuteReg(args.a2)
+        val offset = args.a3
+
+        logger.debug("[${visitor.inner.compiledOffset}]: store_indirect_u32_dynamic [$base + 0x${offset.toString(16)}] = $src")
+
+        visitor.store<U32StoreTy>(
+            programCounter,
+            src.toRegImm(),
+            base,
+            offset,
+            true
+        )
+    }
+
+    val storeIndirectU64Basic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val src = transmuteReg(args.a1)
+        val base = transmuteReg(args.a2)
+        val offset = args.a3
+
+        logger.debug("[${visitor.inner.compiledOffset}]: store_indirect_u64_basic [$base + 0x${offset.toString(16)}] = $src")
+
+        visitor.store<U64StoreTy>(
+            programCounter,
+            src.toRegImm(),
+            base,
+            offset,
+            false
+        )
+    }
+
+    val storeIndirectU64Dynamic: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val src = transmuteReg(args.a1)
+        val base = transmuteReg(args.a2)
+        val offset = args.a3
+
+        logger.debug("[${visitor.inner.compiledOffset}]: store_indirect_u64_dynamic [$base + 0x${offset.toString(16)}] = $src")
+
+        visitor.store<U64StoreTy>(
+            programCounter,
+            src.toRegImm(),
+            base,
+            offset,
+            true
+        )
+    }
 }

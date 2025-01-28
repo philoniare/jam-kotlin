@@ -399,6 +399,10 @@ class Visitor(
         offset: UInt,
         isDynamic: Boolean
     ): Target? {
+        val address = (base?.let { Cast(inner.regs[base.toIndex()]).ulongTruncateToU32() } ?: 0u).plus(offset)
+        val pageAddressLo = inner.module.roundToPageSizeDown(address)
+        val pageSize = inner.module.memoryMap().pageSize
+
         // Get the source value
         val value = when (src) {
             is RegImm.RegValue -> {
@@ -431,29 +435,29 @@ class Visitor(
         val bytes = storeTy.intoBytes(value)
         val length = bytes.size.toUInt()
 
-        val address = (base?.let { Cast(inner.regs[base.toIndex()]).ulongTruncateToU32() } ?: 0u).plus(offset)
-        val pageAddressLo = inner.module.roundToPageSizeDown(address)
-        val addressEnd = address.plus(length)
-        if (addressEnd < address) {
+        val endAddress = address.plus(length)
+        if (endAddress < address) {
             return panicImpl(this, programCounter)
         }
-
-
-        val pageAddressHi = inner.module.roundToPageSizeDown(addressEnd - 1u)
+        val pageAddressHi = inner.module.roundToPageSizeDown(endAddress - 1u)
 
         if (!isDynamic) {
             // Basic memory mode
             try {
-                if (!inner.basicMemory.isPageMapped(inner.module, pageAddressLo) ||
-                    (pageAddressLo != pageAddressHi && !inner.basicMemory.isPageMapped(inner.module, pageAddressHi))
-                ) {
-                    return segfaultImpl(programCounter, addressEnd - 1u)
+                val startPage = inner.module.roundToPageSizeDown(address)
+                val endPage = inner.module.roundToPageSizeDown(endAddress - 1u)
+
+                // Check if all pages in range are mapped
+                for (currentPage in startPage..endPage step pageSize.toInt()) {
+                    if (!inner.basicMemory.isPageMapped(inner.module, currentPage)) {
+                        return segfaultImpl(programCounter, currentPage)
+                    }
                 }
 
-                if (pageAddressLo != pageAddressHi && !inner.basicMemory.isPageMapped(inner.module, addressEnd - 1u)) {
-                    return segfaultImpl(programCounter, addressEnd - 1u)
+                if (!inner.basicMemory.isWritable(inner.module, address, length)) {
+                    logger.debug("Attempt to write to read-only memory at 0x${address.toString(16)}")
+                    return panicImpl(this, programCounter)
                 }
-
 
                 if (!inner.basicMemory.isWritable(inner.module, address, length)) {
                     logger.debug("Attempt to write to read-only memory at 0x${address.toString(16)}")

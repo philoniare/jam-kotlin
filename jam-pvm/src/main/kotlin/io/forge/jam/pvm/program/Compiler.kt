@@ -479,19 +479,67 @@ class Compiler(
     }
 
     override fun storeIndirectU8(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        if (!module.isDynamicPaging()) {
+            instance.emit(
+                RawHandlers.storeIndirectU8Basic,
+                Args.storeIndirectU8Basic(programCounter, reg1, reg2, imm),
+                "storeIndirectU8Basic"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.storeIndirectU8Dynamic,
+                Args.storeIndirectU8Dynamic(programCounter, reg1, reg2, imm),
+                "storeIndirectU8Dynamic"
+            )
+        }
     }
 
     override fun storeIndirectU16(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        if (!module.isDynamicPaging()) {
+            instance.emit(
+                RawHandlers.storeIndirectU16Basic,
+                Args.storeIndirectU16Basic(programCounter, reg1, reg2, imm),
+                "storeIndirectU16Basic"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.storeIndirectU16Dynamic,
+                Args.storeIndirectU16Dynamic(programCounter, reg1, reg2, imm),
+                "storeIndirectU16Dynamic"
+            )
+        }
     }
 
     override fun storeIndirectU32(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        if (!module.isDynamicPaging()) {
+            instance.emit(
+                RawHandlers.storeIndirectU32Basic,
+                Args.storeIndirectU32Basic(programCounter, reg1, reg2, imm),
+                "storeIndirectU32Basic"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.storeIndirectU32Dynamic,
+                Args.storeIndirectU32Dynamic(programCounter, reg1, reg2, imm),
+                "storeIndirectU32Dynamic"
+            )
+        }
     }
 
     override fun storeIndirectU64(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented")
+        if (!module.isDynamicPaging()) {
+            instance.emit(
+                RawHandlers.storeIndirectU64Basic,
+                Args.storeIndirectU64Basic(programCounter, reg1, reg2, imm),
+                "storeIndirectU64Basic"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.storeIndirectU64Dynamic,
+                Args.storeIndirectU64Dynamic(programCounter, reg1, reg2, imm),
+                "storeIndirectU64Dynamic"
+            )
+        }
     }
 
     override fun loadIndirectU8(reg1: RawReg, reg2: RawReg, imm: UInt) {

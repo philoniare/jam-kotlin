@@ -981,5 +981,61 @@ data class Args(
             a2 = offset,
             a3 = value
         )
+
+        fun storeIndirectU8Basic(programCounter: ProgramCounter, src: RawReg, base: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = src.toU32(),
+            a2 = base.toU32(),
+            a3 = offset
+        )
+
+        fun storeIndirectU8Dynamic(programCounter: ProgramCounter, src: RawReg, base: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = src.toU32(),
+            a2 = base.toU32(),
+            a3 = offset
+        )
+
+        fun storeIndirectU16Basic(programCounter: ProgramCounter, src: RawReg, base: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = src.toU32(),
+            a2 = base.toU32(),
+            a3 = offset
+        )
+
+        fun storeIndirectU16Dynamic(programCounter: ProgramCounter, src: RawReg, base: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = src.toU32(),
+            a2 = base.toU32(),
+            a3 = offset
+        )
+
+        fun storeIndirectU32Basic(programCounter: ProgramCounter, src: RawReg, base: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = src.toU32(),
+            a2 = base.toU32(),
+            a3 = offset
+        )
+
+        fun storeIndirectU32Dynamic(programCounter: ProgramCounter, src: RawReg, base: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = src.toU32(),
+            a2 = base.toU32(),
+            a3 = offset
+        )
+
+        fun storeIndirectU64Basic(programCounter: ProgramCounter, src: RawReg, base: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = src.toU32(),
+            a2 = base.toU32(),
+            a3 = offset
+        )
+
+        fun storeIndirectU64Dynamic(programCounter: ProgramCounter, src: RawReg, base: RawReg, offset: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = src.toU32(),
+            a2 = base.toU32(),
+            a3 = offset
+        )
     }
 }
