@@ -434,11 +434,32 @@ class Visitor(
         val address = (base?.let { Cast(inner.regs[base.toIndex()]).ulongTruncateToU32() } ?: 0u).plus(offset)
         val pageAddressLo = inner.module.roundToPageSizeDown(address)
         val addressEnd = address.plus(length)
+        if (addressEnd < address) {
+            return panicImpl(this, programCounter)
+        }
+
+
         val pageAddressHi = inner.module.roundToPageSizeDown(addressEnd - 1u)
 
         if (!isDynamic) {
             // Basic memory mode
             try {
+                if (!inner.basicMemory.isPageMapped(inner.module, pageAddressLo) ||
+                    (pageAddressLo != pageAddressHi && !inner.basicMemory.isPageMapped(inner.module, pageAddressHi))
+                ) {
+                    return segfaultImpl(programCounter, addressEnd - 1u)
+                }
+
+                if (pageAddressLo != pageAddressHi && !inner.basicMemory.isPageMapped(inner.module, addressEnd - 1u)) {
+                    return segfaultImpl(programCounter, addressEnd - 1u)
+                }
+
+
+                if (!inner.basicMemory.isWritable(inner.module, address, length)) {
+                    logger.debug("Attempt to write to read-only memory at 0x${address.toString(16)}")
+                    return panicImpl(this, programCounter)
+                }
+
                 inner.basicMemory.getMemorySlice(inner.module, address, length)?.let { slice ->
                     bytes.copyInto(slice)
                     return goToNextInstruction()
@@ -448,10 +469,6 @@ class Visitor(
             }
         } else {
             // Dynamic memory mode
-            if (addressEnd < address) {
-                return panicImpl(this, programCounter)
-            }
-
             if (pageAddressLo == pageAddressHi) {
                 println("Single page")
                 // Single page access

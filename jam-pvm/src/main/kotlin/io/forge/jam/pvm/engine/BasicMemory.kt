@@ -31,10 +31,58 @@ class BasicMemory private constructor(
         }
     }
 
+    fun isPageMapped(module: Module, address: UInt): Boolean {
+        val memoryMap = module.memoryMap()
+        return when {
+            // Check if address falls within any valid memory region
+            address >= memoryMap.auxDataAddress ->
+                address < memoryMap.auxDataAddress + memoryMap.auxDataSize
+
+            address >= memoryMap.stackAddressLow() ->
+                address < memoryMap.stackAddressLow() + memoryMap.stackSize
+
+            address >= memoryMap.rwDataAddress ->
+                address < memoryMap.rwDataAddress + memoryMap.rwDataSize
+
+            address >= memoryMap.roDataAddress() ->
+                module.interpretedModule() != null &&
+                    address < memoryMap.roDataAddress() + module.interpretedModule()!!.roData.size.toUInt()
+
+            else -> false
+        }
+    }
+
     /**
      * Returns the current heap size
      */
     fun heapSize(): UInt = heapSize
+
+    /**
+     * Checks if a memory range is writable
+     */
+    fun isWritable(module: Module, address: UInt, length: UInt): Boolean {
+        val memoryMap = module.memoryMap()
+
+        // Get end address, checking for overflow
+        val endAddress = address.plus(length).takeIf { it >= address } ?: return false
+
+        return when {
+            // RO data region is never writable
+            address < memoryMap.rwDataAddress -> false
+            // Aux data is only writable for external access
+            address >= memoryMap.auxDataAddress -> false
+            // Stack region is always writable
+            address >= memoryMap.stackAddressLow() ->
+                endAddress <= (memoryMap.stackAddressLow() + memoryMap.stackSize)
+            // RW data region (including heap)
+            address >= memoryMap.rwDataAddress -> {
+                val rwRegionEnd = memoryMap.rwDataAddress + rwData.size.toUInt()
+                endAddress <= rwRegionEnd
+            }
+
+            else -> false
+        }
+    }
 
     /**
      * Marks the memory as dirty, requiring a reset before next use
