@@ -10,6 +10,6 @@ data class Config(
 ) {
     companion object {
         @JvmStatic
-        fun new(): Config = Config()
+        fun new(allowDynamicPaging: Boolean): Config = Config(allowDynamicPaging = allowDynamicPaging)
     }
 }

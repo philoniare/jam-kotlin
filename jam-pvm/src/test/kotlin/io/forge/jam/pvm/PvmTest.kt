@@ -28,7 +28,7 @@ class PvmTest {
                 "$folderName/$testCase",
             )
 
-            val config = Config.new()
+            val config = Config.new(true)
             val engine = Engine.new(config).getOrThrow()
 
             val parts = ProgramParts(is64Bit = true)
@@ -93,7 +93,7 @@ class PvmTest {
 
             val blob = ProgramBlob.fromParts(parts).getOrThrow()
             println("rwData: ${blob.rwData.toByteArray().toHex()}")
-            val moduleConfig = ModuleConfig.new()
+            val moduleConfig = ModuleConfig.new(true)
             moduleConfig.setStrict(true)
             moduleConfig.setGasMetering(GasMeteringKind.Sync)
             moduleConfig.setStepTracing(true)
@@ -117,6 +117,7 @@ class PvmTest {
                     when (result) {
                         InterruptKind.Finished -> return@run PvmStatus.HALT
                         InterruptKind.Panic -> return@run PvmStatus.PANIC
+                        is InterruptKind.Segfault -> return@run PvmStatus.PAGE_FAULT
                         InterruptKind.NotEnoughGas -> return@run "out-of-gas"
                         InterruptKind.Step -> {
                             finalPc = instance.programCounter()!!.value
@@ -124,7 +125,7 @@ class PvmTest {
                         }
 
                         is InterruptKind.Ecalli -> TODO()
-                        is InterruptKind.Segfault -> return@run "SEGFAULT"
+
                     }
                 }
             }

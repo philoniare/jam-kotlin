@@ -120,6 +120,6 @@ class ModuleConfig private constructor(
         /**
          * Creates a new default module configuration.
          */
-        fun new(): ModuleConfig = ModuleConfig()
+        fun new(dynamicPaging: Boolean): ModuleConfig = ModuleConfig(dynamicPaging = dynamicPaging)
     }
 }

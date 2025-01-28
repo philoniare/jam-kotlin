@@ -9,13 +9,17 @@ enum class PvmStatus {
     PANIC,
 
     @SerialName("halt")
-    HALT;
+    HALT,
+
+    @SerialName("page-fault")
+    PAGE_FAULT;
 
     companion object {
         fun fromString(value: String): PvmStatus = when (value.lowercase()) {
             "panic" -> PANIC
             "halt" -> HALT
-            else -> throw IllegalArgumentException("Invalid status: $value. Must be either 'panic' or 'halt'")
+            "page-fault" -> PAGE_FAULT
+            else -> throw IllegalArgumentException("Invalid status: $value. Must be either 'panic', 'halt' or 'page-fault'")
         }
     }
 }
