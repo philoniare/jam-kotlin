@@ -457,6 +457,7 @@ class InterpretedInstance private constructor(
             this.programCounter = programCounter
             this.compiledOffset = resolveArbitraryJump(programCounter)
                 ?: TARGET_OUT_OF_RANGE
+            nextProgramCounterChanged = false
             logger.debug("Starting execution at: ${programCounter.value} [$compiledOffset]")
         } else {
             logger.debug("Implicitly resuming at: ${programCounter.value} [$compiledOffset]")

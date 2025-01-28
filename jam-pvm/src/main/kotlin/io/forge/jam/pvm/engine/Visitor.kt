@@ -282,14 +282,16 @@ class Visitor(
         dst: Reg,
         base: Reg?,
         offset: UInt,
-        size: UInt,
+        length: UInt,
         isDynamic: Boolean
     ): Target? {
-        val address = base?.let { get32(RegImm.RegValue(it)) }?.let { it.plus(offset) and 0xFFFFFFFFu } ?: offset
+
+        val address = base?.let { Cast(inner.regs[base.toIndex()]).ulongTruncateToU32() }?.let { it.plus(offset) } ?: 0u
+        println("Offset: ${address}")
 
         if (!isDynamic) {
             // Basic memory mode
-            inner.basicMemory.getMemorySlice(inner.module, address, size)?.let { slice ->
+            inner.basicMemory.getMemorySlice(inner.module, address, length)?.let { slice ->
                 val loadTy = when (T::class) {
                     U8LoadTy::class -> U8LoadTy
                     I8LoadTy::class -> I8LoadTy
@@ -308,7 +310,7 @@ class Visitor(
             } ?: return panicImpl(this, programCounter)
         } else {
             // Dynamic memory mode
-            val addressEnd = address.plus(size)
+            val addressEnd = address.plus(length)
             if (addressEnd < address) {
                 return panicImpl(this, programCounter)
             }
@@ -319,11 +321,13 @@ class Visitor(
             if (pageAddressLo == pageAddressHi) {
                 // Single page access
                 val page =
-                    inner.dynamicMemory.pages[pageAddressLo] ?: return panicImpl(this, programCounter)
+                    inner.dynamicMemory.pages[pageAddressLo]
+                        ?: return segfaultImpl(programCounter, pageAddressLo)
 
                 try {
-                    val pageOffset = (address - pageAddressLo).toInt()
-                    val slice = page.sliceArray(pageOffset until pageOffset + size.toInt())
+                    val offset = Cast(address).uintToUSize() - Cast(pageAddressLo).uintToUSize()
+                    val slice = page.sliceArray(offset.toInt() until offset.toInt() + length.toInt())
+
                     val loadTy = when (T::class) {
                         U8LoadTy::class -> U8LoadTy
                         I8LoadTy::class -> I8LoadTy
@@ -334,11 +338,13 @@ class Visitor(
                         U64LoadTy::class -> U64LoadTy
                         else -> throw IllegalArgumentException("Unknown LoadTy type")
                     }
+
                     val value = loadTy.fromSlice(slice)
                     set64(dst, value)
                     return goToNextInstruction()
-                } catch (e: ArrayIndexOutOfBoundsException) {
-                    return segfaultImpl(programCounter, pageAddressLo)
+
+                } catch (e: IndexOutOfBoundsException) {
+                    return panicImpl(this, programCounter)
                 }
             } else {
                 // Cross-page access
@@ -351,8 +357,8 @@ class Visitor(
                         try {
                             val pageSize = inner.module.memoryMap().pageSize.toInt()
                             val loLen = (pageAddressHi - address).toInt()
-                            val hiLen = size.toInt() - loLen
-                            val buffer = ByteArray(size.toInt())
+                            val hiLen = length.toInt() - loLen
+                            val buffer = ByteArray(length.toInt())
 
                             System.arraycopy(lo, pageSize - loLen, buffer, 0, loLen)
                             System.arraycopy(hi, 0, buffer, loLen, hiLen)

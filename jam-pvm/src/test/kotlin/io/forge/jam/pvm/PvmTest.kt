@@ -1,7 +1,6 @@
 package io.forge.jam.pvm
 
 import io.forge.jam.core.encoding.TestFileLoader
-import io.forge.jam.core.toHex
 import io.forge.jam.pvm.engine.*
 import io.forge.jam.pvm.program.*
 import org.junit.jupiter.api.Test
@@ -28,7 +27,7 @@ class PvmTest {
                 "$folderName/$testCase",
             )
 
-            val config = Config.new(true)
+            val config = Config.new(false)
             val engine = Engine.new(config).getOrThrow()
 
             val parts = ProgramParts(is64Bit = true)
@@ -92,8 +91,7 @@ class PvmTest {
             }
 
             val blob = ProgramBlob.fromParts(parts).getOrThrow()
-            println("rwData: ${blob.rwData.toByteArray().toHex()}")
-            val moduleConfig = ModuleConfig.new(true)
+            val moduleConfig = ModuleConfig.new(false)
             moduleConfig.setStrict(true)
             moduleConfig.setGasMetering(GasMeteringKind.Sync)
             moduleConfig.setStepTracing(true)
