@@ -464,8 +464,10 @@ class Visitor(
                     return panicImpl(this, programCounter)
                 }
 
-                inner.basicMemory.getMemorySlice(inner.module, address, length)?.let { slice ->
-                    bytes.copyInto(slice)
+                inner.basicMemory.getMemorySliceMut(inner.module, address, length)?.let { mutableSlice ->
+                    for (i in 0 until bytes.size) {
+                        mutableSlice[i] = bytes[i].toUByte()
+                    }
                     return goToNextInstruction()
                 } ?: return panicImpl(this, programCounter)
             } catch (e: ArrayIndexOutOfBoundsException) {
