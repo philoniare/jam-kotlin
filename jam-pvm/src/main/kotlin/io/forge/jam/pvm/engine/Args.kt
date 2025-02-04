@@ -50,6 +50,16 @@ data class Args(
             a1 = s.toU32()
         )
 
+        fun countSetBits32(d: RawReg, s: RawReg) = Args(
+            a0 = d.toU32(),
+            a1 = s.toU32()
+        )
+
+        fun countSetBits64(d: RawReg, s: RawReg) = Args(
+            a0 = d.toU32(),
+            a1 = s.toU32()
+        )
+
         fun add64(a0: RawReg, a1: RawReg, a2: RawReg) = Args(
             a0 = a0.toU32(),
             a1 = a1.toU32(),

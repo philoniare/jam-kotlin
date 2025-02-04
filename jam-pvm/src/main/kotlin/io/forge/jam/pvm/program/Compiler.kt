@@ -1354,11 +1354,19 @@ class Compiler(
     }
 
     override fun countSetBits32(reg1: RawReg, reg2: RawReg) {
-        TODO("Not yet implemented")
+        instance.emit(
+            RawHandlers.countSetBits32,
+            Args.countSetBits32(reg1, reg2),
+            "countSetBits32"
+        )
     }
 
     override fun countSetBits64(reg1: RawReg, reg2: RawReg) {
-        TODO("Not yet implemented")
+        instance.emit(
+            RawHandlers.countSetBits64,
+            Args.countSetBits64(reg1, reg2),
+            "countSetBits64"
+        )
     }
 
     override fun signExtend8(reg1: RawReg, reg2: RawReg) {

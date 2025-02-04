@@ -103,6 +103,22 @@ object RawHandlers {
         visitor.goToNextInstruction()
     }
 
+    val countSetBits32: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s = transmuteReg(args.a1)
+        visitor.set32(d, visitor.get32(s.toRegImm()).countOneBits().toUInt())
+        visitor.goToNextInstruction()
+    }
+
+    val countSetBits64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s = transmuteReg(args.a1)
+        visitor.set64(d, visitor.get64(s.toRegImm()).countOneBits().toULong())
+        visitor.goToNextInstruction()
+    }
+
     val countLeadingZeroBits64: Handler = { visitor ->
         val args = getArgs(visitor)
         val d = transmuteReg(args.a0)
