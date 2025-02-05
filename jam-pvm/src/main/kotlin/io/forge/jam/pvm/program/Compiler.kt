@@ -1192,7 +1192,19 @@ class Compiler(
     }
 
     override fun orInverted(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented: orInverted")
+        if (module.blob().is64Bit) {
+            instance.emit(
+                RawHandlers.orInverted64,
+                Args.orInverted64(reg1, reg2, reg3),
+                "orInverted64"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.orInverted32,
+                Args.orInverted32(reg1, reg2, reg3),
+                "orInverted32"
+            )
+        }
     }
 
     override fun xnor(reg1: RawReg, reg2: RawReg, reg3: RawReg) {

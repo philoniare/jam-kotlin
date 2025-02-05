@@ -38,7 +38,7 @@ class GasVisitor : InstructionVisitor<Unit> {
     }
 
     override fun memset() {
-        TODO("Not yet implemented")
+        cost += 1u
     }
 
     override fun fallthrough() {
@@ -207,15 +207,15 @@ class GasVisitor : InstructionVisitor<Unit> {
     }
 
     override fun andInverted(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented")
+        cost += 1u
     }
 
     override fun orInverted(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented")
+        cost += 1u
     }
 
     override fun xnor(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented")
+        cost += 1u
     }
 
     override fun maximum(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
