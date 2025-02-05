@@ -152,6 +152,28 @@ object RawHandlers {
         visitor.set3_32(d, s1.toRegImm(), s2.toRegImm(), ::wrappingAddUInt)
     }
 
+    val maximum32: Handler = { visitor ->
+        val args = getArgs(visitor)
+        logger.debug("Args: $args")
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        visitor.set3_32(d, s1.toRegImm(), s2.toRegImm()) { a, b ->
+            Cast(ArithmeticOps.maxSigned(Cast(a).uintToSigned(), Cast(b).uintToSigned())).intToUnsigned()
+        }
+    }
+
+    val maximum64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        logger.debug("Args: $args")
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        visitor.set3_64(d, s1.toRegImm(), s2.toRegImm()) { a, b ->
+            Cast(ArithmeticOps.maxSigned64(Cast(a).ulongToSigned(), Cast(b).ulongToSigned())).longToUnsigned()
+        }
+    }
+
     val add64: Handler = { visitor ->
         val args = getArgs(visitor)
         logger.debug("Args: $args")

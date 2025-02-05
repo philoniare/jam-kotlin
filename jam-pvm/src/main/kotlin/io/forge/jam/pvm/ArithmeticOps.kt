@@ -3,6 +3,14 @@ package io.forge.jam.pvm
 import java.math.BigInteger
 
 object ArithmeticOps {
+    fun maxSigned(lhs: Int, rhs: Int): Int {
+        return if (lhs >= rhs) lhs else rhs
+    }
+
+    fun maxSigned64(lhs: Long, rhs: Long): Long {
+        return if (lhs >= rhs) lhs else rhs
+    }
+
     fun divu(lhs: UInt, rhs: UInt): UInt {
         return if (rhs == 0u) {
             UInt.MAX_VALUE
@@ -67,7 +75,6 @@ object ArithmeticOps {
         }
     }
 
-    // We'll add the mul operations too for completeness
     fun mulh(lhs: Int, rhs: Int): Int {
         return ((lhs.toLong() * rhs.toLong()) shr 32).toInt()
     }
