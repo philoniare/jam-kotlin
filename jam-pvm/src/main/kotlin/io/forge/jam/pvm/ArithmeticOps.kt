@@ -3,6 +3,14 @@ package io.forge.jam.pvm
 import java.math.BigInteger
 
 object ArithmeticOps {
+    fun minSigned(lhs: Int, rhs: Int): Int {
+        return if (lhs <= rhs) lhs else rhs
+    }
+
+    fun minSigned64(lhs: Long, rhs: Long): Long {
+        return if (lhs <= rhs) lhs else rhs
+    }
+
     fun maxSigned(lhs: Int, rhs: Int): Int {
         return if (lhs >= rhs) lhs else rhs
     }

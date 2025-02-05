@@ -196,6 +196,50 @@ object RawHandlers {
         }
     }
 
+    val minimum32: Handler = { visitor ->
+        val args = getArgs(visitor)
+        logger.debug("Args: $args")
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        visitor.set3_32(d, s1.toRegImm(), s2.toRegImm()) { a, b ->
+            Cast(ArithmeticOps.minSigned(Cast(a).uintToSigned(), Cast(b).uintToSigned())).intToUnsigned()
+        }
+    }
+
+    val minimum64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        logger.debug("Args: $args")
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        visitor.set3_64(d, s1.toRegImm(), s2.toRegImm()) { a, b ->
+            Cast(ArithmeticOps.minSigned64(Cast(a).ulongToSigned(), Cast(b).ulongToSigned())).longToUnsigned()
+        }
+    }
+
+    val minimumUnsigned32: Handler = { visitor ->
+        val args = getArgs(visitor)
+        logger.debug("Args: $args")
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        visitor.set3_32(d, s1.toRegImm(), s2.toRegImm()) { a, b ->
+            minOf(a, b)
+        }
+    }
+
+    val minimumUnsigned64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        logger.debug("Args: $args")
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        visitor.set3_64(d, s1.toRegImm(), s2.toRegImm()) { a, b ->
+            minOf(a, b)
+        }
+    }
+
     val add64: Handler = { visitor ->
         val args = getArgs(visitor)
         logger.debug("Args: $args")

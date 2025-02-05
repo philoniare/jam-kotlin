@@ -1232,11 +1232,35 @@ class Compiler(
     }
 
     override fun minimum(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented: minimum")
+        if (module.blob().is64Bit) {
+            instance.emit(
+                RawHandlers.minimum64,
+                Args.minimum64(reg1, reg2, reg3),
+                "minimum64"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.minimum32,
+                Args.minimum32(reg1, reg2, reg3),
+                "minimum32"
+            )
+        }
     }
 
     override fun minimumUnsigned(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented:  minimumUnsigned")
+        if (module.blob().is64Bit) {
+            instance.emit(
+                RawHandlers.minimumUnsigned64,
+                Args.minimumUnsigned64(reg1, reg2, reg3),
+                "minimumUnsigned64"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.minimumUnsigned32,
+                Args.minimumUnsigned32(reg1, reg2, reg3),
+                "minimumUnsigned32"
+            )
+        }
     }
 
     override fun rotateLeft32(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
