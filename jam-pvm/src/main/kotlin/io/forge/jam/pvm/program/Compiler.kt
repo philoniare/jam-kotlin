@@ -857,23 +857,42 @@ class Compiler(
     }
 
     override fun cmovIfNotZeroImm(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented: cmovIfNotZeroImm")
+        instance.emit(
+            RawHandlers.cmovIfNotZeroImm,
+            Args.cmovIfNotZeroImm(reg1, reg2, imm), "cmovIfNotZeroImm"
+        )
     }
 
     override fun rotateRightImm32(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented: rotateRightImm32")
+        instance.emit(
+            RawHandlers.rotateRightImm32,
+            Args.rotateRightImm32(reg1, reg2, imm),
+            "rotateRightImm32"
+        )
     }
 
     override fun rotateRightImmAlt32(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented: rotateRightImmAlt32")
+        instance.emit(
+            RawHandlers.rotateRightImmAlt32,
+            Args.rotateRightImmAlt32(reg1, reg2, imm),
+            "rotateRightImmAlt32"
+        )
     }
 
     override fun rotateRightImm64(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented: rotateRightImm64")
+        instance.emit(
+            RawHandlers.rotateRightImm64,
+            Args.rotateRightImm64(reg1, reg2, imm),
+            "rotateRightImm64"
+        )
     }
 
     override fun rotateRightImmAlt64(reg1: RawReg, reg2: RawReg, imm: UInt) {
-        TODO("Not yet implemented: rotateRightImmAlt64")
+        instance.emit(
+            RawHandlers.rotateRightImmAlt64,
+            Args.rotateRightImmAlt64(reg1, reg2, imm),
+            "rotateRightImmAlt64"
+        )
     }
 
     override fun branchNotEq(s1: RawReg, s2: RawReg, i: UInt) {
