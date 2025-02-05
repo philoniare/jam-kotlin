@@ -1207,7 +1207,19 @@ class Compiler(
     }
 
     override fun andInverted(reg1: RawReg, reg2: RawReg, reg3: RawReg) {
-        TODO("Not yet implemented:  andInverted")
+        if (module.blob().is64Bit) {
+            instance.emit(
+                RawHandlers.andInverted64,
+                Args.andInverted64(reg1, reg2, reg3),
+                "andInverted64"
+            )
+        } else {
+            instance.emit(
+                RawHandlers.andInverted32,
+                Args.andInverted32(reg1, reg2, reg3),
+                "andInverted32"
+            )
+        }
     }
 
     override fun orInverted(reg1: RawReg, reg2: RawReg, reg3: RawReg) {

@@ -140,6 +140,26 @@ object RawHandlers {
         }
     }
 
+    val andInverted32: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        visitor.set3_32(d, s1.toRegImm(), s2.toRegImm()) { a, b ->
+            a and b.inv()
+        }
+    }
+
+    val andInverted64: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val d = transmuteReg(args.a0)
+        val s1 = transmuteReg(args.a1)
+        val s2 = transmuteReg(args.a2)
+        visitor.set3_64(d, s1.toRegImm(), s2.toRegImm()) { a, b ->
+            a and b.inv()
+        }
+    }
+
     val countTrailingZeroBits32: Handler = { visitor ->
         val args = getArgs(visitor)
         val d = transmuteReg(args.a0)
