@@ -17,7 +17,8 @@ class Compiler(
 
     companion object {
         private val logger = PvmLogger(Compiler::class.java)
-        const val TARGET_OUT_OF_RANGE = 0u
+        const val TARGET_INVALID_BRANCH = 0u
+        const val TARGET_OUT_OF_RANGE = 1u
 
         fun notEnoughGasImpl(visitor: Visitor, programCounter: ProgramCounter, newGas: Long): Target? {
             with(visitor.inner) {

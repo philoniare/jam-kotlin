@@ -1,6 +1,7 @@
 package io.forge.jam.pvm
 
 import io.forge.jam.pvm.engine.*
+import io.forge.jam.pvm.program.Compiler.Companion.TARGET_INVALID_BRANCH
 import io.forge.jam.pvm.program.Compiler.Companion.TARGET_OUT_OF_RANGE
 import io.forge.jam.pvm.program.Compiler.Companion.notEnoughGasImpl
 import io.forge.jam.pvm.program.ProgramCounter
@@ -291,7 +292,11 @@ object RawHandlers {
         val s1 = transmuteReg(args.a1)
         val s2 = transmuteReg(args.a2)
         visitor.set3_64(d, s1.toRegImm(), s2.toRegImm()) { a, b ->
-            Cast(ArithmeticOps.maxSigned64(Cast(a).ulongToSigned(), Cast(b).ulongToSigned())).longToUnsigned()
+            val result =
+                ArithmeticOps.maxSigned64(Cast(a).ulongToSigned(), Cast(b).ulongToSigned())
+            logger.debug("maximum64 inputs - lhs: ${Cast(a).ulongToSigned()}, rhs: ${Cast(b).ulongToSigned()}")
+            logger.debug("maximum64 result - output: ${Cast(result).longToUnsigned()}")
+            Cast(result).longToUnsigned()
         }
     }
 
@@ -1055,6 +1060,11 @@ object RawHandlers {
         val tt = args.a2
         val tf = args.a3
         logger.debug("[${visitor.inner.compiledOffset}]: jump ~$tt if $s1 != $s2")
+        logger.debug(
+            "BranchNotEq comparing values: reg1=${
+                visitor.get64(s1.toRegImm()).toString(16)
+            } vs reg2=${visitor.get64(s2.toRegImm()).toString(16)}. tt: ${tt} tf: ${tf}"
+        )
         visitor.branch(s1.toRegImm(), s2.toRegImm(), tt, tf) { a, b ->
             a != b
         }
@@ -1069,18 +1079,18 @@ object RawHandlers {
 
         logger.debug("[${visitor.inner.compiledOffset}]: jump $targetTrue if $s1 != $s2")
 
+        val offset = visitor.inner.compiledOffset
         val targetFalseResolved = visitor.inner.resolveJump(targetFalse) ?: TARGET_OUT_OF_RANGE
-        visitor.inner.resolveJump(targetTrue)?.let { targetTrueResolved ->
-            val offset = visitor.inner.compiledOffset
-            visitor.inner.compiledHandlers[offset.toInt()] = branchNotEq
-            visitor.inner.compiledArgs[offset.toInt()] = Args.branchNotEq(
-                s1.toRawReg(),
-                s2.toRawReg(),
-                targetTrueResolved,
-                targetFalseResolved
-            )
-            offset
-        }
+        val targetTrueResolved = visitor.inner.resolveJump(targetTrue) ?: TARGET_INVALID_BRANCH
+
+        visitor.inner.compiledHandlers[offset.toInt()] = branchNotEq
+        visitor.inner.compiledArgs[offset.toInt()] = Args.branchNotEq(
+            s1.toRawReg(),
+            s2.toRawReg(),
+            targetTrueResolved,
+            targetFalseResolved
+        )
+        offset
     }
 
     val branchNotEqImm: Handler = { visitor ->
@@ -1145,6 +1155,7 @@ object RawHandlers {
         val d = transmuteReg(args.a0)
         val s = transmuteReg(args.a1)
         val c = transmuteReg(args.a2)
+        logger.debug("CmovIfZero condition value: ${visitor.get64(c.toRegImm()).toString(16)}")
         if (visitor.get64(c.toRegImm()) == 0uL) {
             visitor.set64(d, visitor.get64(s.toRegImm()))
         }
@@ -1542,6 +1553,11 @@ object RawHandlers {
         val s1 = transmuteReg(args.a1)
         val s2 = transmuteReg(args.a2)
         logger.debug("[${visitor.inner.compiledOffset}]: set_less_than_signed $d = $s1 <s $s2")
+        logger.debug(
+            "SetLessThanSigned comparing values: lhs=${
+                visitor.get64(s1.toRegImm()).toString(16)
+            } vs rhs=${visitor.get64(s2.toRegImm()).toString(16)}"
+        )
         visitor.set3_64(d, s1.toRegImm(), s2.toRegImm()) { s1, s2 ->
             if (Cast(s1).ulongToSigned() < Cast(s2).ulongToSigned()) 1uL else 0uL
         }

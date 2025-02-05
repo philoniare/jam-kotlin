@@ -252,6 +252,7 @@ class Visitor(
     ): Target {
         val v1 = get64(s1)
         val v2 = get64(s2)
+        logger.debug("Branch: $v1, $v2, ${condition(v1, v2)}")
         return if (condition(v1, v2)) {
             targetTrue
         } else {
@@ -285,6 +286,7 @@ class Visitor(
         length: UInt,
         isDynamic: Boolean
     ): Target? {
+        logger.debug("Registers before load: ${inner.regs.map { it.toString(16) }}")
         val address = (base?.let { Cast(inner.regs[base.toIndex()]).ulongTruncateToU32() } ?: 0u).plus(offset)
         val pageAddressLo = inner.module.roundToPageSizeDown(address)
 
@@ -408,17 +410,23 @@ class Visitor(
             is RegImm.RegValue -> {
                 // Get value from register
                 val regValue = inner.regs[src.reg.toIndex()]
-                logger.debug("Memory [0x${offset.toString(16)}] = ${src.reg} = 0x${regValue.toString(16)}")
+                logger.debug("Memory Reg [0x${offset.toString(16)}] = ${src.reg} = 0x${regValue.toString(16)}")
                 regValue
             }
 
             is RegImm.ImmValue -> {
-                val immValue = Cast(Cast(src.value).uintToSigned())
-                    .intToI64SignExtend()
-                    .let { Cast(it) }
-                    .longToUnsigned()
-                logger.debug("Memory [0x${offset.toString(16)}] = 0x${immValue.toString(16)}")
-                immValue
+                val raw = src.value
+                val asSigned: Int = Cast(raw).uintToSigned()
+                val extended: Long = Cast(asSigned).intToI64SignExtend()
+                val finalValue: ULong = Cast(extended).longToUnsigned()
+                logger.debug(
+                    "Immediate conversion: raw=0x${raw.toString(16)}, asSigned=$asSigned, extended=$extended, final=0x${
+                        finalValue.toString(
+                            16
+                        )
+                    }"
+                )
+                finalValue
             }
         }
 
