@@ -63,34 +63,24 @@ class PvmTest {
             // Handle RW data pages
             val rwPages = pageGroups[true] ?: emptyList()
             if (rwPages.isNotEmpty()) {
-                // Find RW memory contents
+                val firstPageAddress = rwPages.first().address
+                val rwSize = rwPages.sumOf { it.length }
+                val rwData = ByteArray(rwSize.toInt())
+
                 val rwMemory = inputCase.initialMemory.filter { mem ->
                     rwPages.any { page ->
                         mem.address >= page.address &&
                             mem.address.toInt() + mem.contents.size <= (page.address + page.length).toInt()
                     }
                 }
-
-                // Initialize memory based on rwMemory contents
-                if (rwMemory.isNotEmpty()) {
-                    // Calculate size needed for memory contents
-                    val minAddress = rwMemory.minOf { it.address }
-                    val maxAddress = rwMemory.maxOf { it.address.toInt() + it.contents.size }
-                    val totalSize = maxAddress - minAddress.toInt()
-                    val rwData = ByteArray(totalSize.toInt())
-
-                    // Copy contents from each memory segment
-                    rwMemory.forEach { mem ->
-                        val offset = (mem.address - minAddress).toInt()
-                        mem.contents.forEachIndexed { index, value ->
-                            rwData[offset + index] = value.toByte()
-                        }
+                rwMemory.forEach { mem ->
+                    val offset = (mem.address - firstPageAddress).toInt()
+                    mem.contents.forEachIndexed { index, value ->
+                        rwData[offset + index] = value.toByte()
                     }
-                    parts.rwData = ArcBytes.fromStatic(rwData)
                 }
-
-                // Set full page size from page map
-                parts.rwDataSize = rwPages.sumOf { it.length }.toUInt()
+                parts.rwData = ArcBytes.fromStatic(rwData)
+                parts.rwDataSize = rwSize.toUInt()
             }
 
             val blob = ProgramBlob.fromParts(parts).getOrThrow()

@@ -254,20 +254,20 @@ class InterpretedInstance private constructor(
             isJumpTargetValid = false
 
             if (stepTracing) {
-                logger.debug("  [${compiledHandlers.size}]: ${instruction.offset}: step")
+                logger.debug("  [${compiledHandlers.size + 1}]: ${instruction.offset}: step")
                 emit(RawHandlers.step, Args.step(instruction.offset), "step")
             }
 
             if (module.gasMetering() != null) {
                 if (chargeGasIndex == null) {
-                    logger.debug("  [${compiledHandlers.size}]: ${instruction.offset}: charge_gas")
+                    logger.debug("  [${compiledHandlers.size + 1}]: ${instruction.offset}: charge_gas")
                     chargeGasIndex = Pair(instruction.offset, compiledHandlers.size)
                     emit(RawHandlers.chargeGas, Args.chargeGas(instruction.offset, 0u), "charge_gas")
                 }
                 instruction.kind.visit(gasVisitor)
             }
 
-            logger.debug("  [${compiledHandlers.size}]: ${instruction.offset}: ${instruction.kind}")
+            logger.debug("  [${compiledHandlers.size + 1}]: ${instruction.offset}: ${instruction.kind}")
             val originalLength = compiledHandlers.size
 
             instruction.kind.visit(

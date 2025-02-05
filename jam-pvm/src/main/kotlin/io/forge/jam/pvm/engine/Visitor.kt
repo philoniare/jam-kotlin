@@ -1,6 +1,5 @@
 package io.forge.jam.pvm.engine
 
-import io.forge.jam.core.toHex
 import io.forge.jam.pvm.Abi
 import io.forge.jam.pvm.PvmLogger
 import io.forge.jam.pvm.program.ProgramCounter
@@ -305,9 +304,7 @@ class Visitor(
                     U64LoadTy::class -> U64LoadTy
                     else -> throw IllegalArgumentException("Unknown LoadTy type")
                 }
-                logger.debug("Slice: ${slice.toHex()}")
                 val value = loadTy.fromSlice(slice)
-                logger.debug("Memory  $dst = $loadTy [0x${address}] = 0x${value}")
                 set64(dst, value)
                 return goToNextInstruction()
             } catch (e: ArrayIndexOutOfBoundsException) {
