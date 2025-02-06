@@ -9,14 +9,14 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class AccumulationState(
-    val slot: Long,
+    var slot: Long,
     @Serializable(with = JamByteArrayHexSerializer::class)
     val entropy: JamByteArray,
     @SerialName("ready_queue")
-    val readyQueue: List<List<ReadyRecord>>,
+    var readyQueue: MutableList<List<ReadyRecord>>,
     @SerialName("accumulated")
     @Serializable(with = ByteArrayNestedListSerializer::class)
-    val accumulated: List<List<JamByteArray>>,
+    val accumulated: MutableList<List<JamByteArray>>,
     val privileges: Privileges,
     val accounts: List<ServiceItem>
 ) : Encodable {
@@ -31,8 +31,8 @@ data class AccumulationState(
         return AccumulationState(
             slot = slot,
             entropy = entropy.copy(),
-            readyQueue = readyQueue.map { it.map { it.copy() } },
-            accumulated = accumulated.map { it.map { it.copy() } },
+            readyQueue = readyQueue.map { it.map { it.copy() } }.toMutableList(),
+            accumulated = accumulated.map { it.map { it.copy() } }.toMutableList(),
             privileges = privileges.copy(),
             accounts = accounts.map { it.copy() }
         )
