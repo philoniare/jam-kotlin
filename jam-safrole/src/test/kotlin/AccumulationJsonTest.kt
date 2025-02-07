@@ -16,9 +16,9 @@ class AccumulationJsonTest {
             "Ready queue size mismatch in test case: $testCase"
         )
 
+        println("ReadyQuery: ${actual.readyQueue}")
         expected.readyQueue.forEachIndexed { queueIndex, expectedQueue ->
             val actualQueue = actual.readyQueue[queueIndex]
-            println("actualQueue: $actualQueue")
             assertEquals(
                 expectedQueue.size,
                 actualQueue.size,
@@ -36,6 +36,8 @@ class AccumulationJsonTest {
             }
         }
 
+        println("Accumulated Expected: ${expected.accumulated}")
+        println("Accumulated Actual: ${actual.accumulated}")
         assertEquals(
             expected.accumulated.size,
             actual.accumulated.size,
@@ -115,7 +117,7 @@ class AccumulationJsonTest {
             )
 
             val report = AccumulationStateTransition(
-                AccumulationConfig(EPOCH_LENGTH = 12)
+                AccumulationConfig(EPOCH_LENGTH = 12, MAX_BLOCK_HISTORY = 8, AUTH_QUEUE_SIZE = 80)
             )
             val (postState, output) = report.transition(inputCase.input, inputCase.preState)
             assertAccumulationStateEquals(inputCase.postState, postState, testCase)
