@@ -16,7 +16,8 @@ class AccumulationJsonTest {
             "Ready queue size mismatch in test case: $testCase"
         )
 
-        println("ReadyQuery: ${actual.readyQueue}")
+        println("ReadyQueue Expect: ${expected.readyQueue}")
+        println("ReadyQueue Actual: ${actual.readyQueue}")
         expected.readyQueue.forEachIndexed { queueIndex, expectedQueue ->
             val actualQueue = actual.readyQueue[queueIndex]
             assertEquals(
@@ -36,7 +37,7 @@ class AccumulationJsonTest {
             }
         }
 
-        println("Accumulated Expected: ${expected.accumulated}")
+        println("Accumulated Expect: ${expected.accumulated}")
         println("Accumulated Actual: ${actual.accumulated}")
         assertEquals(
             expected.accumulated.size,

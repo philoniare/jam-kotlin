@@ -8,7 +8,6 @@ class AccumulationStateTransition(private val config: AccumulationConfig) {
         preState: AccumulationState
     ): Pair<AccumulationState, AccumulationOutput> {
         val postState = preState.deepCopy()
-        val previousSlot = postState.slot
         postState.slot = input.slot
 
         if (input.reports.isEmpty()) {
