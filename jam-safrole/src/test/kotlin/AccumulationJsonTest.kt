@@ -108,12 +108,13 @@ class AccumulationJsonTest {
 
     @Test
     fun testTinyAccumulations() {
-        val folderName = "accumulation/tiny"
-        val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
+        val folderName = "stf/accumulate/tiny"
+        val testCases = TestFileLoader.getTestFilenamesFromTestVectors(folderName)
 
         for (testCase in testCases) {
-            val (inputCase) = TestFileLoader.loadTestData<AccumulationCase>(
-                "$folderName/$testCase",
+            val (inputCase) = TestFileLoader.loadTestDataFromTestVectors<AccumulationCase>(
+                folderName,
+                testCase,
                 ".bin"
             )
 
@@ -128,12 +129,13 @@ class AccumulationJsonTest {
 
     @Test
     fun testFullAccumulations() {
-        val folderName = "accumulation/full"
-        val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
+        val folderName = "stf/accumulate/full"
+        val testCases = TestFileLoader.getTestFilenamesFromTestVectors(folderName)
 
         for (testCase in testCases) {
-            val (inputCase) = TestFileLoader.loadTestData<AccumulationCase>(
-                "$folderName/$testCase",
+            val (inputCase) = TestFileLoader.loadTestDataFromTestVectors<AccumulationCase>(
+                folderName,
+                testCase,
                 ".bin"
             )
 

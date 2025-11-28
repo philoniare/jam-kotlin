@@ -9,7 +9,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class Privileges(
     val bless: Long,
-    val assign: Long,
+    val assign: List<Long>,
     val designate: Long,
     @SerialName("always_acc")
     val alwaysAcc: List<AlwaysAccItem>
@@ -17,7 +17,7 @@ data class Privileges(
 ) : Encodable {
     override fun encode(): ByteArray {
         val blessBytes = encodeFixedWidthInteger(bless, 4, false)
-        val assignBytes = encodeFixedWidthInteger(assign, 4, false)
+        val assignBytes = assign.flatMap { encodeFixedWidthInteger(it, 4, false).toList() }.toByteArray()
         val designateBytes = encodeFixedWidthInteger(designate, 4, false)
         val alwaysAccBytes = encodeList(alwaysAcc)
         return blessBytes + assignBytes + designateBytes + alwaysAccBytes

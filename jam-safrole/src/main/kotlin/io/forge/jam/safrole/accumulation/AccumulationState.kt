@@ -18,6 +18,7 @@ data class AccumulationState(
     @Serializable(with = ByteArrayNestedListSerializer::class)
     var accumulated: MutableList<List<JamByteArray>>,
     val privileges: Privileges,
+    val statistics: List<ServiceStatisticsEntry> = emptyList(),
     val accounts: List<ServiceItem>
 ) : Encodable {
     override fun encode(): ByteArray {
@@ -37,6 +38,7 @@ data class AccumulationState(
             readyQueue = readyQueue.map { it.map { it.copy() } }.toMutableList(),
             accumulated = accumulated.map { it.map { it.copy() } }.toMutableList(),
             privileges = privileges.copy(),
+            statistics = statistics.map { it.copy() },
             accounts = accounts.map { it.copy() }
         )
     }
