@@ -9,12 +9,14 @@ class TestFileLoader {
     companion object {
         @PublishedApi
         internal val JAM_TEST_VECTORS_PATH: File by lazy {
-            val cwd = System.getProperty("user.dir")
+            val cwd = File(System.getProperty("user.dir"))
             // Handle both running from project root or from module directory
-            if (cwd.endsWith("jam-core")) {
-                File(cwd).parentFile.resolve("jamtestvectors")
+            val testVectorsInCwd = cwd.resolve("jamtestvectors")
+            if (testVectorsInCwd.exists()) {
+                testVectorsInCwd
             } else {
-                File(cwd).resolve("jamtestvectors")
+                // Try parent directory (when running from a module subdirectory)
+                cwd.parentFile.resolve("jamtestvectors")
             }
         }
         /**
