@@ -152,9 +152,19 @@ class SafroleStateTransition(private val config: SafroleConfig) {
         // "s ∈ E_k ⟨X_G ⌢ r⟩"
         var isOrderValid = true
         val culprits = disputes.culprits
+
+        // Collect all ed25519 keys from kappa and lambda validator sets
+        val validGuarantorKeys = (state.kappa + state.lambda).map { it.ed25519 }.toSet()
+
         if (culprits.isNotEmpty()) {
             for (i in 0 until culprits.size) {
                 val culprit = culprits[i]
+
+                // Validate culprit key is from a known guarantor (validator)
+                if (!validGuarantorKeys.any { it.contentEquals(culprit.key) }) {
+                    return SafroleErrorCode.BAD_GUARANTOR_KEY
+                }
+
                 val message = JamByteArray(JAM_GUARANTEE.toByteArray()) + culprit.target
 
                 // Verify culprit signature
@@ -291,6 +301,12 @@ class SafroleStateTransition(private val config: SafroleConfig) {
 
         for (i in 0 until disputes.faults.size) {
             val fault = disputes.faults[i]
+
+            // Validate fault key is from a known auditor (validator)
+            if (!validGuarantorKeys.any { it.contentEquals(fault.key) }) {
+                return SafroleErrorCode.BAD_AUDITOR_KEY
+            }
+
             if (i < disputes.faults.size - 1) {
                 val currentKey = disputes.faults[i].key
                 val nextKey = disputes.faults[i + 1].key

@@ -63,7 +63,13 @@ enum class SafroleErrorCode : Encodable {
     NOT_ENOUGH_FAULTS,
 
     @SerialName("faults-not-sorted-unique")
-    FAULTS_NOT_SORTED_UNIQUE;
+    FAULTS_NOT_SORTED_UNIQUE,
+
+    @SerialName("bad-guarantor-key")
+    BAD_GUARANTOR_KEY,
+
+    @SerialName("bad-auditor-key")
+    BAD_AUDITOR_KEY;
 
     override fun encode(): ByteArray {
         return byteArrayOf(ordinal.toByte())

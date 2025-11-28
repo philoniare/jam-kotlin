@@ -1,20 +1,23 @@
 package io.forge.jam.core.encoding
 
+import io.forge.jam.safrole.dispute.DisputeCase
+import io.forge.jam.safrole.dispute.DisputeOutput
 import io.forge.jam.safrole.safrole.*
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.fail
+import kotlin.test.*
 
 class DisputeJsonTest {
 
-    fun assertDisputeOutputEquals(expected: SafroleOutput, actual: SafroleOutput, testCase: String) {
+    private fun assertDisputeOutputEquals(expected: DisputeOutput, actual: SafroleOutput, testCase: String) {
         if (expected.err != null) {
+            assertNotNull(actual.err, "$testCase: Expected error but got OK")
             assertEquals(expected.err, actual.err, "$testCase: Mismatch in error")
         }
 
         if (expected.ok != null) {
-            assertEquals(expected.ok!!.epochMark, actual.ok?.epochMark, "$testCase: Mismatch in EpochMark")
-            assertEquals(expected.ok!!.ticketsMark, actual.ok?.ticketsMark, "$testCase: Mismatch in TicketsMark")
+            assertNotNull(actual.ok, "$testCase: Expected OK but got error: ${actual.err}")
+            assertNull(actual.ok!!.epochMark, "$testCase: Expected no EpochMark for disputes")
+            assertNull(actual.ok!!.ticketsMark, "$testCase: Expected no TicketsMark for disputes")
+
             if (expected.ok!!.offendersMark != null && actual.ok?.offendersMark != null) {
                 assertEquals(
                     expected.ok!!.offendersMark!!.size,
@@ -38,70 +41,51 @@ class DisputeJsonTest {
         }
     }
 
-    fun assertListOfByteArraysEqualsIgnoreOrder(
-        expected: List<ByteArray>,
-        actual: List<ByteArray>,
-        message: String? = null
-    ) {
-        if (expected.size != actual.size) {
-            fail(message ?: "Expected size ${expected.size} but got ${actual.size}")
-        }
-
-        val expectedCounts = expected.groupingBy { it.contentHashCode() }.eachCount()
-        val actualCounts = actual.groupingBy { it.contentHashCode() }.eachCount()
-
-        assertEquals(expectedCounts, actualCounts, message)
-    }
-
-    fun assertDisputeStateEquals(expected: SafroleState, actual: SafroleState, testCase: String) {
+    private fun assertDisputeStateEquals(expected: DisputeState, actual: SafroleState, testCase: String) {
         assertEquals(expected.tau, actual.tau, "Mismatch in tau. TestCase: $testCase")
-
-        assertEquals(expected.eta.size, actual.eta.size, "Mismatch in eta size. TestCase: $testCase")
-        for (i in expected.eta.indices) {
-            assertEquals(
-                expected.eta[i],
-                actual.eta[i],
-                "Mismatch in eta at index $i. Expected: ${expected.eta[i].toHex()}, Actual: ${actual.eta[i].toHex()}. TestCase: $testCase"
-            )
-        }
-
         assertEquals(expected.lambda, actual.lambda, "Mismatch in lambda. TestCase: $testCase")
         assertEquals(expected.kappa, actual.kappa, "Mismatch in kappa. TestCase: $testCase")
-        assertEquals(expected.gammaK, actual.gammaK, "Mismatch in gammaK. TestCase: $testCase")
-        assertEquals(expected.iota, actual.iota, "Mismatch in iota. TestCase: $testCase")
-        assertEquals(expected.gammaA, actual.gammaA, "Mismatch in gammaA. TestCase: $testCase")
-        assertEquals(expected.gammaS, actual.gammaS, "Mismatch in gammaS. TestCase: $testCase")
-        assertEquals(expected.gammaZ, actual.gammaZ, "Mismatch in gammaZ. TestCase: $testCase")
 
         // Check rho
-        assertEquals(expected.rho?.size, actual.rho?.size, "Mismatch in rho size. TestCase: $testCase")
-        if (expected.rho != null && actual.rho != null) {
-            for (i in expected.rho!!.indices) {
-                assertEquals(expected.rho!![i], actual.rho!![i], "Mismatch in rho at index $i. TestCase: $testCase")
+        assertEquals(expected.rho.size, actual.rho?.size, "Mismatch in rho size. TestCase: $testCase")
+        if (actual.rho != null) {
+            for (i in expected.rho.indices) {
+                assertEquals(expected.rho[i], actual.rho!![i], "Mismatch in rho at index $i. TestCase: $testCase")
             }
         }
 
         // Check psi
+        assertNotNull(actual.psi, "Actual psi should not be null. TestCase: $testCase")
+        assertNotNull(expected.psi, "Expected psi should not be null. TestCase: $testCase")
         assertEquals(expected.psi!!.bad, actual.psi!!.bad, "Mismatch in bad. TestCase: $testCase")
         assertEquals(expected.psi!!.good, actual.psi!!.good, "Mismatch in good. TestCase: $testCase")
-//        assertEquals(
-//            expected.psi!!.offenders,
-//            actual.psi!!.offenders,
-//            "Mismatch in offenders. TestCase: $testCase"
-//        )
         assertEquals(expected.psi!!.wonky, actual.psi!!.wonky, "Mismatch in wonky. TestCase: $testCase")
+    }
+
+    private fun disputeStateToSafroleState(disputeState: DisputeState): SafroleState {
+        return SafroleState(
+            tau = disputeState.tau,
+            kappa = disputeState.kappa,
+            lambda = disputeState.lambda,
+            rho = disputeState.rho.toMutableList(),
+            psi = disputeState.psi
+        )
+    }
+
+    private fun disputeInputToSafroleInput(disputeInput: DisputeInput): SafroleInput {
+        return SafroleInput(
+            disputes = disputeInput.disputes,
+            slot = null
+        )
     }
 
     @Test
     fun testTinyDisputes() {
-        val folderName = "disputes/tiny"
-        val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
+        val folderPath = "stf/disputes/tiny"
+        val testCases = TestFileLoader.getTestFilenamesFromTestVectors(folderPath)
 
         for (testCase in testCases) {
-            val (inputCase, binaryData) = TestFileLoader.loadTestData<SafroleCase>(
-                "$folderName/$testCase",
-                ".bin"
-            )
+            val inputCase = TestFileLoader.loadJsonFromTestVectors<DisputeCase>(folderPath, testCase)
 
             val safrole = SafroleStateTransition(
                 SafroleConfig(
@@ -113,24 +97,23 @@ class DisputeJsonTest {
                     coresCount = 2
                 )
             )
-            val (postState, output) = safrole.transition(inputCase.input, inputCase.preState)
+
+            val safroleInput = disputeInputToSafroleInput(inputCase.input)
+            val safrolePreState = disputeStateToSafroleState(inputCase.preState)
+            val (postState, output) = safrole.transition(safroleInput, safrolePreState)
 
             assertDisputeOutputEquals(inputCase.output, output, testCase)
-
             assertDisputeStateEquals(inputCase.postState, postState, testCase)
         }
     }
 
     @Test
     fun testFullDisputes() {
-        val folderName = "disputes/full"
-        val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
+        val folderPath = "stf/disputes/full"
+        val testCases = TestFileLoader.getTestFilenamesFromTestVectors(folderPath)
 
         for (testCase in testCases) {
-            val (inputCase) = TestFileLoader.loadTestData<SafroleCase>(
-                "$folderName/$testCase",
-                ".bin"
-            )
+            val inputCase = TestFileLoader.loadJsonFromTestVectors<DisputeCase>(folderPath, testCase)
 
             val safrole = SafroleStateTransition(
                 SafroleConfig(
@@ -142,10 +125,12 @@ class DisputeJsonTest {
                     coresCount = 341
                 )
             )
-            val (postState, output) = safrole.transition(inputCase.input, inputCase.preState)
+
+            val safroleInput = disputeInputToSafroleInput(inputCase.input)
+            val safrolePreState = disputeStateToSafroleState(inputCase.preState)
+            val (postState, output) = safrole.transition(safroleInput, safrolePreState)
 
             assertDisputeOutputEquals(inputCase.output, output, testCase)
-
             assertDisputeStateEquals(inputCase.postState, postState, testCase)
         }
     }
