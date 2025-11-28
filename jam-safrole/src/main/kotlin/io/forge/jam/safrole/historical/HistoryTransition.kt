@@ -9,41 +9,39 @@ class HistoryTransition {
         const val MAX_CORES = 341
         val ZERO_HASH = ByteArray(32) { 0 }
 
-        // MMR node prefix as
-        private const val MMR_NODE_PREFIX = "\$mmr_node"
+        // MMR peak prefix: "peak" (without $)
+        val PEAK_PREFIX = "peak".toByteArray(Charsets.US_ASCII)
     }
 
     fun stf(input: HistoricalInput, preState: HistoricalState): HistoricalState {
         validateInputs(input)
 
-        val updatedPreState = if (preState.beta.isNotEmpty()) {
-            val lastBlock = preState.beta.last().copy(
-                stateRoot = input.parentStateRoot
-            )
-            preState.copy(
-                beta = preState.beta.dropLast(1) + lastBlock,
-            )
-        } else {
-            preState
-        }
+        val history = preState.beta.history
+        val currentMmr = preState.beta.mmr
 
-        val newMmr = appendToMmr(
-            if (updatedPreState.beta.isEmpty()) {
-                HistoricalMmr(peaks = listOf())
-            } else {
-                updatedPreState.beta.last().mmr
-            },
-            input.accumulateRoot
-        )
-        val newBlock = HistoricalBeta(
-            headerHash = input.headerHash,
-            mmr = newMmr,
-            stateRoot = JamByteArray(ZERO_HASH),
-            reported = input.workPackages
-        )
+        val updatedHistory =
+                if (history.isNotEmpty()) {
+                    val lastBlock = history.last().copy(stateRoot = input.parentStateRoot)
+                    history.dropLast(1) + lastBlock
+                } else {
+                    history
+                }
 
-        val newBeta = (updatedPreState.beta + newBlock).takeLast(BLOCK_HISTORY_LIMIT)
-        return HistoricalState(beta = newBeta)
+        val newMmr = appendToMmr(currentMmr, input.accumulateRoot)
+
+        // Calculate beefy root from the new MMR peaks
+        val beefyRoot = calculateBeefyRoot(newMmr)
+
+        val newBlock =
+                HistoricalBeta(
+                        headerHash = input.headerHash,
+                        beefyRoot = beefyRoot,
+                        stateRoot = JamByteArray(ZERO_HASH),
+                        reported = input.workPackages
+                )
+
+        val newHistory = (updatedHistory + newBlock).takeLast(BLOCK_HISTORY_LIMIT)
+        return HistoricalState(beta = HistoricalBetaContainer(history = newHistory, mmr = newMmr))
     }
 
     private fun validateInputs(input: HistoricalInput) {
@@ -57,9 +55,9 @@ class HistoryTransition {
     }
 
     /**
-     * Append a new peak to the MMR following the mountain range rules.
-     * Each peak represents a perfect binary tree of size 2^i where i is the index.
-     * When merging, we combine adjacent peaks of the same size and push the result up.
+     * Append a new peak to the MMR following the mountain range rules. Each peak represents a
+     * perfect binary tree of size 2^i where i is the index. When merging, we combine adjacent peaks
+     * of the same size and push the result up.
      */
     private fun appendToMmr(previousMmr: HistoricalMmr, newPeak: JamByteArray): HistoricalMmr {
         val peaks = previousMmr.peaks.toMutableList()
@@ -92,6 +90,41 @@ class HistoryTransition {
         val digest = KeccakDigest(256)
         val output = ByteArray(32)
         digest.update(data.bytes, 0, data.size)
+        digest.doFinal(output, 0)
+        return JamByteArray(output)
+    }
+
+    /** Calculate the beefy root from MMR peaks using the mmrsuperpeak function. */
+    private fun calculateBeefyRoot(mmr: HistoricalMmr): JamByteArray {
+        // Filter non-null peaks, keeping them in order
+        val h = mmr.peaks.filterNotNull()
+        return mmrSuperPeak(h)
+    }
+
+    private fun mmrSuperPeak(h: List<JamByteArray>): JamByteArray {
+        return when {
+            h.isEmpty() -> JamByteArray(ZERO_HASH)
+            h.size == 1 -> h[0]
+            else -> {
+                // keccak($peak || superpeak(h[...len-1]) || h[len-1])
+                val rest = h.dropLast(1)
+                val last = h.last()
+                val superPeakOfRest = mmrSuperPeak(rest)
+                keccakHashWithPrefix(PEAK_PREFIX, superPeakOfRest, last)
+            }
+        }
+    }
+
+    private fun keccakHashWithPrefix(
+            prefix: ByteArray,
+            left: JamByteArray,
+            right: JamByteArray
+    ): JamByteArray {
+        val digest = KeccakDigest(256)
+        val output = ByteArray(32)
+        digest.update(prefix, 0, prefix.size)
+        digest.update(left.bytes, 0, left.size)
+        digest.update(right.bytes, 0, right.size)
         digest.doFinal(output, 0)
         return JamByteArray(output)
     }

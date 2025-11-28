@@ -98,11 +98,9 @@ class ReportStateTransition(private val config: ReportStateConfig) {
                 return ReportErrorCode.BAD_STATE_ROOT
             }
 
-            // Verify MMR peaks
+            // Verify beefy root matches the anchor block's beefy root
             val beefyRoot = context.beefyRoot
-            val mmrPeaks = anchorBlock.mmr.peaks
-
-            if (!validateBeefyRootAgainstMmrPeaks(beefyRoot, mmrPeaks)) {
+            if (!anchorBlock.beefyRoot.contentEquals(beefyRoot)) {
                 return ReportErrorCode.BAD_BEEFY_MMR_ROOT
             }
 

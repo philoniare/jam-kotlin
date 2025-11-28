@@ -14,7 +14,9 @@ data class HistoricalBeta(
     @Serializable(with = JamByteArrayHexSerializer::class)
     val headerHash: JamByteArray,
 
-    val mmr: HistoricalMmr,
+    @SerialName("beefy_root")
+    @Serializable(with = JamByteArrayHexSerializer::class)
+    val beefyRoot: JamByteArray,
 
     @SerialName("state_root")
     @Serializable(with = JamByteArrayHexSerializer::class)
@@ -24,9 +26,8 @@ data class HistoricalBeta(
     val reported: List<ReportedWorkPackage>
 ) : Encodable {
     override fun encode(): ByteArray {
-        val mmrBytes = mmr.encode()
         val reportedBytes = encodeList(reported)
-        return headerHash.bytes + mmrBytes + stateRoot.bytes + reportedBytes
+        return headerHash.bytes + beefyRoot.bytes + stateRoot.bytes + reportedBytes
     }
 
     override fun equals(other: Any?): Boolean {
@@ -36,9 +37,8 @@ data class HistoricalBeta(
         other as HistoricalBeta
 
         if (!headerHash.contentEquals(other.headerHash)) return false
+        if (!beefyRoot.contentEquals(other.beefyRoot)) return false
         if (!stateRoot.contentEquals(other.stateRoot)) return false
-
-        if (mmr != other.mmr) return false
         if (reported != other.reported) return false
 
         return true
@@ -46,13 +46,13 @@ data class HistoricalBeta(
 
     override fun hashCode(): Int {
         var result = headerHash.contentHashCode()
-        result = 31 * result + mmr.hashCode()
+        result = 31 * result + beefyRoot.contentHashCode()
         result = 31 * result + stateRoot.contentHashCode()
         result = 31 * result + reported.hashCode()
         return result
     }
 
     override fun toString(): String {
-        return "\nHistoricalBeta(headerHash=${headerHash.toHex()}, mmr=$mmr, stateRoot=${stateRoot.toHex()}, reported=[$reported])"
+        return "\nHistoricalBeta(headerHash=${headerHash.toHex()}, beefyRoot=${beefyRoot.toHex()}, stateRoot=${stateRoot.toHex()}, reported=[$reported])"
     }
 }

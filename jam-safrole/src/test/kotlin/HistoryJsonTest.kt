@@ -5,18 +5,21 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class HistoryJsonTest {
-    fun assertHistoryStateEquals(expected: HistoricalState, actual: HistoricalState) {
-        // Compare beta lists size
+    private fun assertHistoryStateEquals(expected: HistoricalState, actual: HistoricalState) {
+        // Compare history lists size
         assertEquals(
-            expected.beta.size,
-            actual.beta.size,
-            "Mismatch in beta list size. Expected: ${expected.beta.size}, Actual: ${actual.beta.size}"
+            expected.beta.history.size,
+            actual.beta.history.size,
+            "Mismatch in beta.history list size. Expected: ${expected.beta.history.size}, Actual: ${actual.beta.history.size}"
         )
 
-        // Compare each beta entry
-        for (i in expected.beta.indices) {
-            assertHistoricalBetaEquals(expected.beta[i], actual.beta[i], "beta[$i]")
+        // Compare each history entry
+        for (i in expected.beta.history.indices) {
+            assertHistoricalBetaEquals(expected.beta.history[i], actual.beta.history[i], "beta.history[$i]")
         }
+
+        // Compare MMR at container level
+        assertMmrEquals(expected.beta.mmr, actual.beta.mmr, "beta.mmr")
     }
 
     private fun assertHistoricalBetaEquals(expected: HistoricalBeta, actual: HistoricalBeta, path: String) {
@@ -24,7 +27,14 @@ class HistoryJsonTest {
         assertEquals(
             expected.headerHash,
             actual.headerHash,
-            "$path: Mismatch in hash. Expected: ${expected.headerHash.toHex()}, Actual: ${actual.headerHash.toHex()}"
+            "$path: Mismatch in headerHash. Expected: ${expected.headerHash.toHex()}, Actual: ${actual.headerHash.toHex()}"
+        )
+
+        // Compare beefy root
+        assertEquals(
+            expected.beefyRoot,
+            actual.beefyRoot,
+            "$path: Mismatch in beefyRoot. Expected: ${expected.beefyRoot.toHex()}, Actual: ${actual.beefyRoot.toHex()}"
         )
 
         // Compare state root
@@ -33,9 +43,6 @@ class HistoryJsonTest {
             actual.stateRoot,
             "$path: Mismatch in stateRoot. Expected: ${expected.stateRoot.toHex()}, Actual: ${actual.stateRoot.toHex()}"
         )
-
-        // Compare MMR
-        assertMmrEquals(expected.mmr, actual.mmr, "$path.mmr")
 
         // Compare reported packages
         assertEquals(
@@ -70,15 +77,29 @@ class HistoryJsonTest {
     }
 
     @Test
-    fun testHistory() {
-        val folderName = "history"
-        val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
+    fun testTinyHistory() {
+        val folderPath = "stf/history/tiny"
+        val testCases = TestFileLoader.getTestFilenamesFromTestVectors(folderPath)
 
         for (testCase in testCases) {
-            val (inputCase) = TestFileLoader.loadTestData<HistoricalCase>(
-                "$folderName/$testCase",
-                ".bin"
+            val inputCase = TestFileLoader.loadJsonFromTestVectors<HistoricalCase>(folderPath, testCase)
+
+            val transition = HistoryTransition()
+            val postState = transition.stf(inputCase.input, inputCase.preState)
+            assertHistoryStateEquals(
+                inputCase.postState,
+                postState,
             )
+        }
+    }
+
+    @Test
+    fun testFullHistory() {
+        val folderPath = "stf/history/full"
+        val testCases = TestFileLoader.getTestFilenamesFromTestVectors(folderPath)
+
+        for (testCase in testCases) {
+            val inputCase = TestFileLoader.loadJsonFromTestVectors<HistoricalCase>(folderPath, testCase)
 
             val transition = HistoryTransition()
             val postState = transition.stf(inputCase.input, inputCase.preState)
