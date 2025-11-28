@@ -1,7 +1,13 @@
-use ark_ec_vrfs::suites::bandersnatch::edwards as bandersnatch;
-use ark_ec_vrfs::{prelude::ark_serialize, suites::bandersnatch::edwards::RingContext};
+use ark_ec_vrfs::reexports::ark_serialize;
+use ark_ec_vrfs::ring::RingProofParams;
+use ark_ec_vrfs::suites::bandersnatch::BandersnatchSha512Ell2;
+use ark_ec_vrfs::{Input, Output, Public, Secret};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use bandersnatch::{Input, Output, Public, RingProof, Secret};
+
+// Type aliases for Bandersnatch suite
+type RingProof = ark_ec_vrfs::ring::Proof<BandersnatchSha512Ell2>;
+type PcsParams = ark_ec_vrfs::ring::PcsParams<BandersnatchSha512Ell2>;
+type RingParams = RingProofParams<BandersnatchSha512Ell2>;
 use jni::objects::{JByteArray, JClass};
 use jni::sys::{jbyte, jbyteArray, jint, jlong};
 use jni::JNIEnv;
@@ -9,10 +15,14 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 use std::sync::{Arc, Mutex};
 
-static RING_CONTEXTS: OnceLock<Mutex<HashMap<usize, RingContext>>> = OnceLock::new();
+static RING_CONTEXTS: OnceLock<Mutex<HashMap<usize, RingParams>>> = OnceLock::new();
 const ERROR_RESULT: [u8; 32] = [0; 32];
 
-type RingCommitment = ark_ec_vrfs::ring::RingCommitment<bandersnatch::BandersnatchSha512Ell2>;
+type RingCommitment = ark_ec_vrfs::ring::RingCommitment<BandersnatchSha512Ell2>;
+type BanderInput = Input<BandersnatchSha512Ell2>;
+type BanderOutput = Output<BandersnatchSha512Ell2>;
+type BanderPublic = Public<BandersnatchSha512Ell2>;
+type BanderSecret = Secret<BandersnatchSha512Ell2>;
 
 #[derive(Debug)]
 enum VrfError {
@@ -33,17 +43,16 @@ impl std::fmt::Display for VrfError {
 
 #[derive(CanonicalSerialize, CanonicalDeserialize)]
 struct RingVrfSignature {
-    output: Output,
+    output: BanderOutput,
     // This contains both the Pedersen proof and actual ring proof.
     proof: RingProof,
 }
 
-fn vrf_input_point(vrf_input_data: &[u8]) -> Input {
-    Input::new(vrf_input_data).unwrap()
+fn vrf_input_point(vrf_input_data: &[u8]) -> BanderInput {
+    BanderInput::new(vrf_input_data).unwrap()
 }
 
 fn initialize_ring_context(srs_data: &[u8], ring_size: jint) -> Result<(), String> {
-    use bandersnatch::PcsParams;
     let ring_size = ring_size as usize;
     let contexts = RING_CONTEXTS.get_or_init(|| Mutex::new(HashMap::new()));
     let mut contexts = contexts.lock().unwrap();
@@ -52,7 +61,7 @@ fn initialize_ring_context(srs_data: &[u8], ring_size: jint) -> Result<(), Strin
         let pcs_params = PcsParams::deserialize_uncompressed_unchecked(&mut &srs_data[..])
             .map_err(|e| format!("Failed to deserialize PCS params: {}", e))?;
 
-        let ring_ctx = RingContext::from_srs(ring_size, pcs_params)
+        let ring_ctx = RingParams::from_pcs_params(ring_size, pcs_params)
             .map_err(|e| format!("Failed to create ring context: {:?}", e))?;
 
         contexts.insert(ring_size, ring_ctx);
@@ -62,7 +71,7 @@ fn initialize_ring_context(srs_data: &[u8], ring_size: jint) -> Result<(), Strin
 }
 
 // "Static" ring context data
-fn ring_context(ring_size: jint) -> Arc<RingContext> {
+fn ring_context(ring_size: jint) -> Arc<RingParams> {
     let ring_size = ring_size as usize;
     let contexts = RING_CONTEXTS.get()
         .expect("Ring contexts not initialized")
@@ -100,15 +109,15 @@ pub extern "system" fn Java_io_forge_jam_vrfs_BandersnatchWrapper_initializeCont
 // Prover actor.
 struct Prover {
     pub prover_idx: usize,
-    pub secret: Secret,
-    pub ring: Vec<Public>,
+    pub secret: BanderSecret,
+    pub ring: Vec<BanderPublic>,
 }
 
 impl Prover {
-    pub fn new(ring: Vec<Public>, prover_idx: usize) -> Self {
+    pub fn new(ring: Vec<BanderPublic>, prover_idx: usize) -> Self {
         Self {
             prover_idx,
-            secret: Secret::from_seed(&prover_idx.to_le_bytes()),
+            secret: BanderSecret::from_seed(&prover_idx.to_le_bytes()),
             ring,
         }
     }
@@ -142,7 +151,7 @@ struct Verifier {
 }
 
 impl Verifier {
-    fn new(ring: Vec<Public>, ring_size: jint) -> Self {
+    fn new(ring: Vec<BanderPublic>, ring_size: jint) -> Self {
         // Backend currently requires the wrapped type (plain affine points)
         let pts: Vec<_> = ring.iter().map(|pk| pk.0).collect();
         let verifier_key = ring_context(ring_size).verifier_key(&pts);
@@ -178,7 +187,7 @@ impl Verifier {
 
         let verifier_key = ring_ctx.verifier_key_from_commitment(commitment);
         let verifier = ring_ctx.verifier(verifier_key);
-        if Public::verify(input, output, &[], &signature.proof, &verifier).is_err() {
+        if BanderPublic::verify(input, output, &[], &signature.proof, &verifier).is_err() {
             return Err(VrfError::VerificationError);
         }
         output.hash()[..32]
@@ -199,7 +208,7 @@ pub extern "system" fn Java_io_forge_jam_vrfs_BandersnatchWrapper_createProver(
 
     // Initialize the ring
     let ring: Vec<_> = (0..ring_size)
-        .map(|i| Secret::from_seed(&i.to_le_bytes()).public())
+        .map(|i| BanderSecret::from_seed(&i.to_le_bytes()).public())
         .collect();
 
     // Create the Prover
@@ -271,11 +280,11 @@ pub extern "system" fn Java_io_forge_jam_vrfs_BandersnatchWrapper_getVerifierCom
     // Step 5: Deserialize each public key
     let mut ring = Vec::with_capacity(ring_size as usize);
     for key in pub_keys.iter() {
-        match Public::deserialize_compressed(&mut &key[..]) {
+        match BanderPublic::deserialize_compressed(&mut &key[..]) {
             Ok(public_key) => ring.push(public_key),
-            Err(e) => {
+            Err(_e) => {
                 // Use a padding point as key
-                ring.push(Public::from(ring_context(ring_size).padding_point()));
+                ring.push(BanderPublic::from(RingParams::padding_point()));
             }
         }
     }
