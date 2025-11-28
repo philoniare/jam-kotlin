@@ -3,8 +3,12 @@ package io.forge.jam.core
 import io.forge.jam.core.serializers.JamByteArrayHexSerializer
 import kotlinx.serialization.Serializable
 
+/**
+ * Short-form validator key used in EpochMark.
+ * Contains only bandersnatch and ed25519 keys.
+ */
 @Serializable
-data class ValidatorKey(
+data class EpochValidatorKey(
     @Serializable(with = JamByteArrayHexSerializer::class)
     val bandersnatch: JamByteArray,
     @Serializable(with = JamByteArrayHexSerializer::class)

@@ -11,7 +11,7 @@ data class EpochMark(
     @Serializable(with = JamByteArrayHexSerializer::class)
     @SerialName("tickets_entropy")
     val ticketsEntropy: JamByteArray,
-    val validators: List<ValidatorKey>
+    val validators: List<EpochValidatorKey>
 ) : Encodable {
     override fun toString(): String {
         return "EpochMark(" +

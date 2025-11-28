@@ -526,7 +526,7 @@ class SafroleStateTransition(private val config: SafroleConfig) {
         val epochMark = EpochMark(
             entropy = postState.eta[1],
             ticketsEntropy = postState.eta[2],
-            validators = postState.gammaK.map { it.bandersnatch }
+            validators = postState.gammaK.map { EpochValidatorKey(it.bandersnatch, it.ed25519) }
         )
 
         // 5.6. Determine sealing sequence (eq. 69)

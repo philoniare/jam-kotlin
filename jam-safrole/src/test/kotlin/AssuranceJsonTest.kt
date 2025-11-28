@@ -113,14 +113,11 @@ class AssuranceJsonTest {
 
     @Test
     fun testTinyAssurances() {
-        val folderName = "assurances/tiny"
-        val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
+        val folderPath = "stf/assurances/tiny"
+        val testCases = TestFileLoader.getTestFilenamesFromTestVectors(folderPath)
 
         for (testCase in testCases) {
-            val (inputCase) = TestFileLoader.loadTestData<AssuranceCase>(
-                "$folderName/$testCase",
-                ".bin"
-            )
+            val inputCase = TestFileLoader.loadJsonFromTestVectors<AssuranceCase>(folderPath, testCase)
 
             val stf = AssuranceStateTransition(AssuranceConfig(VALIDATOR_COUNT = 6, CORE_COUNT = 2))
             val (postState, output) = stf.transition(inputCase.input, inputCase.preState)
@@ -131,14 +128,11 @@ class AssuranceJsonTest {
 
     @Test
     fun testFullAssurances() {
-        val folderName = "assurances/full"
-        val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
+        val folderPath = "stf/assurances/full"
+        val testCases = TestFileLoader.getTestFilenamesFromTestVectors(folderPath)
 
         for (testCase in testCases) {
-            val (inputCase) = TestFileLoader.loadTestData<AssuranceCase>(
-                "$folderName/$testCase",
-                ".bin"
-            )
+            val inputCase = TestFileLoader.loadJsonFromTestVectors<AssuranceCase>(folderPath, testCase)
 
             val stf = AssuranceStateTransition(AssuranceConfig(VALIDATOR_COUNT = 1023, CORE_COUNT = 341))
             val (postState, output) = stf.transition(inputCase.input, inputCase.preState)
