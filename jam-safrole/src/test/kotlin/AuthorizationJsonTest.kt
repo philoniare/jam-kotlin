@@ -63,14 +63,11 @@ class AuthorizationJsonTest {
 
     @Test
     fun testTinyAuthorizations() {
-        val folderName = "authorizations/tiny"
-        val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
+        val folderPath = "stf/authorizations/tiny"
+        val testCases = TestFileLoader.getTestFilenamesFromTestVectors(folderPath)
 
         for (testCase in testCases) {
-            val (inputCase) = TestFileLoader.loadTestData<AuthCase>(
-                "$folderName/$testCase",
-                ".bin"
-            )
+            val inputCase = TestFileLoader.loadJsonFromTestVectors<AuthCase>(folderPath, testCase)
 
             val stf = AuthorizationStateTransition(AuthConfig(CORE_COUNT = 2))
             val (postState, output) = stf.transition(inputCase.input, inputCase.preState)
@@ -80,14 +77,11 @@ class AuthorizationJsonTest {
 
     @Test
     fun testFullAuthorizations() {
-        val folderName = "authorizations/full"
-        val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
+        val folderPath = "stf/authorizations/full"
+        val testCases = TestFileLoader.getTestFilenamesFromTestVectors(folderPath)
 
         for (testCase in testCases) {
-            val (inputCase) = TestFileLoader.loadTestData<AuthCase>(
-                "$folderName/$testCase",
-                ".bin"
-            )
+            val inputCase = TestFileLoader.loadJsonFromTestVectors<AuthCase>(folderPath, testCase)
 
             val stf = AuthorizationStateTransition(AuthConfig(CORE_COUNT = 341))
             val (postState, output) = stf.transition(inputCase.input, inputCase.preState)
