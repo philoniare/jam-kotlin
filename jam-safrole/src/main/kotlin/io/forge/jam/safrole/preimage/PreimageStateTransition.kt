@@ -8,6 +8,7 @@ class PreimageStateTransition {
         input: PreimageInput,
         preState: PreimageState
     ): Pair<PreimageState, PreimageOutput> {
+        // First check if all preimages are needed (account exists, lookup entry exists with empty value)
         for (submission in input.preimages) {
             val account = preState.accounts.find { it.id == submission.requester }
                 ?: return Pair(preState, PreimageOutput(err = PreimageErrorCode.PREIMAGE_UNNEEDED))
@@ -21,6 +22,11 @@ class PreimageStateTransition {
                     historyItem.key.length == length &&
                     historyItem.value.isEmpty()
             } ?: return Pair(preState, PreimageOutput(err = PreimageErrorCode.PREIMAGE_UNNEEDED))
+        }
+
+        // Then validate that preimages are sorted and unique by (requester, hash)
+        if (!arePreimagesSortedAndUnique(input.preimages)) {
+            return Pair(preState, PreimageOutput(err = PreimageErrorCode.PREIMAGES_NOT_SORTED_UNIQUE))
         }
 
         val postState = preState.copy(
@@ -54,5 +60,60 @@ class PreimageStateTransition {
         }
 
         return Pair(postState, PreimageOutput(ok = null))
+    }
+
+    /**
+     * Check that preimages are sorted by (requester, hash) and unique.
+     * Sorting is ascending by requester ID, then by blake2b hash of the blob.
+     */
+    private fun arePreimagesSortedAndUnique(preimages: List<PreimageExtrinsic>): Boolean {
+        if (preimages.size <= 1) return true
+
+        var prevRequester: Long? = null
+        var prevHash: ByteArray? = null
+
+        for (submission in preimages) {
+            val currentHash = blakeHash(submission.blob.bytes)
+
+            if (prevRequester != null && prevHash != null) {
+                val comparison = comparePreimages(prevRequester, prevHash, submission.requester, currentHash)
+                // Must be strictly less than (sorted and unique means no duplicates)
+                if (comparison >= 0) {
+                    return false
+                }
+            }
+
+            prevRequester = submission.requester
+            prevHash = currentHash
+        }
+
+        return true
+    }
+
+    /**
+     * Compare two preimages by (requester, hash).
+     * Returns negative if first < second, 0 if equal, positive if first > second.
+     */
+    private fun comparePreimages(
+        requester1: Long,
+        hash1: ByteArray,
+        requester2: Long,
+        hash2: ByteArray
+    ): Int {
+        // First compare by requester
+        val requesterComparison = requester1.compareTo(requester2)
+        if (requesterComparison != 0) {
+            return requesterComparison
+        }
+
+        // Then compare by hash (lexicographically)
+        for (i in hash1.indices) {
+            val byte1 = hash1[i].toInt() and 0xFF
+            val byte2 = hash2[i].toInt() and 0xFF
+            if (byte1 != byte2) {
+                return byte1 - byte2
+            }
+        }
+        return 0
     }
 }

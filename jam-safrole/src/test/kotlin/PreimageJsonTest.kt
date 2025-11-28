@@ -47,7 +47,6 @@ class PreimageJsonTest {
     fun assertPreimageStateEquals(expected: PreimageState, actual: PreimageState, testCase: String) {
         assertEquals(expected.accounts.size, actual.accounts.size)
         expected.accounts.forEachIndexed { index, expectedAccount ->
-            println("Expected: ${expectedAccount}")
             val actualAccount = actual.accounts[index]
 
             // Compare account IDs
@@ -121,15 +120,31 @@ class PreimageJsonTest {
     }
 
     @Test
-    fun testPreimages() {
-        val folderName = "preimages"
-        val testCases = TestFileLoader.getTestFilenamesFromResources(folderName)
+    fun testTinyPreimages() {
+        val folderPath = "stf/preimages/tiny"
+        val testCases = TestFileLoader.getTestFilenamesFromTestVectors(folderPath)
 
         for (testCase in testCases) {
-            val (inputCase) = TestFileLoader.loadTestData<PreimageCase>(
-                "$folderName/$testCase",
-                ".bin"
+            val inputCase = TestFileLoader.loadJsonFromTestVectors<PreimageCase>(folderPath, testCase)
+
+            val stf = PreimageStateTransition()
+            val (postState, output) = stf.transition(inputCase.input, inputCase.preState)
+            assertPreimageOutputEquals(inputCase.output, output, testCase)
+            assertPreimageStateEquals(
+                inputCase.postState,
+                postState,
+                testCase
             )
+        }
+    }
+
+    @Test
+    fun testFullPreimages() {
+        val folderPath = "stf/preimages/full"
+        val testCases = TestFileLoader.getTestFilenamesFromTestVectors(folderPath)
+
+        for (testCase in testCases) {
+            val inputCase = TestFileLoader.loadJsonFromTestVectors<PreimageCase>(folderPath, testCase)
 
             val stf = PreimageStateTransition()
             val (postState, output) = stf.transition(inputCase.input, inputCase.preState)
