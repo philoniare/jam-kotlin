@@ -4,9 +4,9 @@ import io.forge.jam.core.*
 import io.forge.jam.core.serializers.ByteArrayNestedListSerializer
 import io.forge.jam.core.serializers.JamByteArrayHexSerializer
 import io.forge.jam.safrole.preimage.PreimageHash
-import io.forge.jam.safrole.report.ServiceData
+import io.forge.jam.safrole.report.AccumulationServiceData
+import io.forge.jam.safrole.report.AccumulationServiceItem
 import io.forge.jam.safrole.report.ServiceInfo
-import io.forge.jam.safrole.report.ServiceItem
 import io.forge.jam.safrole.report.StorageMapEntry
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -23,7 +23,7 @@ data class AccumulationState(
     var accumulated: MutableList<List<JamByteArray>>,
     val privileges: Privileges,
     val statistics: List<ServiceStatisticsEntry> = emptyList(),
-    val accounts: List<ServiceItem>
+    val accounts: List<AccumulationServiceItem>
 ) : Encodable {
     override fun encode(): ByteArray {
         val slotBytes = encodeFixedWidthInteger(slot, 4, false)
@@ -77,13 +77,13 @@ data class AccumulationState(
 }
 
 /**
- * Convert PartialState back to list of ServiceItems.
+ * Convert PartialState back to list of AccumulationServiceItems.
  */
-fun PartialState.toServiceItems(): List<ServiceItem> {
+fun PartialState.toAccumulationServiceItems(): List<AccumulationServiceItem> {
     return accounts.map { (id, account) ->
-        ServiceItem(
+        AccumulationServiceItem(
             id = id,
-            data = ServiceData(
+            data = AccumulationServiceData(
                 service = account.info,
                 storage = account.storage.map { (key, value) ->
                     StorageMapEntry(key = key, value = value)

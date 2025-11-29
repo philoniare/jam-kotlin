@@ -2,8 +2,12 @@ package io.forge.jam.safrole.report
 
 import io.forge.jam.core.Encodable
 import io.forge.jam.core.JamByteArray
+import io.forge.jam.core.encodeCompactInteger
+import io.forge.jam.core.encodeFixedWidthInteger
+import io.forge.jam.core.encodeList
 import io.forge.jam.core.serializers.JamByteArrayHexSerializer
 import io.forge.jam.safrole.preimage.PreimageHash
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -14,31 +18,73 @@ data class StorageMapEntry(
     val value: JamByteArray
 ) : Encodable {
     override fun encode(): ByteArray {
-        return key.bytes + value.bytes
+        val keyBytes = encodeCompactInteger(key.bytes.size.toLong()) + key.bytes
+        val valueBytes = encodeCompactInteger(value.bytes.size.toLong()) + value.bytes
+        return keyBytes + valueBytes
     }
 }
 
 @Serializable
+data class PreimagesStatusMapEntry(
+    @Serializable(with = JamByteArrayHexSerializer::class)
+    val hash: JamByteArray,
+    val status: List<Long>
+) : Encodable {
+    override fun encode(): ByteArray {
+        val statusBytes = status.flatMap { encodeFixedWidthInteger(it, 4, false).toList() }.toByteArray()
+        return hash.bytes + byteArrayOf(status.size.toByte()) + statusBytes
+    }
+}
+
+/**
+ * ServiceData for Reports STF - only contains service metadata.
+ * Used by ReportState where the ASN schema defines Account as just ServiceInfo.
+ */
+@Serializable
 data class ServiceData(
-    val service: ServiceInfo,
-    val storage: List<StorageMapEntry> = emptyList(),
-    val preimages: List<PreimageHash> = emptyList()
+    val service: ServiceInfo
 ) : Encodable {
     override fun encode(): ByteArray {
         return service.encode()
     }
+}
+
+/**
+ * ServiceData for Accumulation STF - contains full account data.
+ * Used by AccumulationState where the ASN schema defines Account with
+ * service, storage, preimages-blob, and preimages-status.
+ */
+@Serializable
+data class AccumulationServiceData(
+    val service: ServiceInfo,
+    val storage: List<StorageMapEntry> = emptyList(),
+    @SerialName("preimages_blob")
+    val preimages: List<PreimageHash> = emptyList(),
+    @SerialName("preimages_status")
+    val preimagesStatus: List<PreimagesStatusMapEntry> = emptyList()
+) : Encodable {
+    override fun encode(): ByteArray {
+        val storageBytes = encodeList(storage)
+        val preimagesBytes = encodeList(preimages)
+        val statusBytes = encodeList(preimagesStatus)
+        return service.encode() + storageBytes + preimagesBytes + statusBytes
+    }
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
-        if (other !is ServiceData) return false
+        if (other !is AccumulationServiceData) return false
 
-        return service == other.service && storage == other.storage && preimages == other.preimages
+        return service == other.service &&
+               storage == other.storage &&
+               preimages == other.preimages &&
+               preimagesStatus == other.preimagesStatus
     }
 
     override fun hashCode(): Int {
         var result = service.hashCode()
         result = 31 * result + storage.hashCode()
         result = 31 * result + preimages.hashCode()
+        result = 31 * result + preimagesStatus.hashCode()
         return result
     }
 }

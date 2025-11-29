@@ -121,7 +121,7 @@ class AccumulationStateTransition(private val config: AccumulationConfig) {
             accumulated = newAccumulatedArray,
             privileges = preState.privileges.copy(),
             statistics = newStatistics,
-            accounts = newPartialState.toServiceItems()
+            accounts = newPartialState.toAccumulationServiceItems()
         )
 
         return Pair(finalState, AccumulationOutput(ok = JamByteArray(ByteArray(32) { 0 })))

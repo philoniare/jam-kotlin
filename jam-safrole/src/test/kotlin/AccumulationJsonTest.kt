@@ -1,7 +1,7 @@
 package io.forge.jam.core.encoding
 
 import io.forge.jam.safrole.accumulation.*
-import io.forge.jam.safrole.report.ServiceItem
+import io.forge.jam.safrole.report.AccumulationServiceItem
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -101,8 +101,8 @@ class AccumulationJsonTest {
     }
 
     private fun assertServiceItemEquals(
-            expected: ServiceItem,
-            actual: ServiceItem,
+            expected: AccumulationServiceItem,
+            actual: AccumulationServiceItem,
             index: Int,
             testCase: String
     ) {

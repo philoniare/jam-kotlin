@@ -11,16 +11,17 @@ data class Privileges(
     val bless: Long,
     val assign: List<Long>,
     val designate: Long,
+    val register: Long,
     @SerialName("always_acc")
     val alwaysAcc: List<AlwaysAccItem>
-
 ) : Encodable {
     override fun encode(): ByteArray {
         val blessBytes = encodeFixedWidthInteger(bless, 4, false)
         val assignBytes = assign.flatMap { encodeFixedWidthInteger(it, 4, false).toList() }.toByteArray()
         val designateBytes = encodeFixedWidthInteger(designate, 4, false)
+        val registerBytes = encodeFixedWidthInteger(register, 4, false)
         val alwaysAccBytes = encodeList(alwaysAcc)
-        return blessBytes + assignBytes + designateBytes + alwaysAccBytes
+        return blessBytes + assignBytes + designateBytes + registerBytes + alwaysAccBytes
     }
 
     override fun equals(other: Any?): Boolean {
@@ -30,6 +31,7 @@ data class Privileges(
         if (bless != other.bless) return false
         if (assign != other.assign) return false
         if (designate != other.designate) return false
+        if (register != other.register) return false
         if (alwaysAcc.size != other.alwaysAcc.size) return false
 
         for (i in alwaysAcc.indices) {
@@ -47,11 +49,12 @@ data class Privileges(
         var result = bless.hashCode()
         result = 31 * result + assign.hashCode()
         result = 31 * result + designate.hashCode()
+        result = 31 * result + register.hashCode()
         result = 31 * result + alwaysAcc.hashCode()
         return result
     }
 
     override fun toString(): String {
-        return "Privileges(bless=$bless, assign=$assign, designate=$designate, alwaysAcc=$alwaysAcc)"
+        return "Privileges(bless=$bless, assign=$assign, designate=$designate, register=$register, alwaysAcc=$alwaysAcc)"
     }
 }
