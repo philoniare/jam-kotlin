@@ -16,9 +16,8 @@ data class StatCase(
     override fun encode(): ByteArray {
         val inputBytes = input.encode()
         val preStateBytes = preState.encode()
-        val outputBytes = byteArrayOf(0)
         val postStateBytes = postState.encode()
-        return inputBytes + preStateBytes + outputBytes + postStateBytes
+        return inputBytes + preStateBytes + postStateBytes
     }
 }
 

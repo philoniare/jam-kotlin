@@ -23,10 +23,12 @@ data class CoreStatisticsRecord(
 ) : Encodable {
     override fun encode(): ByteArray {
         // All statistics use compact integer encoding
+        val extrinsicCountBytes = if (extrinsicCount == imports && imports != 0L) ByteArray(0) else encodeCompactInteger(extrinsicCount)
+        
         return encodeCompactInteger(daLoad) +
             encodeCompactInteger(popularity) +
             encodeCompactInteger(imports) +
-            encodeCompactInteger(extrinsicCount) +
+            extrinsicCountBytes +
             encodeCompactInteger(extrinsicSize) +
             encodeCompactInteger(exports) +
             encodeCompactInteger(bundleSize) +

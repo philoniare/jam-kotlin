@@ -68,18 +68,16 @@ data class SafroleState(
     }
 
     override fun encode(): ByteArray {
-        val tauBytes = encodeFixedWidthInteger(tau, 4, true)
-        val etaBytes = encodeList(eta.toList())
-        val lambdaBytes = encodeList(lambda)
-        val kappaBytes = encodeList(kappa)
-        val gammaKBytes = encodeList(gammaK)
-        val iotaBytes = encodeList(iota)
+        val tauBytes = encodeFixedWidthInteger(tau, 4, false)
+        val etaBytes = encodeList(eta.toList(), false)
+        val lambdaBytes = encodeList(lambda, false)
+        val kappaBytes = encodeList(kappa, false)
+        val gammaKBytes = encodeList(gammaK, false)
+        val iotaBytes = encodeList(iota, false)
         val gammaABytes = encodeList(gammaA)
         val gammaSBytes = gammaS.encode()
         val gammaZBytes = gammaZ.bytes
         val postOffendersBytes = postOffenders?.let { encodeList(it) } ?: byteArrayOf(0)
-        val rhoBytes = rho?.let { encodeOptionalList(it) } ?: byteArrayOf(0)
-        val psiBytes = psi?.encode() ?: byteArrayOf(0)
-        return tauBytes + etaBytes + lambdaBytes + kappaBytes + gammaKBytes + iotaBytes + gammaABytes + gammaSBytes + gammaZBytes + postOffendersBytes + rhoBytes + psiBytes
+        return tauBytes + etaBytes + lambdaBytes + kappaBytes + gammaKBytes + iotaBytes + gammaABytes + gammaSBytes + gammaZBytes + postOffendersBytes
     }
 }

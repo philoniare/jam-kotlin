@@ -14,9 +14,11 @@ data class SafroleOutput(
 ) : Encodable {
     override fun encode(): ByteArray {
         return if (ok != null) {
-            ok.encode()
+            byteArrayOf(0) + ok.encode()
+        } else if (err != null) {
+            byteArrayOf(1) + err!!.encode()
         } else {
-            err!!.encode()
+            byteArrayOf(0)
         }
     }
 }

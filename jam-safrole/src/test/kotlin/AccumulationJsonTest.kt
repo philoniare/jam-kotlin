@@ -21,8 +21,6 @@ class AccumulationJsonTest {
                 "Ready queue size mismatch in test case: $testCase"
         )
 
-        println("ReadyQueue Expect: ${expected.readyQueue}")
-        println("ReadyQueue Actual: ${actual.readyQueue}")
         expected.readyQueue.forEachIndexed { queueIndex, expectedQueue ->
             val actualQueue = actual.readyQueue[queueIndex]
             assertEquals(
@@ -42,8 +40,6 @@ class AccumulationJsonTest {
             }
         }
 
-        println("Accumulated Expect: ${expected.accumulated}")
-        println("Accumulated Actual: ${actual.accumulated}")
         assertEquals(
                 expected.accumulated.size,
                 actual.accumulated.size,
@@ -110,26 +106,6 @@ class AccumulationJsonTest {
             index: Int,
             testCase: String
     ) {
-        if (expected != actual) {
-            println("Service item[$index] mismatch details:")
-            println("  Expected id: ${expected.id}, Actual id: ${actual.id}")
-            println("  Expected service: ${expected.data.service}")
-            println("  Actual service:   ${actual.data.service}")
-            println(
-                    "  Expected storage size: ${expected.data.storage.size}, Actual: ${actual.data.storage.size}"
-            )
-            println(
-                    "  Expected preimages size: ${expected.data.preimages.size}, Actual: ${actual.data.preimages.size}"
-            )
-            if (expected.data.storage.size == actual.data.storage.size) {
-                expected.data.storage.forEachIndexed { i, exp ->
-                    val act = actual.data.storage.getOrNull(i)
-                    if (exp != act) {
-                        println("  Storage[$i] mismatch: expected $exp, actual $act")
-                    }
-                }
-            }
-        }
         assertEquals(expected, actual, "Service item[$index] mismatch in test case: $testCase")
     }
 
@@ -147,7 +123,6 @@ class AccumulationJsonTest {
         val testCaseNames = TestFileLoader.getTestFilenamesFromTestVectors(folderName)
 
         for (testCaseName in testCaseNames) {
-            println("Running test case: $testCaseName")
             val (testCase, expectedBinaryData) =
                     TestFileLoader.loadTestDataFromTestVectors<AccumulationCase>(
                             folderName,

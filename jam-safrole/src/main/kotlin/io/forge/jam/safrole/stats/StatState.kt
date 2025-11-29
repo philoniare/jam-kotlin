@@ -26,6 +26,6 @@ data class StatState(
 
     override fun encode(): ByteArray {
         val slotBytes = encodeFixedWidthInteger(slot, 4, false)
-        return encodeList(valsCurrStats) + encodeList(valsLastStats) + slotBytes + encodeList(currValidators)
+        return encodeList(valsCurrStats, false) + encodeList(valsLastStats, false) + slotBytes + encodeList(currValidators, false)
     }
 }

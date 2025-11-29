@@ -25,13 +25,17 @@ data class TicketsOrKeys(
     }
 
     override fun encode(): ByteArray {
-        val keysBytes =
-            if (keys != null) keys.fold(ByteArray(0)) { acc, byteArray -> acc + byteArray.bytes } else ByteArray(0)
-        val ticketsBytes =
-            if (tickets != null) tickets.fold(ByteArray(0)) { acc, ticketBody -> acc + ticketBody.encode() } else ByteArray(
-                0
-            )
-        return keysBytes + ticketsBytes
+        return if (keys != null) {
+            val discriminator = byteArrayOf(1)
+            val keysBytes = keys.fold(ByteArray(0)) { acc, byteArray -> acc + byteArray.bytes }
+            discriminator + keysBytes
+        } else if (tickets != null) {
+            val discriminator = byteArrayOf(0)
+            val ticketsBytes = tickets.fold(ByteArray(0)) { acc, ticketBody -> acc + ticketBody.encode() }
+            discriminator + ticketsBytes
+        } else {
+            byteArrayOf(0) // Should not happen for valid TicketsOrKeys
+        }
     }
 
     override fun equals(other: Any?): Boolean {

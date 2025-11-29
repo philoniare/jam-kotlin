@@ -10,8 +10,8 @@ data class Preimage(
     val blob: JamByteArray
 ) : Encodable {
     override fun encode(): ByteArray {
-        val requesterBytes = encodeFixedWidthInteger(requester)
-        val blobBytes = blob.bytes
+        val requesterBytes = encodeFixedWidthInteger(requester, 4, false)
+        val blobBytes = encodeCompactInteger(blob.bytes.size.toLong()) + blob.bytes
         return requesterBytes + blobBytes
     }
 }

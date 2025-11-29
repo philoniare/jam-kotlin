@@ -19,9 +19,17 @@ data class OutputMarks(
     val offendersMark: List<JamByteArray>? = null,
 ) : Encodable {
     override fun encode(): ByteArray {
-        val epochMarkBytes = epochMark?.encode() ?: ByteArray(0)
-        val ticketsMarkBytes = if (ticketsMark != null) encodeList(ticketsMark) else ByteArray(0)
-        return epochMarkBytes
+        val epochMarkBytes = if (epochMark != null) {
+            byteArrayOf(1) + epochMark.encode()
+        } else {
+            byteArrayOf(0)
+        }
+        val ticketsMarkBytes = if (ticketsMark != null) {
+            byteArrayOf(1) + encodeList(ticketsMark, false)
+        } else {
+            byteArrayOf(0)
+        }
+        return epochMarkBytes + ticketsMarkBytes
     }
 
     override fun equals(other: Any?): Boolean {

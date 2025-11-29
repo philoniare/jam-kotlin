@@ -15,10 +15,9 @@ data class SafroleInput(
     val disputes: Dispute? = null
 ) : Encodable {
     override fun encode(): ByteArray {
-        val slotBytes = slot?.let { encodeFixedWidthInteger(it, 4, true) } ?: byteArrayOf(0)
+        val slotBytes = slot?.let { encodeFixedWidthInteger(it, 4, false) } ?: byteArrayOf(0)
         val entropyBytes = entropy.bytes
         val extrinsicBytes = encodeList(extrinsic)
-        val disputesBytes = disputes?.encode() ?: byteArrayOf(0)
-        return slotBytes + entropyBytes + extrinsicBytes + disputesBytes
+        return slotBytes + entropyBytes + extrinsicBytes
     }
 }
