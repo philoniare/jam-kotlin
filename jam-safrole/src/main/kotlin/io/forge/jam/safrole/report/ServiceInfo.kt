@@ -9,6 +9,8 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 class ServiceInfo(
+    @SerialName("version")
+    val version: Int = 0,
     @SerialName("code_hash")
     @Serializable(with = JamByteArrayHexSerializer::class)
     val codeHash: JamByteArray,
@@ -29,6 +31,7 @@ class ServiceInfo(
     val parentService: Long = 0
 ) : Encodable {
     override fun encode(): ByteArray {
+        val versionBytes = encodeFixedWidthInteger(version, 1, false)
         val balanceBytes = encodeFixedWidthInteger(balance, 8, false)
         val minItemGasBytes = encodeFixedWidthInteger(minItemGas, 8, false)
         val minMemoGasBytes = encodeFixedWidthInteger(minMemoGas, 8, false)
@@ -38,14 +41,15 @@ class ServiceInfo(
         val creationSlotBytes = encodeFixedWidthInteger(creationSlot, 4, false)
         val lastAccumulationSlotBytes = encodeFixedWidthInteger(lastAccumulationSlot, 4, false)
         val parentServiceBytes = encodeFixedWidthInteger(parentService, 4, false)
-        return codeHash.bytes + balanceBytes + minItemGasBytes + minMemoGasBytes + bytesBytes + depositOffsetBytes + itemsBytes + creationSlotBytes + lastAccumulationSlotBytes + parentServiceBytes
+        return versionBytes + codeHash.bytes + balanceBytes + minItemGasBytes + minMemoGasBytes + bytesBytes + depositOffsetBytes + itemsBytes + creationSlotBytes + lastAccumulationSlotBytes + parentServiceBytes
     }
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is ServiceInfo) return false
 
-        return codeHash == other.codeHash &&
+        return version == other.version &&
+            codeHash == other.codeHash &&
             balance == other.balance &&
             minItemGas == other.minItemGas &&
             minMemoGas == other.minMemoGas &&
@@ -58,7 +62,8 @@ class ServiceInfo(
     }
 
     override fun hashCode(): Int {
-        var result = codeHash.hashCode()
+        var result = version.hashCode()
+        result = 31 * result + codeHash.hashCode()
         result = 31 * result + balance.hashCode()
         result = 31 * result + minItemGas.hashCode()
         result = 31 * result + minMemoGas.hashCode()
@@ -72,10 +77,11 @@ class ServiceInfo(
     }
 
     override fun toString(): String {
-        return "ServiceInfo(codeHash=$codeHash, balance=$balance, minItemGas=$minItemGas, minMemoGas=$minMemoGas, bytes=$bytes, depositOffset=$depositOffset, items=$items, creationSlot=$creationSlot, lastAccumulationSlot=$lastAccumulationSlot, parentService=$parentService)"
+        return "ServiceInfo(version=$version, codeHash=$codeHash, balance=$balance, minItemGas=$minItemGas, minMemoGas=$minMemoGas, bytes=$bytes, depositOffset=$depositOffset, items=$items, creationSlot=$creationSlot, lastAccumulationSlot=$lastAccumulationSlot, parentService=$parentService)"
     }
 
     fun copy(
+        version: Int = this.version,
         codeHash: JamByteArray = this.codeHash,
         balance: Long = this.balance,
         minItemGas: Long = this.minItemGas,
@@ -87,6 +93,6 @@ class ServiceInfo(
         lastAccumulationSlot: Long = this.lastAccumulationSlot,
         parentService: Long = this.parentService
     ): ServiceInfo {
-        return ServiceInfo(codeHash, balance, minItemGas, minMemoGas, bytes, depositOffset, items, creationSlot, lastAccumulationSlot, parentService)
+        return ServiceInfo(version, codeHash, balance, minItemGas, minMemoGas, bytes, depositOffset, items, creationSlot, lastAccumulationSlot, parentService)
     }
 }

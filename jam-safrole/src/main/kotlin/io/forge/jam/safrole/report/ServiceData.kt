@@ -2,7 +2,6 @@ package io.forge.jam.safrole.report
 
 import io.forge.jam.core.Encodable
 import io.forge.jam.core.JamByteArray
-import io.forge.jam.core.encodeList
 import io.forge.jam.core.serializers.JamByteArrayHexSerializer
 import io.forge.jam.safrole.preimage.PreimageHash
 import kotlinx.serialization.Serializable
@@ -20,15 +19,13 @@ data class StorageMapEntry(
 }
 
 @Serializable
-class ServiceData(
+data class ServiceData(
     val service: ServiceInfo,
     val storage: List<StorageMapEntry> = emptyList(),
     val preimages: List<PreimageHash> = emptyList()
 ) : Encodable {
     override fun encode(): ByteArray {
-        val storageBytes = encodeList(storage)
-        val preimageBytes = encodeList(preimages)
-        return service.encode() + storageBytes + preimageBytes
+        return service.encode()
     }
 
     override fun equals(other: Any?): Boolean {
