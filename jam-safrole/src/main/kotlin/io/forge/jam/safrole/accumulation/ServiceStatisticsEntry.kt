@@ -24,9 +24,7 @@ data class ServiceActivityRecord(
         @SerialName("extrinsic_size") val extrinsicSize: Long = 0,
         val exports: Long = 0,
         @SerialName("accumulate_count") val accumulateCount: Long = 0,
-        @SerialName("accumulate_gas_used") val accumulateGasUsed: Long = 0,
-        @SerialName("on_transfers_count") val onTransfersCount: Long = 0,
-        @SerialName("on_transfers_gas_used") val onTransfersGasUsed: Long = 0
+        @SerialName("accumulate_gas_used") val accumulateGasUsed: Long = 0
 ) : Encodable {
     override fun encode(): ByteArray {
         return encodeCompactInteger(providedCount.toLong()) +
@@ -38,8 +36,6 @@ data class ServiceActivityRecord(
                 encodeCompactInteger(extrinsicSize) +
                 encodeCompactInteger(exports) +
                 encodeCompactInteger(accumulateCount) +
-                encodeCompactInteger(accumulateGasUsed) +
-                encodeCompactInteger(onTransfersCount) +
-                encodeCompactInteger(onTransfersGasUsed)
+                encodeCompactInteger(accumulateGasUsed)
     }
 }
