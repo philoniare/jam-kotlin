@@ -1373,7 +1373,11 @@ class Compiler(
     }
 
     override fun ecalli(imm: UInt) {
-        TODO("Not yet implemented: ecalli")
+        instance.emit(
+            RawHandlers.ecalli,
+            Args.ecalli(programCounter, imm),
+            "ecalli"
+        )
     }
 
     override fun storeImmU8(imm1: UInt, imm2: UInt) {

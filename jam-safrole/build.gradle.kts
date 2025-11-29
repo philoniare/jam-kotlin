@@ -10,6 +10,7 @@ dependencies {
     implementation("org.bouncycastle:bcprov-jdk15on:1.70")
     implementation(project(":jam-core"))
     implementation(project(":jam-vrfs"))
+    implementation(project(":jam-pvm"))
 
     testImplementation(kotlin("test"))
     testImplementation(project(":jam-core", configuration = "testArtifacts"))

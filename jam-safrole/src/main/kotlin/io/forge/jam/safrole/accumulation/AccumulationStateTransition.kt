@@ -1,66 +1,237 @@
 package io.forge.jam.safrole.accumulation
 
 import io.forge.jam.core.JamByteArray
+import io.forge.jam.core.WorkReport
 
+/**
+ * Accumulation state transition implementing Gray Paper equations 25-90, 417-424.
+ * Handles ring buffer management for ready_queue and accumulated arrays,
+ * dependency resolution, and PVM execution for service accumulation.
+ */
 class AccumulationStateTransition(private val config: AccumulationConfig) {
+    private val executor = AccumulationExecutor(config)
+
     fun transition(
         input: AccumulationInput,
         preState: AccumulationState
     ): Pair<AccumulationState, AccumulationOutput> {
-        val postState = preState.deepCopy()
-        postState.slot = input.slot
+        val m = (input.slot % config.EPOCH_LENGTH).toInt()
+        val prevM = (preState.slot % config.EPOCH_LENGTH).toInt()
+        val deltaT = (input.slot - preState.slot).toInt().coerceAtLeast(1)
 
-        if (input.reports.isEmpty()) {
-            return Pair(postState, AccumulationOutput(ok = JamByteArray(ByteArray(32) { 0 })))
+        // 1. Collect all historically accumulated hashes (for dependency checking)
+        val historicallyAccumulated = preState.accumulated.flatten().toMutableSet()
+
+        // 2. Partition new reports into immediate vs queued
+        val immediateReports = input.reports.filter {
+            it.context.prerequisites.isEmpty() && it.segmentRootLookup.isEmpty()
+        }
+        val queuedReports = input.reports.filter {
+            it.context.prerequisites.isNotEmpty() || it.segmentRootLookup.isNotEmpty()
         }
 
-        val accumulatedHashes = postState.accumulated.flatten().toMutableSet()
+        // 3. Track newly accumulated package hashes this block
+        val newAccumulated = mutableSetOf<JamByteArray>()
 
-        val immediateReports =
-            input.reports.filter { it.context.prerequisites.isEmpty() && it.segmentRootLookup.isEmpty() }
-        val queuedReports =
-            input.reports.filter { immediateReports.contains(it).not() }
+        // Add immediate reports to accumulated set
+        immediateReports.forEach { report ->
+            newAccumulated.add(report.packageSpec.hash)
+            historicallyAccumulated.add(report.packageSpec.hash)
+        }
 
-        val newAccumulated = immediateReports.map { it.packageSpec.hash }
-        accumulatedHashes.addAll(newAccumulated)
+        // 4. Build the new ready queue with proper ring buffer management
+        // First, copy all slots from pre_state and edit dependencies
+        val newReadyQueue = MutableList<List<ReadyRecord>>(config.EPOCH_LENGTH) { slotIdx ->
+            val oldRecords = preState.readyQueue.getOrNull(slotIdx) ?: emptyList()
+            editReadyQueue(oldRecords, historicallyAccumulated)
+        }
 
-        val slot = input.slot % config.EPOCH_LENGTH
-        val newReadyQueueCopy = postState.readyQueue.toMutableList()
-        newReadyQueueCopy[slot.toInt()] = queuedReports.map {
+        // Clear slots that were skipped (from prevM+1 to m, modulo EPOCH_LENGTH)
+        // These are slots older than one epoch that should be dropped
+        if (deltaT > 1) {
+            for (offset in 1 until deltaT.coerceAtMost(config.EPOCH_LENGTH)) {
+                val clearIdx = ((prevM + offset) % config.EPOCH_LENGTH + config.EPOCH_LENGTH) % config.EPOCH_LENGTH
+                newReadyQueue[clearIdx] = emptyList()
+            }
+        }
+
+        // Add new queued reports to the current slot m
+        val newRecords = queuedReports.map { report ->
             ReadyRecord(
-                report = it,
-                dependencies = it.context.prerequisites + it.segmentRootLookup.map { sr -> sr.workPackageHash }
+                report = report,
+                dependencies = (report.context.prerequisites +
+                    report.segmentRootLookup.map { it.workPackageHash })
+                    .filter { it !in historicallyAccumulated }
             )
         }
+        // Append to existing records at current slot
+        newReadyQueue[m] = newReadyQueue[m] + newRecords
 
+        // 5. Extract accumulatable reports from ready queue (Q function - topological sort)
+        // Flatten and process all queued records
+        val allQueuedWithSlots = newReadyQueue.flatMapIndexed { slotIdx, records ->
+            records.map { record -> Pair(slotIdx, record) }
+        }
 
-        val processedReports = mutableListOf<JamByteArray>()
-        var madeProgress: Boolean
+        val (readyToAccumulate, stillQueuedWithSlots) = extractAccumulatableWithSlots(
+            allQueuedWithSlots,
+            historicallyAccumulated
+        )
+
+        // 6. Add ready-to-accumulate reports to accumulated set
+        readyToAccumulate.forEach { report ->
+            newAccumulated.add(report.packageSpec.hash)
+            historicallyAccumulated.add(report.packageSpec.hash)
+        }
+
+        // 7. Rebuild ready queue with remaining records (preserving slot positions)
+        val finalReadyQueue = MutableList<List<ReadyRecord>>(config.EPOCH_LENGTH) { emptyList() }
+        stillQueuedWithSlots.groupBy { it.first }.forEach { (slotIdx, pairs) ->
+            finalReadyQueue[slotIdx] = pairs.map { it.second }
+        }
+
+        // 8. Execute PVM for all accumulated reports
+        val allToAccumulate = immediateReports + readyToAccumulate
+        val partialState = preState.toPartialState()
+
+        val (newPartialState, gasUsedPerService) = executeAccumulation(
+            partialState = partialState,
+            reports = allToAccumulate,
+            timeslot = input.slot,
+            entropy = preState.entropy
+        )
+
+        // 9. Rotate accumulated array (drop oldest, add new at end)
+        val newAccumulatedList = newAccumulated.toList().sortedBy { it.toHex() }
+        val newAccumulatedArray = (preState.accumulated.drop(1) + listOf(newAccumulatedList)).toMutableList()
+
+        // 10. Update statistics
+        val workItemsPerService = countWorkItemsPerService(allToAccumulate)
+        val newStatistics = updateStatistics(
+            preState.statistics,
+            gasUsedPerService,
+            workItemsPerService
+        )
+
+        // 11. Build final state (accounts and statistics are val, so need to create new state)
+        val finalState = AccumulationState(
+            slot = input.slot,
+            entropy = preState.entropy.copy(),
+            readyQueue = finalReadyQueue,
+            accumulated = newAccumulatedArray,
+            privileges = preState.privileges.copy(),
+            statistics = newStatistics,
+            accounts = newPartialState.toServiceItems()
+        )
+
+        return Pair(finalState, AccumulationOutput(ok = JamByteArray(ByteArray(32) { 0 })))
+    }
+
+    /**
+     * Extract accumulatable reports while preserving slot information.
+     */
+    private fun extractAccumulatableWithSlots(
+        queueWithSlots: List<Pair<Int, ReadyRecord>>,
+        initiallyAccumulated: Set<JamByteArray>
+    ): Pair<List<WorkReport>, List<Pair<Int, ReadyRecord>>> {
+        val accumulated = initiallyAccumulated.toMutableSet()
+        val result = mutableListOf<WorkReport>()
+        var remaining = queueWithSlots.toList()
+
         do {
-            madeProgress = false
-            for (i in newReadyQueueCopy.indices) {
-                val slotReports = newReadyQueueCopy[i].toMutableList()
-                var j = 0
-                while (j < slotReports.size) {
-                    val record = slotReports[j]
-                    if (record.dependencies.all { dep -> accumulatedHashes.contains(dep) }) {
-                        processedReports.add(record.report.packageSpec.hash)
-                        accumulatedHashes.add(record.report.packageSpec.hash)
-                        slotReports.removeAt(j)
-                        madeProgress = true
-                    } else {
-                        j++
-                    }
-                }
-                newReadyQueueCopy[i] = slotReports
+            val (ready, notReady) = remaining.partition { (_, record) ->
+                record.dependencies.all { it in accumulated }
             }
-        } while (madeProgress)
+            if (ready.isEmpty()) break
 
-        // Update state
-        postState.readyQueue = newReadyQueueCopy
-        val newAccumulatedAndProcessed = (newAccumulated + processedReports).sortedBy { it.toHex() }
-        postState.accumulated = (postState.accumulated.drop(1) + listOf(newAccumulatedAndProcessed)).toMutableList()
+            ready.forEach { (_, record) ->
+                result.add(record.report)
+                accumulated.add(record.report.packageSpec.hash)
+            }
+            remaining = notReady
+        } while (true)
 
-        return Pair(postState, AccumulationOutput(ok = JamByteArray(ByteArray(32) { 0 })))
+        return Pair(result, remaining)
+    }
+
+    /**
+     * Execute PVM accumulation for all reports.
+     */
+    private fun executeAccumulation(
+        partialState: PartialState,
+        reports: List<WorkReport>,
+        timeslot: Long,
+        entropy: JamByteArray
+    ): Pair<PartialState, Map<Long, Long>> {
+        if (reports.isEmpty()) {
+            return Pair(partialState, emptyMap())
+        }
+
+        val gasUsedMap = mutableMapOf<Long, Long>()
+        var currentState = partialState
+
+        for (report in reports) {
+            for (result in report.results) {
+                val operand = OperandTuple(
+                    packageHash = report.packageSpec.hash,
+                    segmentRoot = report.packageSpec.erasureRoot,
+                    authorizerHash = report.authorizerHash,
+                    payloadHash = result.payloadHash,
+                    gasLimit = result.accumulateGas,
+                    authTrace = report.authOutput,
+                    result = result.result
+                )
+
+                val execResult = executor.executeService(
+                    partialState = currentState,
+                    timeslot = timeslot,
+                    serviceId = result.serviceId,
+                    gasLimit = result.accumulateGas,
+                    entropy = entropy,
+                    operands = listOf(AccumulationOperand.WorkItem(operand))
+                )
+
+                currentState = execResult.postState
+                gasUsedMap[result.serviceId] = (gasUsedMap[result.serviceId] ?: 0L) + execResult.gasUsed
+            }
+        }
+
+        return Pair(currentState, gasUsedMap)
+    }
+
+    /**
+     * Update service statistics with accumulation results.
+     */
+    private fun updateStatistics(
+        existing: List<ServiceStatisticsEntry>,
+        gasUsedPerService: Map<Long, Long>,
+        workItemsPerService: Map<Long, Int>
+    ): List<ServiceStatisticsEntry> {
+        val statsMap = existing.associateBy { it.id }.toMutableMap()
+
+        for ((serviceId, gasUsed) in gasUsedPerService) {
+            val workItems = workItemsPerService[serviceId] ?: 0
+            val current = statsMap[serviceId]
+
+            if (current != null) {
+                statsMap[serviceId] = ServiceStatisticsEntry(
+                    id = serviceId,
+                    record = current.record.copy(
+                        accumulateCount = current.record.accumulateCount + workItems,
+                        accumulateGasUsed = current.record.accumulateGasUsed + gasUsed
+                    )
+                )
+            } else {
+                statsMap[serviceId] = ServiceStatisticsEntry(
+                    id = serviceId,
+                    record = ServiceActivityRecord(
+                        accumulateCount = workItems.toLong(),
+                        accumulateGasUsed = gasUsed
+                    )
+                )
+            }
+        }
+
+        return statsMap.values.sortedBy { it.id }
     }
 }

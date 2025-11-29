@@ -18,7 +18,15 @@ class ServiceInfo(
     @SerialName("min_memo_gas")
     val minMemoGas: Long,
     val bytes: Long,
-    val items: Int
+    @SerialName("deposit_offset")
+    val depositOffset: Long = 0,
+    val items: Int,
+    @SerialName("creation_slot")
+    val creationSlot: Long = 0,
+    @SerialName("last_accumulation_slot")
+    val lastAccumulationSlot: Long = 0,
+    @SerialName("parent_service")
+    val parentService: Long = 0
 ) : Encodable {
     override fun encode(): ByteArray {
         val balanceBytes = encodeFixedWidthInteger(balance, 8, false)
@@ -38,7 +46,11 @@ class ServiceInfo(
             minItemGas == other.minItemGas &&
             minMemoGas == other.minMemoGas &&
             bytes == other.bytes &&
-            items == other.items
+            depositOffset == other.depositOffset &&
+            items == other.items &&
+            creationSlot == other.creationSlot &&
+            lastAccumulationSlot == other.lastAccumulationSlot &&
+            parentService == other.parentService
     }
 
     override fun hashCode(): Int {
@@ -47,12 +59,16 @@ class ServiceInfo(
         result = 31 * result + minItemGas.hashCode()
         result = 31 * result + minMemoGas.hashCode()
         result = 31 * result + bytes.hashCode()
+        result = 31 * result + depositOffset.hashCode()
         result = 31 * result + items.hashCode()
+        result = 31 * result + creationSlot.hashCode()
+        result = 31 * result + lastAccumulationSlot.hashCode()
+        result = 31 * result + parentService.hashCode()
         return result
     }
 
     override fun toString(): String {
-        return "ServiceInfo(codeHash=$codeHash, balance=$balance, minItemGas=$minItemGas, minMemoGas=$minMemoGas, bytes=$bytes, items=$items)"
+        return "ServiceInfo(codeHash=$codeHash, balance=$balance, minItemGas=$minItemGas, minMemoGas=$minMemoGas, bytes=$bytes, depositOffset=$depositOffset, items=$items, creationSlot=$creationSlot, lastAccumulationSlot=$lastAccumulationSlot, parentService=$parentService)"
     }
 
     fun copy(
@@ -61,8 +77,12 @@ class ServiceInfo(
         minItemGas: Long = this.minItemGas,
         minMemoGas: Long = this.minMemoGas,
         bytes: Long = this.bytes,
-        items: Int = this.items
+        depositOffset: Long = this.depositOffset,
+        items: Int = this.items,
+        creationSlot: Long = this.creationSlot,
+        lastAccumulationSlot: Long = this.lastAccumulationSlot,
+        parentService: Long = this.parentService
     ): ServiceInfo {
-        return ServiceInfo(codeHash, balance, minItemGas, minMemoGas, bytes, items)
+        return ServiceInfo(codeHash, balance, minItemGas, minMemoGas, bytes, depositOffset, items, creationSlot, lastAccumulationSlot, parentService)
     }
 }

@@ -1257,5 +1257,10 @@ data class Args(
             a2 = base.toU32(),
             a3 = offset
         )
+
+        fun ecalli(programCounter: ProgramCounter, imm: UInt) = Args(
+            a0 = programCounter.value,
+            a1 = imm
+        )
     }
 }

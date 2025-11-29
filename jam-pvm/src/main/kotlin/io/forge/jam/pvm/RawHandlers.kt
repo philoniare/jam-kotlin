@@ -52,6 +52,21 @@ object RawHandlers {
         panicImpl(visitor, programCounter)
     }
 
+    val ecalli: Handler = { visitor ->
+        val args = getArgs(visitor)
+        val programCounter = ProgramCounter(args.a0)
+        val imm = args.a1
+        logger.debug("Ecalli at ${programCounter.value}: host call $imm")
+        with(visitor.inner) {
+            this.programCounter = programCounter
+            this.programCounterValid = true
+            this.nextProgramCounter = null
+            this.nextProgramCounterChanged = true
+            this.interrupt = InterruptKind.Ecalli(imm)
+        }
+        null
+    }
+
     val chargeGas: Handler = { visitor ->
         val args = getArgs(visitor)
         val programCounter = ProgramCounter(args.a0)
