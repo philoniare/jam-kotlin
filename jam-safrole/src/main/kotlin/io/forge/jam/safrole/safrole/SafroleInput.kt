@@ -17,7 +17,7 @@ data class SafroleInput(
     override fun encode(): ByteArray {
         val slotBytes = slot?.let { encodeFixedWidthInteger(it, 4, false) } ?: byteArrayOf(0)
         val entropyBytes = entropy.bytes
-        val extrinsicBytes = encodeList(extrinsic)
+        val extrinsicBytes = encodeListWithCompactLength(extrinsic)
         return slotBytes + entropyBytes + extrinsicBytes
     }
 }
