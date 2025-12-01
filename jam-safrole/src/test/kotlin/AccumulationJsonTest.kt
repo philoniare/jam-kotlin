@@ -12,77 +12,98 @@ class AccumulationJsonTest {
                 actual: AccumulationState,
                 testCase: String
         ) {
-                assertEquals(expected.slot, actual.slot, "Slot mismatch in test case: $testCase")
-                assertEquals(
-                        expected.entropy,
-                        actual.entropy,
-                        "Entropy mismatch in test case: $testCase"
-                )
-
-                assertEquals(
-                        expected.readyQueue.size,
-                        actual.readyQueue.size,
-                        "Ready queue size mismatch in test case: $testCase"
-                )
-
-                expected.readyQueue.forEachIndexed { queueIndex, expectedQueue ->
-                        val actualQueue = actual.readyQueue[queueIndex]
+                try {
                         assertEquals(
-                                expectedQueue.size,
-                                actualQueue.size,
-                                "Ready queue[$queueIndex] size mismatch in test case: $testCase"
+                                expected.slot,
+                                actual.slot,
+                                "Slot mismatch in test case: $testCase"
+                        )
+                        assertEquals(
+                                expected.entropy,
+                                actual.entropy,
+                                "Entropy mismatch in test case: $testCase"
                         )
 
-                        expectedQueue.forEachIndexed { recordIndex, expectedRecord ->
-                                val actualRecord = actualQueue[recordIndex]
-                                assertReadyRecordEquals(
-                                        expectedRecord,
-                                        actualRecord,
-                                        "Ready queue[$queueIndex][$recordIndex]",
+                        assertEquals(
+                                expected.readyQueue.size,
+                                actual.readyQueue.size,
+                                "Ready queue size mismatch in test case: $testCase"
+                        )
+
+                        expected.readyQueue.forEachIndexed { queueIndex, expectedQueue ->
+                                val actualQueue = actual.readyQueue[queueIndex]
+                                assertEquals(
+                                        expectedQueue.size,
+                                        actualQueue.size,
+                                        "Ready queue[$queueIndex] size mismatch in test case: $testCase"
+                                )
+
+                                expectedQueue.forEachIndexed { recordIndex, expectedRecord ->
+                                        val actualRecord = actualQueue[recordIndex]
+                                        assertReadyRecordEquals(
+                                                expectedRecord,
+                                                actualRecord,
+                                                "Ready queue[$queueIndex][$recordIndex]",
+                                                testCase
+                                        )
+                                }
+                        }
+
+                        assertEquals(
+                                expected.accumulated.size,
+                                actual.accumulated.size,
+                                "Accumulated size mismatch in test case: $testCase"
+                        )
+
+                        expected.accumulated.forEachIndexed { listIndex, expectedList ->
+                                val actualList = actual.accumulated[listIndex]
+                                assertEquals(
+                                        expectedList.size,
+                                        actualList.size,
+                                        "Accumulated[$listIndex] size mismatch in test case: $testCase"
+                                )
+
+                                expectedList.forEachIndexed { itemIndex, expectedItem ->
+                                        val actualItem = actualList[itemIndex]
+                                        assertEquals(
+                                                expectedItem,
+                                                actualItem,
+                                                "Accumulated[$listIndex][$itemIndex] mismatch in test case: $testCase"
+                                        )
+                                }
+                        }
+
+                        assertEquals(
+                                expected.privileges,
+                                actual.privileges,
+                                "Privileges mismatch in test case: $testCase"
+                        )
+
+                        assertEquals(
+                                expected.accounts.size,
+                                actual.accounts.size,
+                                "Accounts size mismatch in test case: $testCase"
+                        )
+
+                        expected.accounts.forEachIndexed { index, expectedAccount ->
+                                val actualAccount = actual.accounts[index]
+                                assertServiceItemEquals(
+                                        expectedAccount,
+                                        actualAccount,
+                                        index,
                                         testCase
                                 )
                         }
-                }
-
-                assertEquals(
-                        expected.accumulated.size,
-                        actual.accumulated.size,
-                        "Accumulated size mismatch in test case: $testCase"
-                )
-
-                expected.accumulated.forEachIndexed { listIndex, expectedList ->
-                        val actualList = actual.accumulated[listIndex]
-                        assertEquals(
-                                expectedList.size,
-                                actualList.size,
-                                "Accumulated[$listIndex] size mismatch in test case: $testCase"
-                        )
-
-                        expectedList.forEachIndexed { itemIndex, expectedItem ->
-                                val actualItem = actualList[itemIndex]
-                                assertEquals(
-                                        expectedItem,
-                                        actualItem,
-                                        "Accumulated[$listIndex][$itemIndex] mismatch in test case: $testCase"
-                                )
-                        }
-                }
-
-                assertEquals(
-                        expected.privileges,
-                        actual.privileges,
-                        "Privileges mismatch in test case: $testCase"
-                )
-
-                assertEquals(
-                        expected.accounts.size,
-                        actual.accounts.size,
-                        "Accounts size mismatch in test case: $testCase"
-                )
-
-                expected.accounts.forEachIndexed { index, expectedAccount ->
-                        val actualAccount = actual.accounts[index]
-                        assertServiceItemEquals(expectedAccount, actualAccount, index, testCase)
+                } catch (e: Throwable) {
+                        val debugFile = java.io.File("/tmp/jam_debug_mismatch.txt")
+                        debugFile.appendText("Assertion failed for $testCase\n")
+                        debugFile.appendText("Error: ${e.message}\n")
+                        debugFile.appendText("Expected: $expected\n")
+                        debugFile.appendText("Actual: $actual\n")
+                        println("Assertion failed for $testCase")
+                        println("Expected: $expected")
+                        println("Actual: $actual")
+                        throw e
                 }
         }
 
@@ -110,6 +131,12 @@ class AccumulationJsonTest {
                 index: Int,
                 testCase: String
         ) {
+                val debugFile = java.io.File("/tmp/jam_debug_mismatch.txt")
+                if (expected != actual) {
+                    debugFile.appendText("Mismatch in service item $index for test case $testCase\n")
+                    debugFile.appendText("Expected: $expected\n")
+                    debugFile.appendText("Actual:   $actual\n")
+                }
                 assertEquals(
                         expected,
                         actual,
@@ -129,6 +156,7 @@ class AccumulationJsonTest {
         fun testTinyAccumulations() {
                 val folderName = "stf/accumulate/tiny"
                 val testCaseNames = TestFileLoader.getTestFilenamesFromTestVectors(folderName)
+                // val testCaseNames = listOf("process_one_immediate_report-1")
 
                 for (testCaseName in testCaseNames) {
                         val (testCase, expectedBinaryData) =
@@ -143,18 +171,31 @@ class AccumulationJsonTest {
                                 "Encoding mismatch for $testCaseName"
                         )
 
-                        val report =
-                                AccumulationStateTransition(
-                                        AccumulationConfig(
-                                                EPOCH_LENGTH = 12,
-                                                MAX_BLOCK_HISTORY = 8,
-                                                AUTH_QUEUE_SIZE = 80
+                        try {
+                                val report =
+                                        AccumulationStateTransition(
+                                                AccumulationConfig(
+                                                        EPOCH_LENGTH = 12,
+                                                        MAX_BLOCK_HISTORY = 8,
+                                                        AUTH_QUEUE_SIZE = 80
+                                                )
                                         )
-                                )
-                        val (postState, output) =
-                                report.transition(testCase.input, testCase.preState)
-                        assertAccumulationStateEquals(testCase.postState, postState, testCaseName)
-                        assertAccumulationOutputEquals(testCase.output, output, testCaseName)
+                                val debugFile = java.io.File("/tmp/jam_debug_mismatch.txt")
+                                debugFile.appendText("Test case: $testCaseName\n")
+                                testCase.preState.accounts.forEach {
+                                    debugFile.appendText("Pre-state account ${it.id} balance: ${it.data.service.balance}\n")
+                                }
+                                val (postState, output) =
+                                        report.transition(testCase.input, testCase.preState)
+                                assertAccumulationStateEquals(testCase.postState, postState, testCaseName)
+                                assertAccumulationOutputEquals(testCase.output, output, testCaseName)
+                        } catch (e: Throwable) {
+                                val debugFile = java.io.File("/tmp/jam_debug_mismatch.txt")
+                                debugFile.appendText("Assertion failed for $testCaseName\n")
+                                debugFile.appendText("Error: ${e.message}\n")
+                                println("Assertion failed for $testCaseName")
+                                throw e
+                        }
                 }
         }
 
@@ -176,19 +217,17 @@ class AccumulationJsonTest {
                                 "Encoding mismatch for $testCaseName"
                         )
 
-                        // val report =
-                        //         AccumulationStateTransition(
-                        //                 AccumulationConfig(
-                        //                         EPOCH_LENGTH = 600,
-                        //                         MAX_BLOCK_HISTORY = 8,
-                        //                         AUTH_QUEUE_SIZE = 80
-                        //                 )
-                        //         )
-                        // val (postState, output) = report.transition(testCase.input,
-                        // testCase.preState)
-                        // assertAccumulationStateEquals(testCase.postState, postState,
-                        // testCaseName)
-                        // assertAccumulationOutputEquals(testCase.output, output, testCaseName)
+                        val report =
+                                AccumulationStateTransition(
+                                        AccumulationConfig(
+                                                EPOCH_LENGTH = 600,
+                                                MAX_BLOCK_HISTORY = 8,
+                                                AUTH_QUEUE_SIZE = 80
+                                        )
+                                )
+                        val (postState, output) = report.transition(testCase.input, testCase.preState)
+                        assertAccumulationStateEquals(testCase.postState, postState, testCaseName)
+                        assertAccumulationOutputEquals(testCase.output, output, testCaseName)
                 }
         }
 }

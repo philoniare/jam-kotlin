@@ -36,7 +36,7 @@ class PreimageJsonTest {
 
         expected.ok?.let { expectedMarks ->
             actual.ok?.let { actualMarks ->
-                assertEquals(
+                assertEquals<Any?>(
                     expectedMarks,
                     actualMarks,
                     "$testCase: Mismatch in ok value"

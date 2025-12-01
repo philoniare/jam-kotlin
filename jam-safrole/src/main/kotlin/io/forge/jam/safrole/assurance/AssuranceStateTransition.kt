@@ -1,6 +1,6 @@
 package io.forge.jam.safrole.assurance
 
-import blakeHash
+import io.forge.jam.core.blakeHash
 import io.forge.jam.core.AssuranceExtrinsic
 import io.forge.jam.core.WorkReport
 import io.forge.jam.safrole.ValidatorKey

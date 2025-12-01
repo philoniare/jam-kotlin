@@ -1,12 +1,12 @@
 package io.forge.jam.safrole.report
 
-import blakeHash
+import io.forge.jam.core.blakeHash
 import io.forge.jam.core.*
 import io.forge.jam.safrole.AvailabilityAssignment
 import io.forge.jam.safrole.ValidatorKey
 import io.forge.jam.safrole.historical.HistoricalBeta
 import io.forge.jam.safrole.historical.HistoricalBetaContainer
-import keccakHash
+import io.forge.jam.core.keccakHash
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
 import org.bouncycastle.crypto.signers.Ed25519Signer
 

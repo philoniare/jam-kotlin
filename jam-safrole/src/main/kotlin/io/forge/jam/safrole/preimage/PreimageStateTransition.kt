@@ -1,6 +1,6 @@
 package io.forge.jam.safrole.preimage
 
-import blakeHash
+import io.forge.jam.core.blakeHash
 import io.forge.jam.core.JamByteArray
 
 class PreimageStateTransition {
