@@ -1,9 +1,11 @@
 package io.forge.jam.pvm.program
 
+import io.forge.jam.pvm.engine.InstructionSetKind
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 data class ProgramParts(
+    var isaKind: InstructionSetKind? = null,  // Track the ISA kind for proper instruction validation
     var is64Bit: Boolean = false,
     var roDataSize: UInt = 0u,
     var rwDataSize: UInt = 0u,
@@ -25,14 +27,175 @@ data class ProgramParts(
     }
 
     companion object {
-        private const val BLOB_VERSION_V1_32: Byte = 1
-        private const val BLOB_VERSION_V1_64: Byte = 0
+        // Polkavm blob magic bytes: "PVM\0"
+        private val BLOB_MAGIC = byteArrayOf(0x50, 0x56, 0x4D, 0x00)
+        private const val BLOB_MAGIC_SIZE = 4
+
+        // Generic blob magic byte: 'G' (0x47)
+        private const val GENERIC_MAGIC: Byte = 0x47
 
         private const val BLOB_LEN_SIZE: Int = Long.SIZE_BYTES
         private const val VM_MAXIMUM_IMPORT_COUNT: UInt = 1024u
 
+        // JAM blob format constants
+        private const val JAM_INIT_ZONE_SIZE: UInt = 65536u  // 2^16
+        private const val JAM_PAGE_SIZE: UInt = 4096u
+
         // Section constants
         private const val SECTION_MEMORY_CONFIG: Byte = 1
+
+        fun fromJamBytes(blob: ArcBytes): Result<ProgramParts> = runCatching {
+            val bytes = blob.toByteArray()
+            if (bytes.size < 15) {
+                throw ProgramParseError(ProgramParseErrorKind.Other("JAM blob too short"))
+            }
+
+            var offset = 0
+
+            // Read |o| (3 bytes little-endian)
+            val roDataLen = readLE3(bytes, offset)
+            offset += 3
+
+            // Read |w| (3 bytes little-endian)
+            val rwDataLen = readLE3(bytes, offset)
+            offset += 3
+
+            // Read z (2 bytes little-endian) - heap pages
+            val heapPages = readLE2(bytes, offset)
+            offset += 2
+
+            // Read s (3 bytes little-endian) - stack size
+            val stackSize = readLE3(bytes, offset)
+            offset += 3
+
+            // Read o (ro_data)
+            if (offset + roDataLen.toInt() > bytes.size) {
+                throw ProgramParseError(ProgramParseErrorKind.Other("JAM blob truncated: ro_data extends beyond end"))
+            }
+            val roData = bytes.copyOfRange(offset, offset + roDataLen.toInt())
+            offset += roDataLen.toInt()
+
+            // Read w (rw_data)
+            if (offset + rwDataLen.toInt() > bytes.size) {
+                throw ProgramParseError(ProgramParseErrorKind.Other("JAM blob truncated: rw_data extends beyond end"))
+            }
+            val rwData = bytes.copyOfRange(offset, offset + rwDataLen.toInt())
+            offset += rwDataLen.toInt()
+
+            // Read |c| (4 bytes little-endian) - code+jumptable length
+            if (offset + 4 > bytes.size) {
+                throw ProgramParseError(ProgramParseErrorKind.Other("JAM blob truncated: missing code length"))
+            }
+            val codeLen = readLE4(bytes, offset)
+            offset += 4
+
+            // Read c (code+jumptable)
+            if (offset + codeLen.toInt() > bytes.size) {
+                throw ProgramParseError(ProgramParseErrorKind.Other("JAM blob truncated: code extends beyond end"))
+            }
+            val codeAndJumpTable = bytes.copyOfRange(offset, offset + codeLen.toInt())
+
+            // Calculate heap size in bytes from heap pages
+            val heapSize = heapPages.toUInt() * JAM_PAGE_SIZE
+
+            ProgramParts(
+                isaKind = InstructionSetKind.JamV1,  // JAM format implies JamV1 ISA
+                is64Bit = true,  // JamV1 uses 64-bit registers (though 32-bit addressing)
+                roDataSize = roDataLen.toUInt(),
+                rwDataSize = rwDataLen.toUInt() + heapSize,
+                stackSize = stackSize.toUInt(),
+                roData = ArcBytes.fromStatic(roData),
+                rwData = ArcBytes.fromStatic(rwData),
+                codeAndJumpTable = ArcBytes.fromStatic(codeAndJumpTable)
+            )
+        }
+        
+        fun fromGenericBytes(blob: ArcBytes): Result<ProgramParts> = runCatching {
+            val bytes = blob.toByteArray()
+            if (bytes.isEmpty() || bytes[0] != GENERIC_MAGIC) {
+                throw ProgramParseError(ProgramParseErrorKind.Other("Not a Generic blob format"))
+            }
+
+            var offset = 1  // Skip 'G' magic byte
+
+            // Skip version byte
+            if (offset >= bytes.size) {
+                throw ProgramParseError(ProgramParseErrorKind.Other("Generic blob truncated: missing version"))
+            }
+            offset += 1  // version byte
+
+            // Skip name (length-prefixed string)
+            if (offset >= bytes.size) {
+                throw ProgramParseError(ProgramParseErrorKind.Other("Generic blob truncated: missing name length"))
+            }
+            val nameLen = bytes[offset].toInt() and 0xFF
+            offset += 1 + nameLen
+
+            // Skip version string (length-prefixed)
+            if (offset >= bytes.size) {
+                throw ProgramParseError(ProgramParseErrorKind.Other("Generic blob truncated: missing version string length"))
+            }
+            val versionLen = bytes[offset].toInt() and 0xFF
+            offset += 1 + versionLen
+
+            // Skip license (length-prefixed)
+            if (offset >= bytes.size) {
+                throw ProgramParseError(ProgramParseErrorKind.Other("Generic blob truncated: missing license length"))
+            }
+            val licenseLen = bytes[offset].toInt() and 0xFF
+            offset += 1 + licenseLen
+
+            // Skip authors (count + each length-prefixed)
+            if (offset >= bytes.size) {
+                throw ProgramParseError(ProgramParseErrorKind.Other("Generic blob truncated: missing author count"))
+            }
+            val authorCount = bytes[offset].toInt() and 0xFF
+            offset += 1
+
+            for (i in 0 until authorCount) {
+                if (offset >= bytes.size) {
+                    throw ProgramParseError(ProgramParseErrorKind.Other("Generic blob truncated: missing author $i length"))
+                }
+                val authorLen = bytes[offset].toInt() and 0xFF
+                offset += 1 + authorLen
+            }
+
+            // Remainder is the JAM blob
+            if (offset >= bytes.size) {
+                throw ProgramParseError(ProgramParseErrorKind.Other("Generic blob truncated: missing JAM blob"))
+            }
+
+            val jamBlob = bytes.copyOfRange(offset, bytes.size)
+            fromJamBytes(ArcBytes.fromStatic(jamBlob)).getOrThrow()
+        }
+
+        /**
+         * Read 2 bytes little-endian.
+         */
+        private fun readLE2(bytes: ByteArray, offset: Int): Int {
+            return (bytes[offset].toInt() and 0xFF) or
+                ((bytes[offset + 1].toInt() and 0xFF) shl 8)
+        }
+
+        /**
+         * Read 3 bytes little-endian.
+         */
+        private fun readLE3(bytes: ByteArray, offset: Int): Int {
+            return (bytes[offset].toInt() and 0xFF) or
+                ((bytes[offset + 1].toInt() and 0xFF) shl 8) or
+                ((bytes[offset + 2].toInt() and 0xFF) shl 16)
+        }
+
+        /**
+         * Read 4 bytes little-endian.
+         */
+        private fun readLE4(bytes: ByteArray, offset: Int): Int {
+            return (bytes[offset].toInt() and 0xFF) or
+                ((bytes[offset + 1].toInt() and 0xFF) shl 8) or
+                ((bytes[offset + 2].toInt() and 0xFF) shl 16) or
+                ((bytes[offset + 3].toInt() and 0xFF) shl 24)
+        }
+
         private const val SECTION_RO_DATA: Byte = 2
         private const val SECTION_RW_DATA: Byte = 3
         private const val SECTION_IMPORTS: Byte = 4
@@ -44,14 +207,30 @@ data class ProgramParts(
         private const val SECTION_END_OF_FILE: Byte = 0
 
         fun fromBytes(blob: ArcBytes): Result<ProgramParts> = runCatching {
-            val reader = ArcBytesReader(blob, 0)
+            val bytes = blob.toByteArray()
 
-            val is64Bit = when (val blobVersion = reader.readByte().getOrThrow()) {
-                BLOB_VERSION_V1_32 -> false
-                BLOB_VERSION_V1_64 -> true
-                else -> throw ProgramParseError(ProgramParseErrorKind.UnsupportedVersion(blobVersion))
+            // 1. Check magic bytes first (must be "PVM\0")
+            if (bytes.size < BLOB_MAGIC_SIZE) {
+                throw ProgramParseError(ProgramParseErrorKind.Other("blob too short"))
+            }
+            if (!bytes.sliceArray(0 until BLOB_MAGIC_SIZE).contentEquals(BLOB_MAGIC)) {
+                throw ProgramParseError(
+                    ProgramParseErrorKind.Other("blob doesn't start with expected magic bytes")
+                )
             }
 
+            // 2. Create reader starting AFTER magic bytes (offset 4)
+            val reader = ArcBytesReader(blob, BLOB_MAGIC_SIZE)
+
+            // 3. Read blob version (now at correct offset 4)
+            val blobVersion = reader.readByte().getOrThrow()
+
+            // 4. Determine ISA kind and is64Bit from blob version
+            val isaKind = InstructionSetKind.fromBlobVersion(blobVersion)
+                ?: throw ProgramParseError(ProgramParseErrorKind.UnsupportedVersion(blobVersion))
+            val is64Bit = isaKind.is64Bit()
+
+            // 5. Read blob length and verify
             val blobLen = reader.readSlice(BLOB_LEN_SIZE).getOrThrow()
                 .let { ByteBuffer.wrap(it).order(ByteOrder.LITTLE_ENDIAN).long }
 
@@ -61,7 +240,7 @@ data class ProgramParts(
                 )
             }
 
-            val parts = ProgramParts(is64Bit = is64Bit)
+            val parts = ProgramParts(isaKind = isaKind, is64Bit = is64Bit)
             var sectionHolder = reader.readByte().getOrThrow()
 
             // Read memory config section if present
