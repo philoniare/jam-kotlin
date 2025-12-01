@@ -170,6 +170,9 @@ class AccumulationStateTransition(private val config: AccumulationConfig) {
         val gasUsedMap = mutableMapOf<Long, Long>()
         var currentState = partialState
 
+        // Group work items by service, preserving report order
+        val serviceOperands = mutableMapOf<Long, MutableList<AccumulationOperand>>()
+        
         for (report in reports) {
             for (result in report.results) {
                 val operand = OperandTuple(
@@ -181,19 +184,28 @@ class AccumulationStateTransition(private val config: AccumulationConfig) {
                     authTrace = report.authOutput,
                     result = result.result
                 )
-
-                val execResult = executor.executeService(
-                    partialState = currentState,
-                    timeslot = timeslot,
-                    serviceId = result.serviceId,
-                    gasLimit = result.accumulateGas,
-                    entropy = entropy,
-                    operands = listOf(AccumulationOperand.WorkItem(operand))
-                )
-
-                currentState = execResult.postState
-                gasUsedMap[result.serviceId] = (gasUsedMap[result.serviceId] ?: 0L) + execResult.gasUsed
+                serviceOperands.computeIfAbsent(result.serviceId) { mutableListOf() }
+                    .add(AccumulationOperand.WorkItem(operand))
             }
+        }
+
+        // Execute for each service
+        for ((serviceId, operands) in serviceOperands) {
+            // Calculate total gas limit for this service batch
+            val totalGasLimit = operands.filterIsInstance<AccumulationOperand.WorkItem>()
+                .sumOf { it.operand.gasLimit }
+
+            val execResult = executor.executeService(
+                partialState = currentState,
+                timeslot = timeslot,
+                serviceId = serviceId,
+                gasLimit = totalGasLimit,
+                entropy = entropy,
+                operands = operands
+            )
+
+            currentState = execResult.postState
+            gasUsedMap[serviceId] = (gasUsedMap[serviceId] ?: 0L) + execResult.gasUsed
         }
 
         return Pair(currentState, gasUsedMap)

@@ -8,6 +8,7 @@ import io.forge.jam.safrole.report.AccumulationServiceData
 import io.forge.jam.safrole.report.AccumulationServiceItem
 import io.forge.jam.safrole.report.ServiceInfo
 import io.forge.jam.safrole.report.StorageMapEntry
+import io.forge.jam.safrole.report.PreimagesStatusMapEntry
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -61,8 +62,10 @@ data class AccumulationState(
                     preimages = item.data.preimages.associate { preimage ->
                         preimage.hash to preimage.blob
                     }.toMutableMap(),
-                    preimageRequests = mutableMapOf(),
-                    lastAccumulated = 0L
+                    preimageRequests = item.data.preimagesStatus.associate { status ->
+                        PreimageKey(status.hash, status.status.size) to PreimageRequest(status.status)
+                    }.toMutableMap(),
+                    lastAccumulated = item.data.service.lastAccumulationSlot
                 )
             }.toMutableMap(),
             stagingSet = mutableListOf(),
@@ -70,7 +73,7 @@ data class AccumulationState(
             manager = privileges.bless,
             assigners = privileges.assign.toMutableList(),
             delegator = privileges.designate,
-            registrar = 0L,
+            registrar = privileges.register,
             alwaysAccers = privileges.alwaysAcc.associate { it.id to it.gas }.toMutableMap()
         )
     }
@@ -85,12 +88,17 @@ fun PartialState.toAccumulationServiceItems(): List<AccumulationServiceItem> {
             id = id,
             data = AccumulationServiceData(
                 service = account.info,
-                storage = account.storage.map { (key, value) ->
-                    StorageMapEntry(key = key, value = value)
-                },
-                preimages = account.preimages.map { (hash, blob) ->
-                    PreimageHash(hash = hash, blob = blob)
-                }
+                storage = account.storage.entries
+                    .sortedBy { it.key.toHex() }
+                    .map { (key, value) -> StorageMapEntry(key = key, value = value) },
+                preimages = account.preimages.entries
+                    .sortedBy { it.key.toHex() }
+                    .map { (hash, blob) -> PreimageHash(hash = hash, blob = blob) },
+                preimagesStatus = account.preimageRequests.entries
+                    .sortedBy { it.key.hash.toHex() }
+                    .map { (key, request) ->
+                        PreimagesStatusMapEntry(hash = key.hash, status = request.requestedAt)
+                    }
             )
         )
     }.sortedBy { it.id }
