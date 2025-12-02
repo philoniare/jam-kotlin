@@ -13,6 +13,16 @@ data class SegmentRootLookup(
     @Serializable(with = JamByteArrayHexSerializer::class)
     val segmentTreeRoot: JamByteArray
 ) : Encodable {
+    companion object {
+        const val SIZE = 64 // 32 + 32
+
+        fun fromBytes(data: ByteArray, offset: Int = 0): SegmentRootLookup {
+            val workPackageHash = JamByteArray(data.copyOfRange(offset, offset + 32))
+            val segmentTreeRoot = JamByteArray(data.copyOfRange(offset + 32, offset + 64))
+            return SegmentRootLookup(workPackageHash, segmentTreeRoot)
+        }
+    }
+
     override fun encode(): ByteArray {
         return workPackageHash.bytes + segmentTreeRoot.bytes
     }

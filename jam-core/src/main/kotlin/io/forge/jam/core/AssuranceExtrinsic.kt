@@ -15,6 +15,25 @@ data class AssuranceExtrinsic(
     @Serializable(with = JamByteArrayHexSerializer::class)
     val signature: JamByteArray      // Ed25519 signature of the assurance
 ) : Encodable {
+    companion object {
+        const val SIGNATURE_SIZE = 64 // Ed25519 signature
+
+        fun size(coresCount: Int): Int {
+            val bitfieldSize = (coresCount + 7) / 8 // Round up to bytes
+            return 32 + bitfieldSize + 2 + SIGNATURE_SIZE
+        }
+
+        fun fromBytes(data: ByteArray, offset: Int = 0, coresCount: Int): AssuranceExtrinsic {
+            val anchor = JamByteArray(data.copyOfRange(offset, offset + 32))
+            val bitfieldSize = (coresCount + 7) / 8
+            val bitfield = JamByteArray(data.copyOfRange(offset + 32, offset + 32 + bitfieldSize))
+            val validatorIndex = (data[offset + 32 + bitfieldSize].toInt() and 0xFF) or
+                ((data[offset + 33 + bitfieldSize].toInt() and 0xFF) shl 8)
+            val signature = JamByteArray(data.copyOfRange(offset + 34 + bitfieldSize, offset + 34 + bitfieldSize + SIGNATURE_SIZE))
+            return AssuranceExtrinsic(anchor, bitfield, validatorIndex, signature)
+        }
+    }
+
     override fun encode(): ByteArray {
         // Encode validatorIndex as 2 bytes (little-endian)
         val validatorIndexBytes = ByteArray(2)

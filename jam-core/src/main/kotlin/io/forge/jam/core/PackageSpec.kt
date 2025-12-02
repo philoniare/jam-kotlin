@@ -18,6 +18,18 @@ data class PackageSpec(
     @SerialName("exports_count")
     val exportsCount: Long
 ) : Encodable {
+    companion object {
+        const val SIZE = 32 + 4 + 32 + 32 + 2 // hash + length + erasureRoot + exportsRoot + exportsCount
+
+        fun fromBytes(data: ByteArray, offset: Int = 0): PackageSpec {
+            val hash = JamByteArray(data.copyOfRange(offset, offset + 32))
+            val length = decodeFixedWidthInteger(data, offset + 32, 4, false)
+            val erasureRoot = JamByteArray(data.copyOfRange(offset + 36, offset + 68))
+            val exportsRoot = JamByteArray(data.copyOfRange(offset + 68, offset + 100))
+            val exportsCount = decodeFixedWidthInteger(data, offset + 100, 2, false)
+            return PackageSpec(hash, length, erasureRoot, exportsRoot, exportsCount)
+        }
+    }
     override fun encode(): ByteArray {
         val hashBytes = hash.bytes
         val lenBytes = encodeFixedWidthInteger(length, 4, false)

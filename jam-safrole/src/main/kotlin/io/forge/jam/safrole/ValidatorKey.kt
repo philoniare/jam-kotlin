@@ -16,6 +16,17 @@ class ValidatorKey(
     @Serializable(with = JamByteArrayHexSerializer::class)
     val metadata: JamByteArray
 ) : Encodable {
+    companion object {
+        const val SIZE = 336 // 32 + 32 + 144 + 128
+
+        fun fromBytes(data: ByteArray, offset: Int = 0): ValidatorKey {
+            val bandersnatch = JamByteArray(data.copyOfRange(offset, offset + 32))
+            val ed25519 = JamByteArray(data.copyOfRange(offset + 32, offset + 64))
+            val bls = JamByteArray(data.copyOfRange(offset + 64, offset + 208))
+            val metadata = JamByteArray(data.copyOfRange(offset + 208, offset + 336))
+            return ValidatorKey(bandersnatch, ed25519, bls, metadata)
+        }
+    }
     override fun encode(): ByteArray {
         return bandersnatch.bytes + ed25519.bytes + bls.bytes + metadata.bytes
     }

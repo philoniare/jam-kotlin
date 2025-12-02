@@ -16,6 +16,45 @@ data class TicketsOrKeys(
     companion object {
         fun fromKeys(keys: List<JamByteArray>) = TicketsOrKeys(keys = keys)
         fun fromTickets(tickets: List<TicketBody>) = TicketsOrKeys(tickets = tickets)
+
+        /**
+         * Decodes TicketsOrKeys from raw bytes.
+         * Returns the decoded value and the number of bytes consumed.
+         */
+        fun fromBytes(data: ByteArray, offset: Int = 0, epochLength: Int): Pair<TicketsOrKeys, Int> {
+            if (offset >= data.size) {
+                return Pair(TicketsOrKeys(), 0)
+            }
+
+            val typeTag = data[offset].toInt() and 0xFF
+            var currentOffset = offset + 1
+
+            return when (typeTag) {
+                0 -> {
+                    // Tickets (Either.left): list of TicketBody
+                    val tickets = mutableListOf<TicketBody>()
+                    for (i in 0 until epochLength) {
+                        if (currentOffset + TicketBody.SIZE <= data.size) {
+                            tickets.add(TicketBody.fromBytes(data, currentOffset))
+                            currentOffset += TicketBody.SIZE
+                        }
+                    }
+                    Pair(fromTickets(tickets), currentOffset - offset)
+                }
+                1 -> {
+                    // Keys (Either.right): list of 32-byte bandersnatch keys
+                    val keys = mutableListOf<JamByteArray>()
+                    for (i in 0 until epochLength) {
+                        if (currentOffset + 32 <= data.size) {
+                            keys.add(JamByteArray(data.copyOfRange(currentOffset, currentOffset + 32)))
+                            currentOffset += 32
+                        }
+                    }
+                    Pair(fromKeys(keys), currentOffset - offset)
+                }
+                else -> Pair(TicketsOrKeys(), 1)
+            }
+        }
     }
 
     override fun toString(): String {

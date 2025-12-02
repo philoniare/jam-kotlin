@@ -12,6 +12,15 @@ data class TicketBody(
     val id: JamByteArray,
     val attempt: Long
 ) : Encodable {
+    companion object {
+        const val SIZE = 33 // 32 bytes id + 1 byte attempt
+
+        fun fromBytes(data: ByteArray, offset: Int = 0): TicketBody {
+            val id = JamByteArray(data.copyOfRange(offset, offset + 32))
+            val attempt = data[offset + 32].toLong() and 0xFF
+            return TicketBody(id, attempt)
+        }
+    }
     override fun toString(): String {
         return "TicketBody(" +
             "id=${id.toHex()}, " +

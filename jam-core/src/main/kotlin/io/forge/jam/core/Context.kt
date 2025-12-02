@@ -23,6 +23,32 @@ data class Context(
     @Serializable(with = JamByteArrayListHexSerializer::class)
     val prerequisites: List<JamByteArray>
 ) : Encodable {
+    companion object {
+        fun fromBytes(data: ByteArray, offset: Int = 0): Pair<Context, Int> {
+            var currentOffset = offset
+            val anchor = JamByteArray(data.copyOfRange(currentOffset, currentOffset + 32))
+            currentOffset += 32
+            val stateRoot = JamByteArray(data.copyOfRange(currentOffset, currentOffset + 32))
+            currentOffset += 32
+            val beefyRoot = JamByteArray(data.copyOfRange(currentOffset, currentOffset + 32))
+            currentOffset += 32
+            val lookupAnchor = JamByteArray(data.copyOfRange(currentOffset, currentOffset + 32))
+            currentOffset += 32
+            val lookupAnchorSlot = decodeFixedWidthInteger(data, currentOffset, 4, false)
+            currentOffset += 4
+
+            // prerequisites - variable length list of 32-byte hashes
+            val (prerequisitesLength, prerequisitesLengthBytes) = decodeCompactInteger(data, currentOffset)
+            currentOffset += prerequisitesLengthBytes
+            val prerequisites = mutableListOf<JamByteArray>()
+            for (i in 0 until prerequisitesLength.toInt()) {
+                prerequisites.add(JamByteArray(data.copyOfRange(currentOffset, currentOffset + 32)))
+                currentOffset += 32
+            }
+
+            return Pair(Context(anchor, stateRoot, beefyRoot, lookupAnchor, lookupAnchorSlot, prerequisites), currentOffset - offset)
+        }
+    }
     override fun encode(): ByteArray {
         val anchorBytes = anchor.bytes
         val stateRootBytes = stateRoot.bytes
