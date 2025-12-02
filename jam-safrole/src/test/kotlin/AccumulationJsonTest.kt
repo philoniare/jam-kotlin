@@ -95,14 +95,6 @@ class AccumulationJsonTest {
                                 )
                         }
                 } catch (e: Throwable) {
-                        val debugFile = java.io.File("/tmp/jam_debug_mismatch.txt")
-                        debugFile.appendText("Assertion failed for $testCase\n")
-                        debugFile.appendText("Error: ${e.message}\n")
-                        debugFile.appendText("Expected: $expected\n")
-                        debugFile.appendText("Actual: $actual\n")
-                        println("Assertion failed for $testCase")
-                        println("Expected: $expected")
-                        println("Actual: $actual")
                         throw e
                 }
         }
@@ -131,12 +123,6 @@ class AccumulationJsonTest {
                 index: Int,
                 testCase: String
         ) {
-                val debugFile = java.io.File("/tmp/jam_debug_mismatch.txt")
-                if (expected != actual) {
-                    debugFile.appendText("Mismatch in service item $index for test case $testCase\n")
-                    debugFile.appendText("Expected: $expected\n")
-                    debugFile.appendText("Actual:   $actual\n")
-                }
                 assertEquals(
                         expected,
                         actual,
@@ -212,6 +198,7 @@ class AccumulationJsonTest {
         fun testTinyAccumulationsStateTransition() {
                 val folderName = "stf/accumulate/tiny"
                 val testCaseNames = TestFileLoader.getTestFilenamesFromTestVectors(folderName)
+                println("Running tests: $testCaseNames")
                 val passed = mutableListOf<String>()
                 val failed = mutableListOf<String>()
 

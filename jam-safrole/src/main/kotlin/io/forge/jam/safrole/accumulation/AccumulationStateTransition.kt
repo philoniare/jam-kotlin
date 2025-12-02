@@ -129,7 +129,9 @@ class AccumulationStateTransition(private val config: AccumulationConfig) {
             accumulated = newAccumulatedArray,
             privileges = preState.privileges.copy(),
             statistics = newStatistics,
-            accounts = newPartialState.toAccumulationServiceItems()
+            accounts = newPartialState.toAccumulationServiceItems().filter { item ->
+                !item.data.service.codeHash.bytes.all { it == 0.toByte() }
+            }
         )
 
         return Pair(finalState, AccumulationOutput(ok = JamByteArray(ByteArray(32) { 0 })))
@@ -197,11 +199,8 @@ class AccumulationStateTransition(private val config: AccumulationConfig) {
             }
         }
 
-        println("[ACC] Services to accumulate: ${serviceOperands.keys}")
-
         // Execute for each service
         for ((serviceId, operands) in serviceOperands) {
-            println("[ACC] Processing service $serviceId with ${operands.size} operands")
             // Calculate total gas limit for this service batch
             val totalGasLimit = operands.filterIsInstance<AccumulationOperand.WorkItem>()
                 .sumOf { it.operand.gasLimit }

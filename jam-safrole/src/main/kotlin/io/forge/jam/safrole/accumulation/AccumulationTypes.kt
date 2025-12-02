@@ -198,7 +198,8 @@ enum class ExitReason {
     PANIC,       // Panic (use checkpoint state)
     OUT_OF_GAS,  // Gas exhausted
     PAGE_FAULT,  // Memory access error
-    HOST_CALL    // Awaiting host call response
+    HOST_CALL,   // Awaiting host call response
+    INVALID_CODE // Code compilation failed
 }
 
 /**
@@ -227,6 +228,10 @@ class AccumulationContext(
     fun collapse(exitReason: ExitReason): PartialState {
         return when (exitReason) {
             ExitReason.PANIC -> y
+            ExitReason.INVALID_CODE -> {
+                x.accounts.remove(serviceIndex)
+                x
+            }
             else -> x
         }
     }

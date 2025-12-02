@@ -36,28 +36,16 @@ class AccumulationExecutor(
         entropy: JamByteArray,
         operands: List<AccumulationOperand>
     ): AccumulationOneResult {
-        println("[EXEC] executeService called for service $serviceId")
         val account = partialState.accounts[serviceId]
-        if (account == null) {
-            println("[EXEC] Account $serviceId not found!")
-            return createEmptyResult(partialState)
-        }
+            ?: return createEmptyResult(partialState)
 
         val codeHash = account.info.codeHash
-        println("[EXEC] Service $serviceId code_hash=${codeHash.toHex().take(40)}...")
-        println("[EXEC] Service $serviceId preimages count=${account.preimages.size}")
         val code = account.preimages[codeHash]?.bytes
-        if (code == null) {
-            println("[EXEC] Code not found in preimages for service $serviceId!")
-            return createEmptyResult(partialState)
-        }
-        println("[EXEC] Code found for service $serviceId, size=${code.size}")
+            ?: return createEmptyResult(partialState)
 
         if (code.size > MAX_SERVICE_CODE_SIZE) {
-            println("[EXEC] Service $serviceId code too large!")
             return createEmptyResult(partialState)
         }
-        println("[EXEC] Service $serviceId about to execute PVM")
 
         // Apply incoming transfers to balance
         val transferBalance = operands.filterIsInstance<AccumulationOperand.Transfer>()
@@ -110,23 +98,15 @@ class AccumulationExecutor(
         gasLimit: Long,
         operands: List<AccumulationOperand>
     ): Pair<ExitReason, Long> {
-        println("[EXEC-PVM] executePvm called for service ${context.serviceIndex}, codeSize=${code.size}, gasLimit=$gasLimit")
         val module = getOrCompileModule(code)
         if (module == null) {
-            println("[EXEC-PVM] Module compilation failed for service ${context.serviceIndex}!")
-            return Pair(ExitReason.PANIC, 0L)
+            return Pair(ExitReason.INVALID_CODE, 0L)
         }
-        println("[EXEC-PVM] Module compiled for service ${context.serviceIndex}")
 
-        // val instance = module.instantiate().getOrNull()
         // Manually instantiate with step tracing
         val interpreted = InterpretedInstance.newFromModule(module, true)
         val backend = InstanceBackend.Interpreted(interpreted)
         val instance = RawInstance(module, backend, null)
-
-        if (instance == null) {
-            return Pair(ExitReason.PANIC, 0L)
-        }
 
         // Set up host call handler
         val hostCalls = AccumulationHostCalls(context, operands, config)
@@ -136,19 +116,6 @@ class AccumulationExecutor(
         val initialGas = gasLimit
 
         val entryPointPc = io.forge.jam.pvm.program.ProgramCounter(5u)
-
-        // Encode operands
-
-        operands.forEachIndexed { index, op ->
-            if (op is AccumulationOperand.WorkItem) {
-                val gasLimit = op.operand.gasLimit
-                op.operand.authTrace.bytes.size
-                op.operand.result.ok?.bytes?.size ?: -1
-                // Log encoded gasLimit
-                val encodedGas = encodeCompactInteger(gasLimit)
-                encodedGas.joinToString("") { "%02x".format(it) }
-            }
-        }
 
         // Encode input as 3 SCALE-compact integers: timeslot, serviceIndex, itemCount
         val inputData = java.io.ByteArrayOutputStream().use { stream ->
@@ -162,10 +129,7 @@ class AccumulationExecutor(
         val SP_INIT = 0xFEFE0000uL
         val INPUT_ADDR = 0xFEFF0000u
 
-        val writeResult = instance.writeMemory(INPUT_ADDR, inputData, isExternal = true)
-        if (writeResult.isFailure) {
-        } else {
-        }
+        instance.writeMemory(INPUT_ADDR, inputData, isExternal = true)
 
         instance.setReg(Reg.RA, RA_INIT)
         instance.setReg(Reg.SP, SP_INIT)
@@ -182,35 +146,28 @@ class AccumulationExecutor(
         // Set initial PC
         instance.setNextProgramCounter(entryPointPc)
 
-        println("[PVM] Starting execution for service ${context.serviceIndex}")
-
         // Execute until completion
         var exitReason = ExitReason.HALT
         var hostCallCount = 0
         while (true) {
             val result = instance.run()
             if (result.isFailure) {
-                val e = result.exceptionOrNull()
-                println("[PVM] Service ${context.serviceIndex} run() failed: ${e?.message}")
                 exitReason = ExitReason.PANIC
                 break
             }
 
             when (val interrupt = result.getOrNull()) {
                 InterruptKind.Finished -> {
-                    println("[PVM] Service ${context.serviceIndex} FINISHED, hostCalls=$hostCallCount")
                     exitReason = ExitReason.HALT
                     break
                 }
 
                 InterruptKind.Panic -> {
-                    println("[PVM] Service ${context.serviceIndex} PANIC, hostCalls=$hostCallCount")
                     exitReason = ExitReason.PANIC
                     break
                 }
 
                 InterruptKind.NotEnoughGas -> {
-                    println("[PVM] Service ${context.serviceIndex} OUT_OF_GAS, hostCalls=$hostCallCount")
                     exitReason = ExitReason.OUT_OF_GAS
                     break
                 }
@@ -221,7 +178,6 @@ class AccumulationExecutor(
                 }
 
                 is InterruptKind.Segfault -> {
-                    println("[PVM] Service ${context.serviceIndex} SEGFAULT, hostCalls=$hostCallCount")
                     exitReason = ExitReason.PAGE_FAULT
                     break
                 }
@@ -231,7 +187,6 @@ class AccumulationExecutor(
                 }
 
                 null -> {
-                    println("[PVM] Service ${context.serviceIndex} null interrupt, hostCalls=$hostCallCount")
                     exitReason = ExitReason.PANIC
                     break
                 }
@@ -239,7 +194,6 @@ class AccumulationExecutor(
         }
 
         val gasUsed = initialGas - instance.gas()
-        println("[PVM] Service ${context.serviceIndex} done, gasUsed=$gasUsed, exitReason=$exitReason")
 
         if (exitReason == ExitReason.PANIC) {
             throw RuntimeException("PVM Panic! Host calls: $hostCallCount")
@@ -253,22 +207,18 @@ class AccumulationExecutor(
      */
     private fun getOrCompileModule(code: ByteArray): Module? {
         val codeHash = JamByteArray(blake2b256(code))
-        println("[COMPILE] Compiling module with codeHash=${codeHash.toHex().take(20)}..., size=${code.size}")
 
         return moduleCache.getOrPut(codeHash) {
             try {
                 var partsResult = ProgramParts.fromGenericBytes(ArcBytes.fromStatic(code))
-                println("[COMPILE] Generic format result: ${partsResult.isSuccess}")
                 if (partsResult.isFailure) {
                     partsResult = ProgramParts.fromJamBytes(ArcBytes.fromStatic(code))
-                    println("[COMPILE] JAM format result: ${partsResult.isSuccess}")
                 }
                 if (partsResult.isFailure) {
-                    partsResult = ProgramParts.fromBytes(ArcBytes.fromStatic(code))
-                    println("[COMPILE] PolkaVM format result: ${partsResult.isSuccess}")
+                    // Fallback: wrap raw bytes as PVM program with data in RO section
+                    partsResult = Result.success(wrapAsPvm(code))
                 }
                 if (partsResult.isFailure) {
-                    println("[COMPILE] All format parsing failed! Error: ${partsResult.exceptionOrNull()}")
                     return null
                 }
                 val parts = partsResult.getOrNull() ?: return null
@@ -284,7 +234,7 @@ class AccumulationExecutor(
                 if (blobResult.isFailure) {
                     return null
                 }
-                val blob = blobResult.getOrNull() ?: return null
+                val blob = blobResult.getOrThrow()
 
                 val moduleConfig = ModuleConfig.new(dynamicPaging = false)
                 moduleConfig.setGasMetering(GasMeteringKind.Sync)
@@ -292,13 +242,17 @@ class AccumulationExecutor(
                 moduleConfig.setStepTracing(true)
                 moduleConfig.setAuxDataSize(16908288u)
 
-                Module.fromBlob(engine, moduleConfig, blob).getOrNull()
-                    ?: return null
+                val moduleResult = Module.fromBlob(engine, moduleConfig, blob)
+                if (moduleResult.isFailure) {
+                    return null
+                }
+                moduleResult.getOrThrow()
             } catch (e: Exception) {
                 return null
             }
         }
     }
+
 
     /**
      * Create empty result when service code cannot be executed.
@@ -335,6 +289,16 @@ class AccumulationExecutor(
             buffer.putLong(timeslot)
             buffer.putLong(operandCount.toLong())
             return buffer.array()
+        }
+
+        private fun wrapAsPvm(code: ByteArray): ProgramParts {
+            return ProgramParts(
+                isaKind = InstructionSetKind.JamV1,
+                is64Bit = true,
+                roDataSize = code.size.toUInt(),
+                roData = ArcBytes.fromStatic(code),
+                codeAndJumpTable = ArcBytes.fromStatic(ByteArray(0))
+            )
         }
     }
 }

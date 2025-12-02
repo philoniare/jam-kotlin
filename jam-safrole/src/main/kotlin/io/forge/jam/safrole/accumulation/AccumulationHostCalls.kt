@@ -331,11 +331,9 @@ class AccumulationHostCalls(
 
             // Update bytes and items in ServiceInfo
             val byteDelta = if (keyWasPresent) {
-                // Replacing existing value: just update value size
                 valueLen - oldValueSize
             } else {
-                // New key: add key size + value size
-                keyLen + valueLen
+                keyLen + valueLen + 34
             }
             val itemsDelta = if (keyWasPresent) 0 else 1
 
@@ -589,10 +587,15 @@ class AccumulationHostCalls(
 
         // 3. Validate: target exists AND target != caller AND codeHash matches caller's ID
         val expectedCodeHash = encodeServiceIdAsCodeHash(context.serviceIndex)
-        if (ejectServiceId == context.serviceIndex ||
-            ejectAccount == null ||
-            ejectAccount.info.codeHash != expectedCodeHash
-        ) {
+        if (ejectServiceId == context.serviceIndex) {
+            instance.setReg7(HostCallResult.WHO)
+            return
+        }
+        if (ejectAccount == null) {
+            instance.setReg7(HostCallResult.WHO)
+            return
+        }
+        if (ejectAccount.info.codeHash != expectedCodeHash) {
             instance.setReg7(HostCallResult.WHO)
             return
         }
@@ -609,7 +612,11 @@ class AccumulationHostCalls(
 
         // 6. Validate preimage request exists with exactly 2 timestamps
         val preimageRequest = ejectAccount.preimageRequests[preimageKey]
-        if (preimageRequest == null || preimageRequest.requestedAt.size != 2) {
+        if (preimageRequest == null) {
+            instance.setReg7(HostCallResult.HUH)
+            return
+        }
+        if (preimageRequest.requestedAt.size != 2) {
             instance.setReg7(HostCallResult.HUH)
             return
         }
