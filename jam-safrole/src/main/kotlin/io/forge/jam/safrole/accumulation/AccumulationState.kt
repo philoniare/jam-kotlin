@@ -27,6 +27,76 @@ data class AccumulationState(
     val statistics: List<ServiceStatisticsEntry> = emptyList(),
     val accounts: List<AccumulationServiceItem>
 ) : Encodable {
+    companion object {
+        fun fromBytes(data: ByteArray, offset: Int = 0, coresCount: Int, epochLength: Int): Pair<AccumulationState, Int> {
+            var currentOffset = offset
+
+            // slot - 4 bytes
+            val slot = decodeFixedWidthInteger(data, currentOffset, 4, false)
+            currentOffset += 4
+
+            // entropy - 32 bytes
+            val entropy = JamByteArray(data.copyOfRange(currentOffset, currentOffset + 32))
+            currentOffset += 32
+
+            // readyQueue - fixed size list (epochLength), each inner list is variable
+            val readyQueue = mutableListOf<List<ReadyRecord>>()
+            for (i in 0 until epochLength) {
+                val (innerLength, innerLengthBytes) = decodeCompactInteger(data, currentOffset)
+                currentOffset += innerLengthBytes
+                val innerList = mutableListOf<ReadyRecord>()
+                for (j in 0 until innerLength.toInt()) {
+                    val (record, recordBytes) = ReadyRecord.fromBytes(data, currentOffset)
+                    innerList.add(record)
+                    currentOffset += recordBytes
+                }
+                readyQueue.add(innerList)
+            }
+
+            // accumulated - fixed size list (epochLength), each inner list is variable 32-byte hashes
+            val accumulated = mutableListOf<List<JamByteArray>>()
+            for (i in 0 until epochLength) {
+                val (innerLength, innerLengthBytes) = decodeCompactInteger(data, currentOffset)
+                currentOffset += innerLengthBytes
+                val innerList = mutableListOf<JamByteArray>()
+                for (j in 0 until innerLength.toInt()) {
+                    innerList.add(JamByteArray(data.copyOfRange(currentOffset, currentOffset + 32)))
+                    currentOffset += 32
+                }
+                accumulated.add(innerList)
+            }
+
+            // privileges - variable size
+            val (privileges, privilegesBytes) = Privileges.fromBytes(data, currentOffset, coresCount)
+            currentOffset += privilegesBytes
+
+            // statistics - compact length + variable-size items
+            val (statsLength, statsLengthBytes) = decodeCompactInteger(data, currentOffset)
+            currentOffset += statsLengthBytes
+            val statistics = mutableListOf<ServiceStatisticsEntry>()
+            for (i in 0 until statsLength.toInt()) {
+                val (entry, entryBytes) = ServiceStatisticsEntry.fromBytes(data, currentOffset)
+                statistics.add(entry)
+                currentOffset += entryBytes
+            }
+
+            // accounts - compact length + variable-size items
+            val (accountsLength, accountsLengthBytes) = decodeCompactInteger(data, currentOffset)
+            currentOffset += accountsLengthBytes
+            val accounts = mutableListOf<AccumulationServiceItem>()
+            for (i in 0 until accountsLength.toInt()) {
+                val (item, itemBytes) = AccumulationServiceItem.fromBytes(data, currentOffset)
+                accounts.add(item)
+                currentOffset += itemBytes
+            }
+
+            return Pair(
+                AccumulationState(slot, entropy, readyQueue, accumulated, privileges, statistics, accounts),
+                currentOffset - offset
+            )
+        }
+    }
+
     override fun encode(): ByteArray {
         val slotBytes = encodeFixedWidthInteger(slot, 4, false)
         return slotBytes + entropy.bytes + encodeNestedList(readyQueue, false) + encodeNestedList(

@@ -1,6 +1,8 @@
 package io.forge.jam.safrole.accumulation
 
 import io.forge.jam.core.Encodable
+import io.forge.jam.core.decodeCompactInteger
+import io.forge.jam.core.decodeFixedWidthInteger
 import io.forge.jam.core.encodeFixedWidthInteger
 import io.forge.jam.core.encodeList
 import kotlinx.serialization.SerialName
@@ -15,6 +17,42 @@ data class Privileges(
     @SerialName("always_acc")
     val alwaysAcc: List<AlwaysAccItem>
 ) : Encodable {
+    companion object {
+        fun fromBytes(data: ByteArray, offset: Int = 0, coresCount: Int): Pair<Privileges, Int> {
+            var currentOffset = offset
+
+            // bless - 4 bytes
+            val bless = decodeFixedWidthInteger(data, currentOffset, 4, false)
+            currentOffset += 4
+
+            // assign - fixed size list (coresCount)
+            val assign = mutableListOf<Long>()
+            for (i in 0 until coresCount) {
+                assign.add(decodeFixedWidthInteger(data, currentOffset, 4, false))
+                currentOffset += 4
+            }
+
+            // designate - 4 bytes
+            val designate = decodeFixedWidthInteger(data, currentOffset, 4, false)
+            currentOffset += 4
+
+            // register - 4 bytes
+            val register = decodeFixedWidthInteger(data, currentOffset, 4, false)
+            currentOffset += 4
+
+            // alwaysAcc - compact length prefix + fixed-size items
+            val (alwaysAccLength, alwaysAccLengthBytes) = decodeCompactInteger(data, currentOffset)
+            currentOffset += alwaysAccLengthBytes
+            val alwaysAcc = mutableListOf<AlwaysAccItem>()
+            for (i in 0 until alwaysAccLength.toInt()) {
+                alwaysAcc.add(AlwaysAccItem.fromBytes(data, currentOffset))
+                currentOffset += AlwaysAccItem.SIZE
+            }
+
+            return Pair(Privileges(bless, assign, designate, register, alwaysAcc), currentOffset - offset)
+        }
+    }
+
     override fun encode(): ByteArray {
         val blessBytes = encodeFixedWidthInteger(bless, 4, false)
         val assignBytes = assign.flatMap { encodeFixedWidthInteger(it, 4, false).toList() }.toByteArray()

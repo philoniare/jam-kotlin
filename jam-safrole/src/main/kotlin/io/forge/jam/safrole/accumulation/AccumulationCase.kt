@@ -13,6 +13,26 @@ data class AccumulationCase(
     @SerialName("post_state")
     val postState: AccumulationState
 ) : Encodable {
+    companion object {
+        fun fromBytes(data: ByteArray, offset: Int = 0, coresCount: Int, epochLength: Int): Pair<AccumulationCase, Int> {
+            var currentOffset = offset
+
+            val (input, inputBytes) = AccumulationInput.fromBytes(data, currentOffset)
+            currentOffset += inputBytes
+
+            val (preState, preStateBytes) = AccumulationState.fromBytes(data, currentOffset, coresCount, epochLength)
+            currentOffset += preStateBytes
+
+            val (output, outputBytes) = AccumulationOutput.fromBytes(data, currentOffset)
+            currentOffset += outputBytes
+
+            val (postState, postStateBytes) = AccumulationState.fromBytes(data, currentOffset, coresCount, epochLength)
+            currentOffset += postStateBytes
+
+            return Pair(AccumulationCase(input, preState, output, postState), currentOffset - offset)
+        }
+    }
+
     override fun encode(): ByteArray {
         val inputBytes = input.encode()
         val preStateBytes = preState.encode()
