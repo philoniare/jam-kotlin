@@ -8,6 +8,56 @@ import io.forge.jam.safrole.serializer.NullableAvailabilityAssignmentListSeriali
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+/**
+ * Intermediate structure for decoded Safrole gamma state.
+ */
+data class SafroleGammaState(
+    val gammaK: List<ValidatorKey>,
+    val gammaA: List<TicketBody>,
+    val gammaS: TicketsOrKeys,
+    val gammaZ: JamByteArray
+) {
+    companion object {
+        fun fromBytes(data: ByteArray, offset: Int = 0, validatorCount: Int, epochLength: Int): SafroleGammaState {
+            var currentOffset = offset
+
+            // γk: next epoch validators (validatorCount × 336 bytes)
+            val gammaK = mutableListOf<ValidatorKey>()
+            for (i in 0 until validatorCount) {
+                if (currentOffset + ValidatorKey.SIZE <= data.size) {
+                    gammaK.add(ValidatorKey.fromBytes(data, currentOffset))
+                    currentOffset += ValidatorKey.SIZE
+                }
+            }
+
+            // γz: ring root (144 bytes) - comes SECOND in Boka's order
+            val gammaZ = if (currentOffset + 144 <= data.size) {
+                JamByteArray(data.copyOfRange(currentOffset, currentOffset + 144))
+            } else {
+                JamByteArray(ByteArray(144))
+            }
+            currentOffset += 144
+
+            // γs: sealing sequence (TicketsOrKeys) - comes THIRD
+            val (gammaS, gammaSBytes) = TicketsOrKeys.fromBytes(data, currentOffset, epochLength)
+            currentOffset += gammaSBytes
+
+            // γa: ticket accumulator (variable length, compact-encoded) - comes LAST
+            val (gammaALength, gammaALengthBytes) = decodeCompactInteger(data, currentOffset)
+            currentOffset += gammaALengthBytes
+            val gammaA = mutableListOf<TicketBody>()
+            for (i in 0 until gammaALength.toInt()) {
+                if (currentOffset + TicketBody.SIZE <= data.size) {
+                    gammaA.add(TicketBody.fromBytes(data, currentOffset))
+                    currentOffset += TicketBody.SIZE
+                }
+            }
+
+            return SafroleGammaState(gammaK, gammaA, gammaS, gammaZ)
+        }
+    }
+}
+
 @Serializable
 data class SafroleState(
     // Current timeslot
@@ -50,6 +100,81 @@ data class SafroleState(
     var rho: MutableList<AvailabilityAssignment?>? = null,
     var psi: Psi? = null
 ) : Encodable {
+    companion object {
+        fun fromBytes(data: ByteArray, offset: Int = 0, validatorCount: Int, epochLength: Int): Pair<SafroleState, Int> {
+            var currentOffset = offset
+
+            // tau - 4 bytes
+            val tau = decodeFixedWidthInteger(data, currentOffset, 4, false)
+            currentOffset += 4
+
+            // eta - 4 x 32-byte hashes (fixed size, no length prefix)
+            val eta = JamByteArrayList()
+            for (i in 0 until 4) {
+                eta.add(JamByteArray(data.copyOfRange(currentOffset, currentOffset + 32)))
+                currentOffset += 32
+            }
+
+            // lambda - validatorCount validators (fixed array, no length prefix)
+            val lambda = decodeFixedList(data, currentOffset, validatorCount, ValidatorKey.SIZE) { d, o ->
+                ValidatorKey.fromBytes(d, o)
+            }
+            currentOffset += validatorCount * ValidatorKey.SIZE
+
+            // kappa - validatorCount validators
+            val kappa = decodeFixedList(data, currentOffset, validatorCount, ValidatorKey.SIZE) { d, o ->
+                ValidatorKey.fromBytes(d, o)
+            }
+            currentOffset += validatorCount * ValidatorKey.SIZE
+
+            // gammaK - validatorCount validators
+            val gammaK = decodeFixedList(data, currentOffset, validatorCount, ValidatorKey.SIZE) { d, o ->
+                ValidatorKey.fromBytes(d, o)
+            }
+            currentOffset += validatorCount * ValidatorKey.SIZE
+
+            // iota - validatorCount validators
+            val iota = decodeFixedList(data, currentOffset, validatorCount, ValidatorKey.SIZE) { d, o ->
+                ValidatorKey.fromBytes(d, o)
+            }
+            currentOffset += validatorCount * ValidatorKey.SIZE
+
+            // gammaA - compact length prefix + variable-size list
+            val (gammaALength, gammaALengthBytes) = decodeCompactInteger(data, currentOffset)
+            currentOffset += gammaALengthBytes
+            val gammaA = decodeFixedList(data, currentOffset, gammaALength.toInt(), TicketBody.SIZE) { d, o ->
+                TicketBody.fromBytes(d, o)
+            }
+            currentOffset += gammaALength.toInt() * TicketBody.SIZE
+
+            // gammaS - TicketsOrKeys (Either)
+            val (gammaS, gammaSBytes) = TicketsOrKeys.fromBytes(data, currentOffset, epochLength)
+            currentOffset += gammaSBytes
+
+            // gammaZ - 144 bytes (ring root)
+            val gammaZ = JamByteArray(data.copyOfRange(currentOffset, currentOffset + 144))
+            currentOffset += 144
+
+            // postOffenders - compact length prefix + 32-byte hashes
+            val (postOffendersLength, postOffendersLengthBytes) = decodeCompactInteger(data, currentOffset)
+            currentOffset += postOffendersLengthBytes
+            val postOffenders = if (postOffendersLength > 0) {
+                val list = mutableListOf<JamByteArray>()
+                for (i in 0 until postOffendersLength.toInt()) {
+                    list.add(JamByteArray(data.copyOfRange(currentOffset, currentOffset + 32)))
+                    currentOffset += 32
+                }
+                list
+            } else null
+
+            return Pair(
+                SafroleState(
+                    tau, eta, lambda, kappa, gammaK, iota, gammaA, gammaS, gammaZ, postOffenders
+                ),
+                currentOffset - offset
+            )
+        }
+    }
     fun deepCopy(): SafroleState {
         return SafroleState(
             tau = tau,

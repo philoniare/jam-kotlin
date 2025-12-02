@@ -100,6 +100,9 @@ class SafroleStateTransition(private val config: SafroleConfig) {
                 ticketsMark = transformTicketsSequence(postState.gammaA)
             }
 
+            // Save pre-epoch gammaZ for ticket verification (tickets must be verified with pre-epoch ring root)
+            val ticketVerificationGammaZ = preState.gammaZ.clone()
+
             // Handle epoch transition if needed
             if (newEpoch > prevEpoch) {
                 epochMark =
@@ -115,8 +118,9 @@ class SafroleStateTransition(private val config: SafroleConfig) {
             }
 
             // Process ticket submissions if any (eq. 74-80)
+            // Use pre-epoch gammaZ for verification as per Boka reference
             if (input.extrinsic.isNotEmpty()) {
-                val ticketResult = processExtrinsics(postState, input.extrinsic, newPhase)
+                val ticketResult = processExtrinsics(postState, input.extrinsic, newPhase, ticketVerificationGammaZ)
                 if (ticketResult != null) {
                     return Pair(postState, SafroleOutput(err = ticketResult))
                 }
@@ -572,7 +576,8 @@ class SafroleStateTransition(private val config: SafroleConfig) {
     private fun processExtrinsics(
         postState: SafroleState,
         tickets: List<TicketEnvelope>,
-        phase: Long
+        phase: Long,
+        verificationGammaZ: JamByteArray
     ): SafroleErrorCode? {
         // Skip if in epoch tail
         if (phase >= config.ticketCutoff) {
@@ -588,10 +593,10 @@ class SafroleStateTransition(private val config: SafroleConfig) {
                 return SafroleErrorCode.BAD_TICKET_ATTEMPT
             }
 
-            // Verify ring VRF proof
+            // Verify ring VRF proof using pre-epoch ring root
             val ticketId = verifyRingProof(
                 ticket.signature.bytes,
-                postState.gammaZ.bytes,
+                verificationGammaZ.bytes,
                 postState.eta[2].bytes,
                 ticket.attempt
             )

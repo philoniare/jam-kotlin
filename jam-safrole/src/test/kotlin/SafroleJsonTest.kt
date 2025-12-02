@@ -111,4 +111,54 @@ class SafroleJsonTest {
             )
         }
     }
+
+    @Test
+    fun testTinySafroleDecoding() {
+        val folderName = "stf/safrole/tiny"
+        val testCaseNames = TestFileLoader.getTestFilenamesFromTestVectors(folderName)
+
+        for (testCaseName in testCaseNames) {
+            val (testCase, binaryData) = TestFileLoader.loadTestDataFromTestVectors<SafroleCase>(
+                folderName,
+                testCaseName,
+                ".bin"
+            )
+
+            // Decode from binary
+            val (decodedCase, bytesConsumed) = SafroleCase.fromBytes(binaryData, 0, 6, 12)
+
+            assertEquals(binaryData.size, bytesConsumed, "Bytes consumed mismatch for $testCaseName")
+            assertEquals(testCase.input.slot, decodedCase.input.slot, "Input slot mismatch for $testCaseName")
+            assertEquals(testCase.preState.tau, decodedCase.preState.tau, "PreState tau mismatch for $testCaseName")
+            assertEquals(testCase.postState.tau, decodedCase.postState.tau, "PostState tau mismatch for $testCaseName")
+
+            // Verify round-trip
+            assertContentEquals(binaryData, decodedCase.encode(), "Round-trip encoding mismatch for $testCaseName")
+        }
+    }
+
+    @Test
+    fun testFullSafroleDecoding() {
+        val folderName = "stf/safrole/full"
+        val testCaseNames = TestFileLoader.getTestFilenamesFromTestVectors(folderName)
+
+        for (testCaseName in testCaseNames) {
+            val (testCase, binaryData) = TestFileLoader.loadTestDataFromTestVectors<SafroleCase>(
+                folderName,
+                testCaseName,
+                ".bin"
+            )
+
+            // Decode from binary
+            val (decodedCase, bytesConsumed) = SafroleCase.fromBytes(binaryData, 0, 1023, 600)
+
+            assertEquals(binaryData.size, bytesConsumed, "Bytes consumed mismatch for $testCaseName")
+            assertEquals(testCase.input.slot, decodedCase.input.slot, "Input slot mismatch for $testCaseName")
+            assertEquals(testCase.preState.tau, decodedCase.preState.tau, "PreState tau mismatch for $testCaseName")
+            assertEquals(testCase.postState.tau, decodedCase.postState.tau, "PostState tau mismatch for $testCaseName")
+
+            // Verify round-trip
+            assertContentEquals(binaryData, decodedCase.encode(), "Round-trip encoding mismatch for $testCaseName")
+        }
+    }
 }
