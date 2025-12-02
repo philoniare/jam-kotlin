@@ -1,8 +1,10 @@
 package io.forge.jam.core.encoding
 
 import io.forge.jam.core.AssuranceExtrinsic
+import io.forge.jam.core.ChainConfig
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
+import kotlin.test.assertEquals
 
 class AssuranceExtrinsicTest {
 
@@ -30,6 +32,23 @@ class AssuranceExtrinsicTest {
         )
     }
 
+    private fun testDecodeAssuranceExtrinsics(configPath: String, config: ChainConfig) {
+        val (inputAssurances, _) = TestFileLoader.loadTestDataFromTestVectors<List<AssuranceExtrinsic>>(configPath, "assurances_extrinsic")
+
+        // Test each assurance individually
+        for (inputAssurance in inputAssurances) {
+            val encoded = inputAssurance.encode()
+            val decodedAssurance = AssuranceExtrinsic.fromBytes(encoded, 0, config.coresCount)
+
+            assertEquals(inputAssurance.anchor.toHex(), decodedAssurance.anchor.toHex(), "Anchor mismatch")
+            assertEquals(inputAssurance.bitfield.toHex(), decodedAssurance.bitfield.toHex(), "Bitfield mismatch")
+            assertEquals(inputAssurance.validatorIndex, decodedAssurance.validatorIndex, "Validator index mismatch")
+            assertEquals(inputAssurance.signature.toHex(), decodedAssurance.signature.toHex(), "Signature mismatch")
+
+            assertContentEquals(encoded, decodedAssurance.encode(), "Round-trip encoding mismatch")
+        }
+    }
+
     @Test
     fun testEncodeAssuranceExtrinsicsTiny() {
         testEncodeAssuranceExtrinsics("codec/tiny")
@@ -38,5 +57,15 @@ class AssuranceExtrinsicTest {
     @Test
     fun testEncodeAssuranceExtrinsicsFull() {
         testEncodeAssuranceExtrinsics("codec/full")
+    }
+
+    @Test
+    fun testDecodeAssuranceExtrinsicsTiny() {
+        testDecodeAssuranceExtrinsics("codec/tiny", ChainConfig.TINY)
+    }
+
+    @Test
+    fun testDecodeAssuranceExtrinsicsFull() {
+        testDecodeAssuranceExtrinsics("codec/full", ChainConfig.FULL)
     }
 }

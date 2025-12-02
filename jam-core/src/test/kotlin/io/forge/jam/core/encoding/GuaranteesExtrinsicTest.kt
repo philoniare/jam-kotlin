@@ -3,6 +3,7 @@ package io.forge.jam.core.encoding
 import io.forge.jam.core.GuaranteeExtrinsic
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
+import kotlin.test.assertEquals
 
 class GuaranteesExtrinsicTest {
 
@@ -25,6 +26,23 @@ class GuaranteesExtrinsicTest {
         )
     }
 
+    private fun testDecodeGuaranteesExtrinsics(configPath: String) {
+        val (inputGuarantees, _) = TestFileLoader.loadTestDataFromTestVectors<List<GuaranteeExtrinsic>>(configPath, "guarantees_extrinsic")
+
+        // Test each guarantee individually
+        for (inputGuarantee in inputGuarantees) {
+            val encoded = inputGuarantee.encode()
+            val (decodedGuarantee, bytesConsumed) = GuaranteeExtrinsic.fromBytes(encoded, 0)
+
+            assertEquals(encoded.size, bytesConsumed, "Bytes consumed should match encoded size")
+            assertEquals(inputGuarantee.slot, decodedGuarantee.slot, "Slot mismatch")
+            assertEquals(inputGuarantee.signatures.size, decodedGuarantee.signatures.size, "Signatures count mismatch")
+            assertEquals(inputGuarantee.report.packageSpec.hash.toHex(), decodedGuarantee.report.packageSpec.hash.toHex(), "Report package spec hash mismatch")
+
+            assertContentEquals(encoded, decodedGuarantee.encode(), "Round-trip encoding mismatch")
+        }
+    }
+
     @Test
     fun testEncodeGuaranteesExtrinsicsTiny() {
         testEncodeGuaranteesExtrinsics("codec/tiny")
@@ -33,5 +51,15 @@ class GuaranteesExtrinsicTest {
     @Test
     fun testEncodeGuaranteesExtrinsicsFull() {
         testEncodeGuaranteesExtrinsics("codec/full")
+    }
+
+    @Test
+    fun testDecodeGuaranteesExtrinsicsTiny() {
+        testDecodeGuaranteesExtrinsics("codec/tiny")
+    }
+
+    @Test
+    fun testDecodeGuaranteesExtrinsicsFull() {
+        testDecodeGuaranteesExtrinsics("codec/full")
     }
 }

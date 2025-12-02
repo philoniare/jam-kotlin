@@ -23,17 +23,21 @@ data class Dispute(
                 currentOffset += verdictSize
             }
 
-            // Decode culprits
-            val (culprits, culpritsBytesConsumed) = decodeList(data, currentOffset) { d, o ->
-                Pair(Culprit.fromBytes(d, o), Culprit.SIZE)
+            // Decode culprits - fixed-size items
+            val (culpritsLength, culpritsLengthBytes) = decodeCompactInteger(data, currentOffset)
+            currentOffset += culpritsLengthBytes
+            val culprits = decodeFixedList(data, currentOffset, culpritsLength.toInt(), Culprit.SIZE) { d, o ->
+                Culprit.fromBytes(d, o)
             }
-            currentOffset += culpritsBytesConsumed
+            currentOffset += culpritsLength.toInt() * Culprit.SIZE
 
-            // Decode faults
-            val (faults, faultsBytesConsumed) = decodeList(data, currentOffset) { d, o ->
-                Pair(Fault.fromBytes(d, o), Fault.SIZE)
+            // Decode faults - fixed-size items
+            val (faultsLength, faultsLengthBytes) = decodeCompactInteger(data, currentOffset)
+            currentOffset += faultsLengthBytes
+            val faults = decodeFixedList(data, currentOffset, faultsLength.toInt(), Fault.SIZE) { d, o ->
+                Fault.fromBytes(d, o)
             }
-            currentOffset += faultsBytesConsumed
+            currentOffset += faultsLength.toInt() * Fault.SIZE
 
             return Pair(Dispute(verdicts, culprits, faults), currentOffset - offset)
         }
