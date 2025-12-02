@@ -7,8 +7,9 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class AccountInfo(
+    @SerialName("preimage_blobs")
     var preimages: List<PreimageHash>,
-    @SerialName("lookup_meta")
+    @SerialName("preimage_requests")
     var lookupMeta: List<PreimageHistory>,
 ) : Encodable {
     override fun encode(): ByteArray {
