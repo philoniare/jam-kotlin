@@ -256,6 +256,11 @@ class ReportStateTransition(private val config: ReportStateConfig) {
             return ReportErrorCode.FUTURE_REPORT_SLOT
         }
 
+        // Validate work report has at least one result
+        if (workReport.results.isEmpty()) {
+            return ReportErrorCode.MISSING_WORK_RESULTS
+        }
+
         val existingAssignment = availAssignments.getOrNull(workReport.coreIndex.toInt())
         if (existingAssignment?.report != null) {
             return ReportErrorCode.CORE_ENGAGED

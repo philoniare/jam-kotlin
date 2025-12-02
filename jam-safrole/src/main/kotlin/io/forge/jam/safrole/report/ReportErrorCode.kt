@@ -81,8 +81,11 @@ enum class ReportErrorCode(val value: Int) : Encodable {
     @SerialName("lookup_anchor_not_recent")
     LOOKUP_ANCHOR_NOT_RECENT(24),
 
+    @SerialName("missing_work_results")
+    MISSING_WORK_RESULTS(25),
+
     @SerialName("duplicate_guarantors")
-    DUPLICATE_GUARANTORS(25); // Not in ASN, but used in code
+    DUPLICATE_GUARANTORS(26); // Not in ASN, but used in code
 
     override fun encode(): ByteArray {
         return byteArrayOf(value.toByte())
