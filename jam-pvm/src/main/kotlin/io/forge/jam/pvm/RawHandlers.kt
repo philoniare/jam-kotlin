@@ -71,13 +71,13 @@ object RawHandlers {
     val chargeGas: Handler = { visitor ->
         val args = getArgs(visitor)
         val programCounter = ProgramCounter(args.a0)
-        val gasCost = args.a1
-        val newGas = visitor.inner.gas - gasCost.toLong()
+        val gasCost = args.a1.toLong()
 
-        if (newGas < 0) {
-            notEnoughGasImpl(visitor, programCounter, newGas)
+        // Check gas > 0 BEFORE subtraction
+        if (visitor.inner.gas <= 0) {
+            notEnoughGasImpl(visitor, programCounter)
         } else {
-            visitor.inner.gas = newGas
+            visitor.inner.gas -= gasCost
             visitor.goToNextInstruction()
         }
     }
@@ -108,13 +108,14 @@ object RawHandlers {
 
     val outOfRange: Handler = { visitor ->
         val args = getArgs(visitor)
-        val gasCost = args.a0
+        val gasCost = args.a0.toLong()
         val programCounter = visitor.inner.programCounter
-        val newGas = visitor.inner.gas - gasCost.toLong()
-        if (newGas < 0) {
-            notEnoughGasImpl(visitor, programCounter, newGas)
+
+        // Check gas > 0 BEFORE subtraction
+        if (visitor.inner.gas <= 0) {
+            notEnoughGasImpl(visitor, programCounter)
         } else {
-            visitor.inner.gas = newGas.toLong()
+            visitor.inner.gas -= gasCost
             panicImpl(visitor, programCounter)
         }
     }
@@ -1807,7 +1808,6 @@ object RawHandlers {
 
         visitor.inner.resolveFallthrough(jumpTo)?.let { target ->
             logger.debug("Resolved fallthrough: ${target}")
-            panicImpl(visitor, jumpTo)
             if (offset + 1u == target) {
                 logger.debug("  -> resolved to fallthrough")
                 visitor.inner.compiledHandlers[offset.toInt()] = fallthrough

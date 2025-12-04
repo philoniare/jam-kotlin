@@ -149,16 +149,14 @@ class InterpretedInstance private constructor(
     }
 
     fun compileOutOfRangeStub() {
-        if (stepTracing) {
-            emit(RawHandlers.stepOutOfRange, Args.stepOutOfRange(), "step_out_of_range")
-        }
         val gasCost = if (module.gasMetering() != null) {
             panicCost()
         } else {
             0u
         }
 
-        emit(RawHandlers.stepOutOfRange, Args.outOfRange(gasCost), "out_of_range")
+        // Always emit outOfRange directly - it handles the panic and gas charging
+        emit(RawHandlers.outOfRange, Args.outOfRange(gasCost), "out_of_range")
     }
 
     fun run(): Result<InterruptKind> = runCatching {
@@ -243,8 +241,6 @@ class InterpretedInstance private constructor(
             compiledHandlers.size.toUInt()
         }
 
-        val gasVisitor = GasVisitor()
-        var chargeGasIndex: Pair<ProgramCounter, Int>? = null
         var isJumpTargetValid = module.isJumpTargetValid(programCounter)
 
         var i = 0
@@ -262,13 +258,10 @@ class InterpretedInstance private constructor(
                 emit(RawHandlers.step, Args.step(instruction.offset), "step")
             }
 
+            // Per-instruction gas charging
             if (module.gasMetering() != null) {
-                if (chargeGasIndex == null) {
-                    logger.debug("  [${compiledHandlers.size + 1}]: ${instruction.offset}: charge_gas")
-                    chargeGasIndex = Pair(instruction.offset, compiledHandlers.size)
-                    emit(RawHandlers.chargeGas, Args.chargeGas(instruction.offset, 0u), "charge_gas")
-                }
-                instruction.kind.visit(gasVisitor)
+                logger.debug("  [${compiledHandlers.size + 1}]: ${instruction.offset}: charge_gas")
+                emit(RawHandlers.chargeGas, Args.chargeGas(instruction.offset, 1u), "charge_gas")
             }
 
             logger.debug("  [${compiledHandlers.size + 1}]: ${instruction.offset}: ${instruction.kind}")
@@ -292,11 +285,6 @@ class InterpretedInstance private constructor(
             if (instruction.kind.opcode().startsNewBasicBlock()) {
                 break
             }
-        }
-
-        chargeGasIndex?.let { (programCounter, index) ->
-            val gasCost = gasVisitor.takeBlockCost()!!
-            compiledArgs[index] = Args.chargeGas(programCounter, gasCost)
         }
 
         if (compiledHandlers.size == origin.toInt()) {

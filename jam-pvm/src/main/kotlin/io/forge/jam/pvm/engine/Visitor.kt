@@ -260,12 +260,16 @@ class Visitor(
 
     /**
      * Handles segmentation faults
+     * Consumes 1 additional gas on page fault
      */
     fun segfaultImpl(programCounter: ProgramCounter, pageAddress: UInt): Target? {
         inner.apply {
             this.programCounter = programCounter
             this.programCounterValid = true
             this.nextProgramCounter = programCounter
+            if (module.gasMetering() != null) {
+                gas -= 1
+            }
             this.interrupt = InterruptKind.Segfault(
                 SegfaultInfo(
                     pageAddress = pageAddress,

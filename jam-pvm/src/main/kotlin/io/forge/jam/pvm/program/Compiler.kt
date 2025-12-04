@@ -19,9 +19,8 @@ class Compiler(
         private val logger = PvmLogger(Compiler::class.java)
         const val TARGET_OUT_OF_RANGE = 0u
 
-        fun notEnoughGasImpl(visitor: Visitor, programCounter: ProgramCounter, newGas: Long): Target? {
+        fun notEnoughGasImpl(visitor: Visitor, programCounter: ProgramCounter): Target? {
             with(visitor.inner) {
-                gas = newGas
                 when (module.gasMetering()) {
                     GasMeteringKind.Sync -> {
                         this.programCounter = programCounter

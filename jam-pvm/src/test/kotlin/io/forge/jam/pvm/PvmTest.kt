@@ -143,7 +143,7 @@ class PvmTest {
                 val actualMemory = instance.readMemoryInto(memory.address.toUInt(), buffer)
                 assertUIntListMatchesBytes(buffer, actualMemory.getOrThrow())
             }
-            assertEquals(inputCase.expectedGas, instance.gas(), "Gas mismatch.")
+            assertEquals(inputCase.expectedGas, instance.gas(), "Gas mismatch in ${testCase}.")
             inputCase.expectedPageFaultAddress?.let {
                 if (it != 0u) {
                     assertEquals(it, pageFaultAddress, "Page fault address mismatch.")
