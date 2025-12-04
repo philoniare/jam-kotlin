@@ -47,15 +47,18 @@ data class PreimageStatusKey(
     val length: Int
 )
 
+/**
+ * Status entry for preimages - used in accumulation state.
+ */
 @Serializable
 data class PreimagesStatusMapEntry(
-    val key: PreimageStatusKey,
-    val value: List<Long>
+    @Serializable(with = JamByteArrayHexSerializer::class)
+    val hash: JamByteArray,
+    val status: List<Long>
 ) : Encodable {
-    // Convenience accessors
-    val hash: JamByteArray get() = key.hash
-    val length: Int get() = key.length
-    val status: List<Long> get() = value
+    val key: PreimageStatusKey get() = PreimageStatusKey(hash, 0)
+    val value: List<Long> get() = status
+    val length: Int get() = 0
 
     companion object {
         fun fromBytes(data: ByteArray, offset: Int = 0): Pair<PreimagesStatusMapEntry, Int> {
@@ -65,31 +68,26 @@ data class PreimagesStatusMapEntry(
             val hash = JamByteArray(data.copyOfRange(currentOffset, currentOffset + 32))
             currentOffset += 32
 
-            // length - 4 bytes
-            val length = decodeFixedWidthInteger(data, currentOffset, 4, false).toInt()
-            currentOffset += 4
-
-            // status count - 1 byte
-            val statusCount = data[currentOffset].toInt() and 0xFF
-            currentOffset += 1
+            // status count - compact integer
+            val (statusCount, statusCountBytes) = decodeCompactInteger(data, currentOffset)
+            currentOffset += statusCountBytes
 
             // status values - 4 bytes each
             val statusValues = mutableListOf<Long>()
-            for (i in 0 until statusCount) {
+            for (i in 0 until statusCount.toInt()) {
                 statusValues.add(decodeFixedWidthInteger(data, currentOffset, 4, false))
                 currentOffset += 4
             }
 
-            val key = PreimageStatusKey(hash, length)
-            return Pair(PreimagesStatusMapEntry(key, statusValues), currentOffset - offset)
+            return Pair(PreimagesStatusMapEntry(hash, statusValues), currentOffset - offset)
         }
     }
 
     override fun encode(): ByteArray {
-        // Encode: hash (32 bytes) + length (4 bytes LE) + status count (1 byte) + status values (4 bytes each LE)
-        val lengthBytes = encodeFixedWidthInteger(key.length, 4, false)
-        val statusBytes = value.flatMap { encodeFixedWidthInteger(it, 4, false).toList() }.toByteArray()
-        return key.hash.bytes + lengthBytes + byteArrayOf(value.size.toByte()) + statusBytes
+        // Encode: hash (32 bytes) + status count (compact) + status values (4 bytes each LE)
+        val statusCountBytes = encodeCompactInteger(status.size.toLong())
+        val statusBytes = status.flatMap { encodeFixedWidthInteger(it, 4, false).toList() }.toByteArray()
+        return hash.bytes + statusCountBytes + statusBytes
     }
 }
 
@@ -123,9 +121,9 @@ data class ServiceData(
 data class AccumulationServiceData(
     val service: ServiceInfo,
     val storage: List<StorageMapEntry> = emptyList(),
-    @SerialName("preimage_blobs")
+    @SerialName("preimages_blob")
     val preimages: List<PreimageHash> = emptyList(),
-    @SerialName("preimage_requests")
+    @SerialName("preimages_status")
     val preimagesStatus: List<PreimagesStatusMapEntry> = emptyList()
 ) : Encodable {
     companion object {

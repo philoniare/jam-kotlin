@@ -8,9 +8,9 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class AccountInfo(
-    @SerialName("preimage_blobs")
+    @SerialName("preimages")
     var preimages: List<PreimageHash>,
-    @SerialName("preimage_requests")
+    @SerialName("lookup_meta")
     var lookupMeta: List<PreimageHistory>,
 ) : Encodable {
     companion object {
