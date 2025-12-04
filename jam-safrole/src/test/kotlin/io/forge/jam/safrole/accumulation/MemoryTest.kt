@@ -258,7 +258,6 @@ class MemoryTest {
             val allocSize = 4096u
 
             // sbrk returns the PREVIOUS heap end (start of newly allocated memory)
-            // Following POSIX sbrk semantics and Boka implementation
             val prevHeapEnd = instance.sbrk(allocSize)
 
             assertNotNull(prevHeapEnd)

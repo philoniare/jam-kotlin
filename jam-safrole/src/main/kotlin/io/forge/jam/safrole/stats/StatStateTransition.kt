@@ -28,11 +28,15 @@ class StatStateTransition(private val statConfig: StatConfig) {
             preImagesSize += input.extrinsic.preimages.sumOf { it.blob.size }
         }
 
-        // Update guarantees - each validator who signed a guarantee gets credit
+        // Update guarantees - each unique validator who signed any guarantee gets +1 credit per block
+        val reporters = mutableSetOf<Int>()
         input.extrinsic.guarantees.forEach { guarantee ->
             guarantee.signatures.forEach { sig ->
-                currStats[sig.validatorIndex.toInt()].guarantees++
+                reporters.add(sig.validatorIndex.toInt())
             }
+        }
+        reporters.forEach { validatorIndex ->
+            currStats[validatorIndex].guarantees++
         }
 
         // Update assurances

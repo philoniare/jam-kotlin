@@ -50,6 +50,9 @@ class BandersnatchWrapper(ringSize: Int) {
             commitment: ByteArray,
             ringSize: Int
         ): ByteArray
+
+        @JvmStatic
+        external fun getIetfVrfOutput(signature: ByteArray): ByteArray
     }
 
     init {

@@ -36,9 +36,9 @@ data class ReportState(
     @SerialName("accounts")
     val accounts: List<ServiceItem>,
     @SerialName("cores_statistics")
-    val coresStatistics: List<CoreStatisticsRecord> = emptyList(),
+    var coresStatistics: List<CoreStatisticsRecord> = emptyList(),
     @SerialName("services_statistics")
-    val servicesStatistics: List<ServiceStatisticsEntry> = emptyList()
+    var servicesStatistics: List<ServiceStatisticsEntry> = emptyList()
 ) : Encodable {
     companion object {
         fun fromBytes(data: ByteArray, offset: Int = 0, coresCount: Int, validatorsCount: Int): Pair<ReportState, Int> {

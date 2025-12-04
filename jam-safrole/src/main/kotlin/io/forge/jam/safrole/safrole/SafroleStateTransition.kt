@@ -33,8 +33,6 @@ class SafroleStateTransition(private val config: SafroleConfig) {
 
     private fun validateVoteDistribution(verdict: Verdict, validatorSet: List<ValidatorKey>): SafroleErrorCode? {
         val positiveVotes = verdict.votes.count { it.vote }
-        val totalVotes = verdict.votes.size
-
         // Only allow:
         // - 0 (all negative) for invalid reports
         // - 1/3 for uncertain/"wonky" reports
@@ -118,7 +116,6 @@ class SafroleStateTransition(private val config: SafroleConfig) {
             }
 
             // Process ticket submissions if any (eq. 74-80)
-            // Use pre-epoch gammaZ for verification as per Boka reference
             if (input.extrinsic.isNotEmpty()) {
                 val ticketResult = processExtrinsics(postState, input.extrinsic, newPhase, ticketVerificationGammaZ)
                 if (ticketResult != null) {

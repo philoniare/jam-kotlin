@@ -4,6 +4,9 @@ use ark_ec_vrfs::suites::bandersnatch::BandersnatchSha512Ell2;
 use ark_ec_vrfs::{Input, Output, Public, Secret};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 
+// Type aliases for IETF VRF
+type IetfProof = ark_ec_vrfs::ietf::Proof<BandersnatchSha512Ell2>;
+
 // Type aliases for Bandersnatch suite
 type RingProof = ark_ec_vrfs::ring::Proof<BandersnatchSha512Ell2>;
 type PcsParams = ark_ec_vrfs::ring::PcsParams<BandersnatchSha512Ell2>;
@@ -405,6 +408,57 @@ pub extern "system" fn Java_io_forge_jam_vrfs_BandersnatchWrapper_verifierRingVr
             Err(_) => return_error(&mut env, "Failed to create output array")
         },
         Err(e) => return_error(&mut env, &e.to_string())
+    }
+}
+
+/// IETF VRF signature structure (96 bytes: 32 output + 64 proof)
+#[derive(CanonicalSerialize, CanonicalDeserialize)]
+struct IetfVrfSignature {
+    output: BanderOutput,
+    proof: IetfProof,
+}
+
+/// Extract the VRF output from an IETF VRF signature.
+/// The signature is 96 bytes and the output is 32 bytes.
+#[no_mangle]
+pub extern "system" fn Java_io_forge_jam_vrfs_BandersnatchWrapper_getIetfVrfOutput(
+    mut env: JNIEnv,
+    _class: JClass,
+    signature: JByteArray,
+) -> jbyteArray {
+    let return_error_local = |env: &mut JNIEnv, error_msg: &str| -> jbyteArray {
+        let _ = env.throw_new("java/lang/RuntimeException", error_msg);
+        match env.byte_array_from_slice(&ERROR_RESULT) {
+            Ok(array) => array.into_raw(),
+            Err(_) => std::ptr::null_mut()
+        }
+    };
+
+    // Get signature bytes
+    let signature_data: Vec<u8> = match env.convert_byte_array(&signature) {
+        Ok(data) => data,
+        Err(_) => return return_error_local(&mut env, "Failed to convert signature data"),
+    };
+
+    if signature_data.len() < 96 {
+        return return_error_local(&mut env, "Signature must be at least 96 bytes");
+    }
+
+    // Deserialize the IETF VRF signature
+    let signature = match IetfVrfSignature::deserialize_compressed_unchecked(&signature_data[..]) {
+        Ok(sig) => sig,
+        Err(_) => return return_error_local(&mut env, "Failed to deserialize IETF VRF signature"),
+    };
+
+    // Extract the output hash (32 bytes)
+    let output_hash = signature.output.hash();
+    let output_bytes: [u8; 32] = output_hash[..32]
+        .try_into()
+        .unwrap_or([0u8; 32]);
+
+    match env.byte_array_from_slice(&output_bytes) {
+        Ok(array) => array.into_raw(),
+        Err(_) => return_error_local(&mut env, "Failed to create output array")
     }
 }
 

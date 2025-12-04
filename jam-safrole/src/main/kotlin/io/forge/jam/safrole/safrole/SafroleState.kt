@@ -30,7 +30,7 @@ data class SafroleGammaState(
                 }
             }
 
-            // γz: ring root (144 bytes) - comes SECOND in Boka's order
+            // γz: ring root (144 bytes)
             val gammaZ = if (currentOffset + 144 <= data.size) {
                 JamByteArray(data.copyOfRange(currentOffset, currentOffset + 144))
             } else {
@@ -101,7 +101,12 @@ data class SafroleState(
     var psi: Psi? = null
 ) : Encodable {
     companion object {
-        fun fromBytes(data: ByteArray, offset: Int = 0, validatorCount: Int, epochLength: Int): Pair<SafroleState, Int> {
+        fun fromBytes(
+            data: ByteArray,
+            offset: Int = 0,
+            validatorCount: Int,
+            epochLength: Int
+        ): Pair<SafroleState, Int> {
             var currentOffset = offset
 
             // tau - 4 bytes
@@ -175,6 +180,7 @@ data class SafroleState(
             )
         }
     }
+
     fun deepCopy(): SafroleState {
         return SafroleState(
             tau = tau,

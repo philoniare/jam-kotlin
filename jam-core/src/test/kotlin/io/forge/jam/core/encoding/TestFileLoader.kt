@@ -133,5 +133,50 @@ class TestFileLoader {
                 ?.map { it.nameWithoutExtension }
                 ?: emptyList()
         }
+
+        /**
+         * Gets all trace step filenames (numbered files like 00000001) from a traces subfolder.
+         * @param traceName The name of the trace folder (e.g., "fallback", "safrole")
+         * @return List of filenames sorted numerically, excluding genesis.
+         */
+        fun getTraceStepFilenames(traceName: String): List<String> {
+            val dir = JAM_TEST_VECTORS_PATH.resolve("traces/$traceName")
+            require(dir.exists() && dir.isDirectory) { "Trace directory not found: ${dir.absolutePath}" }
+            return dir.listFiles()
+                ?.filter { it.isFile && it.name.endsWith(".json") && it.name != "genesis.json" }
+                ?.map { it.nameWithoutExtension }
+                ?.sortedBy { it.toIntOrNull() ?: Int.MAX_VALUE }
+                ?: emptyList()
+        }
+
+        /**
+         * Loads all trace steps from a traces subfolder in order.
+         * @param traceName The name of the trace folder (e.g., "fallback", "safrole")
+         * @return List of pairs containing TraceStep data and expected binary data.
+         */
+        inline fun <reified T> loadTraceSteps(traceName: String): List<Pair<T, ByteArray>> {
+            val filenames = getTraceStepFilenames(traceName)
+            return filenames.map { filename ->
+                loadTestDataFromTestVectors<T>("traces/$traceName", filename)
+            }
+        }
+
+        /**
+         * Loads genesis data from a traces subfolder.
+         * @param traceName The name of the trace folder (e.g., "fallback", "safrole")
+         * @return Pair containing Genesis data and expected binary data.
+         */
+        inline fun <reified T> loadTraceGenesis(traceName: String): Pair<T, ByteArray> {
+            return loadTestDataFromTestVectors<T>("traces/$traceName", "genesis")
+        }
+
+        /**
+         * Gets the count of trace steps in a trace folder.
+         * @param traceName The name of the trace folder
+         * @return The number of trace step files (excluding genesis)
+         */
+        fun getTraceStepCount(traceName: String): Int {
+            return getTraceStepFilenames(traceName).size
+        }
     }
 }

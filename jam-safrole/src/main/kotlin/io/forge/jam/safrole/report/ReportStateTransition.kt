@@ -1,12 +1,12 @@
 package io.forge.jam.safrole.report
 
-import io.forge.jam.core.blakeHash
 import io.forge.jam.core.*
 import io.forge.jam.safrole.AvailabilityAssignment
 import io.forge.jam.safrole.ValidatorKey
+import io.forge.jam.safrole.accumulation.ServiceActivityRecord
+import io.forge.jam.safrole.accumulation.ServiceStatisticsEntry
 import io.forge.jam.safrole.historical.HistoricalBeta
 import io.forge.jam.safrole.historical.HistoricalBetaContainer
-import io.forge.jam.core.keccakHash
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
 import org.bouncycastle.crypto.signers.Ed25519Signer
 
@@ -423,7 +423,7 @@ class ReportStateTransition(private val config: ReportStateConfig) {
             slot = currentSlot,
             randomness = entropyPool[2]
         )
-        val prevSlot = currentSlot - config.ROTATION_PERIOD
+        val prevSlot = maxOf(0, currentSlot - config.ROTATION_PERIOD)
         val prevRandomness = if (isEpochChanging) entropyPool[3] else entropyPool[2]
 
         val prevAssignments = calculateCoreAssignments(
@@ -589,6 +589,14 @@ class ReportStateTransition(private val config: ReportStateConfig) {
         // Update state with new reports
         updateStateWithReports(postState, pendingReports, currentSlot)
 
+        // Update core statistics based on guarantees
+        val updatedCoreStats = updateCoreStatistics(preState.coresStatistics, input.guarantees, config.MAX_CORES)
+        postState.coresStatistics = updatedCoreStats
+
+        // Update service statistics based on guarantees
+        val updatedServicesStats = updateServiceStatistics(preState.servicesStatistics, input.guarantees)
+        postState.servicesStatistics = updatedServicesStats
+
         val sortedReportPackages = reportPackages.sortedBy { it.workPackageHash.toHex() }
         val sortedGuarantors = validGuarantors.distinctBy { it.toHex() }.sortedBy { it.toHex() }
 
@@ -601,6 +609,128 @@ class ReportStateTransition(private val config: ReportStateConfig) {
                 )
             )
         )
+    }
+
+    /**
+     * Update core statistics based on processed guarantees.
+     * Creates FRESH statistics each block (not accumulated from previous state).
+     */
+    private fun updateCoreStatistics(
+        existing: List<CoreStatisticsRecord>,
+        guarantees: List<GuaranteeExtrinsic>,
+        maxCores: Int
+    ): List<CoreStatisticsRecord> {
+        // Always create fresh core stats with zeros
+        val coreStatsList = MutableList(maxCores) { CoreStatisticsRecord() }
+
+        // If no guarantees, return fresh zeros
+        if (guarantees.isEmpty()) {
+            return coreStatsList
+        }
+
+        for (guarantee in guarantees) {
+            val report = guarantee.report
+            val coreIndex = report.coreIndex.toInt()
+
+            if (coreIndex < 0 || coreIndex >= coreStatsList.size) continue
+
+            // Calculate totals from work results (digests)
+            var totalExtrinsicCount = 0L
+            var totalExtrinsicSize = 0L
+            var totalExports = 0L
+            var totalGasUsed = 0L
+            var totalImports = 0L
+
+            for (result in report.results) {
+                val refineLoad = result.refineLoad
+                totalExtrinsicCount += refineLoad.extrinsicCount
+                totalExtrinsicSize += refineLoad.extrinsicSize
+                totalExports += refineLoad.exports
+                totalGasUsed += refineLoad.gasUsed
+                totalImports += refineLoad.imports
+            }
+
+            // Package size from packageSpec (bundleSize)
+            val bundleSize = report.packageSpec.length.toLong()
+
+            // Update core stats (fresh each block, not accumulated)
+            val current = coreStatsList[coreIndex]
+            coreStatsList[coreIndex] = CoreStatisticsRecord(
+                daLoad = current.daLoad,  // daLoad comes from available reports, not guarantees
+                popularity = current.popularity,  // popularity comes from assurances
+                imports = current.imports + totalImports,
+                extrinsicCount = current.extrinsicCount + totalExtrinsicCount,
+                extrinsicSize = current.extrinsicSize + totalExtrinsicSize,
+                exports = current.exports + totalExports,
+                bundleSize = current.bundleSize + bundleSize,
+                gasUsed = current.gasUsed + totalGasUsed
+            )
+        }
+
+        return coreStatsList
+    }
+
+    /**
+     * Update service statistics based on processed guarantees.
+     * Creates FRESH statistics each block (not accumulated from previous state).
+     */
+    private fun updateServiceStatistics(
+        existing: List<ServiceStatisticsEntry>,
+        guarantees: List<GuaranteeExtrinsic>
+    ): List<ServiceStatisticsEntry> {
+        // Create fresh service stats map (not using existing values)
+        val statsMap = mutableMapOf<Long, ServiceStatisticsEntry>()
+
+        // If no guarantees, return empty list
+        if (guarantees.isEmpty()) {
+            return emptyList()
+        }
+
+        for (guarantee in guarantees) {
+            val report = guarantee.report
+
+            // Process each work result in the report
+            for (result in report.results) {
+                val serviceId = result.serviceId
+                val current = statsMap[serviceId]
+
+                // Calculate updates from refineLoad
+                val refineLoad = result.refineLoad
+                val refinementGasUsed = refineLoad.gasUsed
+                val extrinsicCount = refineLoad.extrinsicCount
+                val extrinsicSize = refineLoad.extrinsicSize
+                val importsCount = refineLoad.imports
+                val exportsCount = refineLoad.exports
+
+                if (current != null) {
+                    statsMap[serviceId] = ServiceStatisticsEntry(
+                        id = serviceId,
+                        record = current.record.copy(
+                            refinementCount = current.record.refinementCount + 1,
+                            refinementGasUsed = current.record.refinementGasUsed + refinementGasUsed,
+                            extrinsicCount = current.record.extrinsicCount + extrinsicCount,
+                            extrinsicSize = current.record.extrinsicSize + extrinsicSize,
+                            imports = current.record.imports + importsCount,
+                            exports = current.record.exports + exportsCount
+                        )
+                    )
+                } else {
+                    statsMap[serviceId] = ServiceStatisticsEntry(
+                        id = serviceId,
+                        record = ServiceActivityRecord(
+                            refinementCount = 1,
+                            refinementGasUsed = refinementGasUsed,
+                            extrinsicCount = extrinsicCount,
+                            extrinsicSize = extrinsicSize,
+                            imports = importsCount,
+                            exports = exportsCount
+                        )
+                    )
+                }
+            }
+        }
+
+        return statsMap.values.sortedBy { it.id }
     }
 
     /**
