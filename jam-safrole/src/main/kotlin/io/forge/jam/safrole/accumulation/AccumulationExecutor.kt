@@ -37,7 +37,7 @@ class AccumulationExecutor(
         operands: List<AccumulationOperand>
     ): AccumulationOneResult {
         val account = partialState.accounts[serviceId]
-            ?: return createEmptyResult(partialState, serviceId, timeslot)
+            ?: return createEmptyResult(partialState, serviceId, timeslot, operands)
 
         println("[EXEC-START] service=$serviceId, initialBalance=${account.info.balance}, bytes=${account.info.bytes}, items=${account.info.items}")
 
@@ -46,17 +46,17 @@ class AccumulationExecutor(
 
         val preimage = account.preimages[codeHash]?.bytes
         if (preimage == null) {
-            return createEmptyResult(partialState, serviceId, timeslot)
+            return createEmptyResult(partialState, serviceId, timeslot, operands)
         }
 
         // Extract code blob from preimage (format: metaLength + metadata + code)
         val code = extractCodeBlob(preimage)
         if (code == null || code.isEmpty()) {
-            return createEmptyResult(partialState, serviceId, timeslot)
+            return createEmptyResult(partialState, serviceId, timeslot, operands)
         }
 
         if (code.size > MAX_SERVICE_CODE_SIZE) {
-            return createEmptyResult(partialState, serviceId, timeslot)
+            return createEmptyResult(partialState, serviceId, timeslot, operands)
         }
 
         // Apply incoming transfers to balance
@@ -70,7 +70,7 @@ class AccumulationExecutor(
         }
 
         // Calculate initial nextAccountIndex
-        val minPublicServiceIndex = 256L
+        val minPublicServiceIndex = config.MIN_PUBLIC_SERVICE_INDEX
         val initialIndex = calculateInitialIndex(serviceId, entropy, timeslot)
         val s = minPublicServiceIndex.toUInt()
         val modValue = UInt.MAX_VALUE - s - 255u
@@ -108,7 +108,8 @@ class AccumulationExecutor(
             serviceIndex = serviceId,
             timeslot = timeslot,
             entropy = entropy,
-            nextAccountIndex = nextAccountIndex
+            nextAccountIndex = nextAccountIndex,
+            minPublicServiceIndex = minPublicServiceIndex
         )
 
         // Execute PVM
@@ -143,10 +144,10 @@ class AccumulationExecutor(
 
         return AccumulationOneResult(
             postState = finalState,
-            deferredTransfers = context.deferredTransfers.toList(),
+            deferredTransfers = context.getDeferredTransfers(execResult.exitReason),
             yield = yield,
             gasUsed = execResult.gasUsed,
-            provisions = context.provisions.toSet()
+            provisions = context.getProvisions(execResult.exitReason)
         )
     }
 
@@ -237,7 +238,6 @@ class AccumulationExecutor(
                 }
 
                 InterruptKind.Panic -> {
-                    println("[PANIC] PC=${instance.programCounter()}, gas=${instance.gas()}")
                     exitReason = ExitReason.PANIC
                     break
                 }
@@ -249,19 +249,12 @@ class AccumulationExecutor(
 
                 is InterruptKind.Ecalli -> {
                     hostCallCount++
-                    val gasBefore = instance.gas()
                     // Deduct host call gas cost BEFORE execution
                     val gasCost = hostCalls.getGasCost(interrupt.value, instance)
                     val newGas = instance.gas() - gasCost
                     instance.setGas(newGas)
                     // Now dispatch with gas already charged
                     hostCalls.dispatch(interrupt.value, instance)
-                    val gasAfter = instance.gas()
-                    // Check if dispatch changed gas (it shouldn't)
-                    if (gasAfter != newGas) {
-                        println("[WARNING] Gas changed during dispatch! before=$newGas, after=$gasAfter")
-                    }
-                    println("[HOST-TRACE] #$hostCallCount: id=${interrupt.value}, gasBefore=$gasBefore, gasCost=$gasCost, gasAfter=$gasAfter")
                 }
 
                 is InterruptKind.Segfault -> {
@@ -286,10 +279,6 @@ class AccumulationExecutor(
         val gasUsed = initialGas - instance.gas()
         val finalGas = instance.gas()
         println("[DEBUG-EXEC] hostCalls=$hostCallCount, initialGas=$initialGas, finalGas=$finalGas, gasUsed=$gasUsed, exitReason=$exitReason")
-
-        if (exitReason == ExitReason.PANIC) {
-            throw RuntimeException("PVM Panic! Host calls: $hostCallCount")
-        }
 
         val output: ByteArray? = if (exitReason == ExitReason.HALT) {
             val addr = instance.reg(Reg.A0).toUInt()
@@ -346,7 +335,6 @@ class AccumulationExecutor(
                     return null
                 }
                 val blob = blobResult.getOrThrow()
-                println("[DEBUG-BLOB] codeAndJumpTable=${parts.codeAndJumpTable.toByteArray().size}, parsed code=${blob.code.toByteArray().size}, jumpTable=${blob.jumpTable.toByteArray().size}, bitmask=${blob.bitmask.toByteArray().size}")
 
                 val moduleConfig = ModuleConfig.new(dynamicPaging = false)
                 moduleConfig.setGasMetering(GasMeteringKind.Sync)
@@ -370,18 +358,24 @@ class AccumulationExecutor(
 
     /**
      * Create empty result when service code cannot be executed.
+     * Still applies incoming transfers to the balance.
      */
     private fun createEmptyResult(
         state: PartialState,
         serviceId: Long? = null,
-        timeslot: Long? = null
+        timeslot: Long? = null,
+        operands: List<AccumulationOperand> = emptyList()
     ): AccumulationOneResult {
-        val finalState = if (serviceId != null && timeslot != null) {
+        val finalState = if (serviceId != null) {
             val stateCopy = state.deepCopy()
             val account = stateCopy.accounts[serviceId]
             if (account != null) {
+                val transferBalance = operands.filterIsInstance<AccumulationOperand.Transfer>()
+                    .sumOf { it.transfer.amount }
                 stateCopy.accounts[serviceId] = account.copy(
-                    info = account.info.copy(lastAccumulationSlot = timeslot)
+                    info = account.info.copy(
+                        balance = account.info.balance + transferBalance
+                    )
                 )
             }
             stateCopy

@@ -196,6 +196,14 @@ class AccumulationHostCalls(
                 constants
             }
 
+            1 -> {
+                // Entropy (32 bytes)
+                val entropy = context.entropy.bytes
+                println("[FETCH-DATA] selector=1 (entropy), size=${entropy.size}")
+                println("[FETCH-BYTES] selector=1 hex=${entropy.joinToString("") { "%02x".format(it) }}")
+                entropy
+            }
+
             14 -> {
                 val opList = encodeOperandsList()
                 println("[FETCH-DATA] selector=14 (operands list), size=${opList.size}")

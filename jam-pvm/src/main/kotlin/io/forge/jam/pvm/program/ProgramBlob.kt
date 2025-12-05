@@ -108,79 +108,113 @@ data class ProgramBlob(
         }
 
         /**
-         * Parse JAM format code section
+         * Parse JAM format code section.
          */
         private fun parseJamCodeSection(parts: ProgramParts, blob: ProgramBlob) {
             val data = parts.codeAndJumpTable.toByteArray()
 
-            if (data.size < 6) {
-                throw ProgramParseError(ProgramParseErrorKind.Other("JAM code section too short"))
+            if (data.isEmpty()) {
+                throw ProgramParseError(ProgramParseErrorKind.Other("JAM code section is empty"))
             }
 
-            // Check for JAM-specific header (0x80)
-            // If not present, try parsing as standard PolkaVM code section
-            if ((data[0].toInt() and 0xFF) != 0x80) {
-                parsePolkavmCodeSection(parts, blob)
-                return
+            var offset = 0
+
+            // Read jump table entries count
+            val (jumpTableEntryCount, offset1) = decodeJamNatural(data, offset)
+            offset = offset1
+
+            if (offset >= data.size) {
+                throw ProgramParseError(ProgramParseErrorKind.Other("JAM code section truncated: missing encodeSize"))
             }
 
-            // Parse JAM header
-            // byte 0 is format indicator (0x80 = 2-byte entries), currently unused
-            val jumpTableEntryCount = data[1].toInt() and 0xFF
-            // bytes 2-3 are reserved/unknown
-            val codeLength = ((data[4].toInt() and 0xFF) or ((data[5].toInt() and 0xFF) shl 8))
+            // Read jump table entry size (single byte)
+            val jumpTableEntrySize = (data[offset].toInt() and 0xFF).toByte()
+            offset++
 
-            // JAM format uses 2-byte entries
-            val jumpTableEntrySize: Byte = 2
-            val jumpTableLength = jumpTableEntryCount * jumpTableEntrySize
+            // Read code length
+            val (codeLength, offset2) = decodeJamNatural(data, offset)
+            offset = offset2
 
-            // Calculate offsets
-            val headerSize = 6
-            val jumpTableStart = headerSize
-            val jumpTableEnd = jumpTableStart + jumpTableLength
-            val codeStart = jumpTableEnd
-            val codeEnd = codeStart + codeLength
+            // Calculate jump table length
+            val jumpTableLength = jumpTableEntryCount.toInt() * jumpTableEntrySize.toInt()
 
-            if (codeEnd > data.size) {
+            // Read jump table
+            val jumpTableEnd = offset + jumpTableLength
+            if (jumpTableEnd > data.size) {
                 throw ProgramParseError(
-                    ProgramParseErrorKind.Other("JAM code section truncated: code extends beyond end")
+                    ProgramParseErrorKind.Other("JAM code section truncated: jumpTable extends beyond end")
                 )
             }
-
-            val bitmaskStart = codeEnd
-            val bitmaskLength = data.size - bitmaskStart
-
-            // Extract sections
             blob.jumpTableEntrySize = jumpTableEntrySize
-            blob.jumpTable = ArcBytes.fromStatic(data.copyOfRange(jumpTableStart, jumpTableEnd))
-            blob.code = ArcBytes.fromStatic(data.copyOfRange(codeStart, codeEnd))
-            blob.bitmask = ArcBytes.fromStatic(data.copyOfRange(bitmaskStart, data.size))
+            blob.jumpTable = ArcBytes.fromStatic(data.copyOfRange(offset, jumpTableEnd))
+            offset = jumpTableEnd
+
+            // Read code
+            val codeEnd = offset + codeLength.toInt()
+            if (codeEnd > data.size) {
+                throw ProgramParseError(
+                    ProgramParseErrorKind.Other("JAM code section truncated: code extends beyond end (offset=$offset, codeLength=$codeLength, dataSize=${data.size})")
+                )
+            }
+            blob.code = ArcBytes.fromStatic(data.copyOfRange(offset, codeEnd))
+            offset = codeEnd
+
+            // Read bitmask (remaining bytes)
+            val bitmaskLength = data.size - offset
+            blob.bitmask = ArcBytes.fromStatic(data.copyOfRange(offset, data.size))
 
             // Validate bitmask length
-            var expectedBitmaskLength = codeLength / 8
-            val isBitmaskPadded = codeLength % 8 != 0
+            var expectedBitmaskLength = codeLength.toInt() / 8
+            val isBitmaskPadded = codeLength.toInt() % 8 != 0
             if (isBitmaskPadded) expectedBitmaskLength++
 
             if (bitmaskLength != expectedBitmaskLength) {
                 throw ProgramParseError(
                     ProgramParseErrorKind.Other(
-                        "JAM bitmask length mismatch: expected $expectedBitmaskLength, got $bitmaskLength"
+                        "JAM bitmask length mismatch: expected $expectedBitmaskLength, got $bitmaskLength (codeLength=$codeLength)"
                     )
                 )
             }
+        }
 
-            // Validate bitmask padding
-            if (isBitmaskPadded && blob.bitmask.asRef().isNotEmpty()) {
-                val lastByte = blob.bitmask.asRef().last()
-                val paddingBits = bitmaskLength * 8 - codeLength
-                val paddingMask = (0b10000000.toByte().toInt() shr (paddingBits - 1)).toByte()
-
-                if ((lastByte.toInt() and paddingMask.toInt()) != 0) {
-                    throw ProgramParseError(
-                        ProgramParseErrorKind.Other("JAM bitmask is padded with non-zero bits")
-                    )
-                }
+        /**
+         * Decode a JAM natural number
+         * Returns the decoded value and the new offset.
+         */
+        private fun decodeJamNatural(data: ByteArray, offset: Int): Pair<Long, Int> {
+            if (offset >= data.size) {
+                throw ProgramParseError(ProgramParseErrorKind.Other("JAM natural number: unexpected end of data"))
             }
+
+            val firstByte = data[offset].toInt() and 0xFF
+            if (firstByte == 0) {
+                return Pair(0L, offset + 1)
+            }
+
+            // Count leading zeros of inverted byte to get number of additional bytes
+            val inverted = firstByte.inv() and 0xFF
+            var byteLength = 0
+            for (i in 0 until 8) {
+                if ((inverted and (0x80 shr i)) != 0) break
+                byteLength++
+            }
+
+            if (offset + 1 + byteLength > data.size) {
+                throw ProgramParseError(ProgramParseErrorKind.Other("JAM natural number: truncated"))
+            }
+
+            // Read additional bytes (little-endian)
+            var res: Long = 0
+            for (i in 0 until byteLength) {
+                res = res or ((data[offset + 1 + i].toLong() and 0xFF) shl (8 * i))
+            }
+
+            // Mask for top bits from first byte
+            val mask = (1 shl (8 - byteLength)) - 1
+            val topBits = firstByte and mask
+
+            val value = res + (topBits.toLong() shl (8 * byteLength))
+            return Pair(value, offset + 1 + byteLength)
         }
 
         /**

@@ -2,15 +2,17 @@ package io.forge.jam.safrole.traces
 
 import io.forge.jam.core.*
 import io.forge.jam.safrole.*
-import io.forge.jam.safrole.accumulation.*
+import io.forge.jam.safrole.accumulation.Privileges
+import io.forge.jam.safrole.accumulation.ReadyRecord
+import io.forge.jam.safrole.accumulation.ServiceStatisticsEntry
 import io.forge.jam.safrole.authorization.AUTH_QUEUE_SIZE
 import io.forge.jam.safrole.historical.HistoricalBetaContainer
-import io.forge.jam.safrole.historical.HistoricalMmr
-import io.forge.jam.safrole.historical.HistoricalBeta
 import io.forge.jam.safrole.report.AccumulationServiceData
 import io.forge.jam.safrole.report.AccumulationServiceItem
 import io.forge.jam.safrole.report.CoreStatisticsRecord
-import io.forge.jam.safrole.safrole.*
+import io.forge.jam.safrole.safrole.SafroleGammaState
+import io.forge.jam.safrole.safrole.SafroleInput
+import io.forge.jam.safrole.safrole.SafroleState
 import io.forge.jam.safrole.stats.StatCount
 import io.forge.jam.vrfs.BandersnatchWrapper
 import org.bouncycastle.jcajce.provider.digest.Blake2b
@@ -48,11 +50,13 @@ object StateCodec {
                     val serviceIndex = extractServiceIndex255(kv.key)
                     serviceAccountKvs[serviceIndex] = kv
                 }
+
                 isServiceDataKey(keyByte) -> {
                     // Service storage/preimage key - extract service index
                     val serviceIndex = extractServiceIndexInterleaved(kv.key)
                     serviceDataKvs.getOrPut(serviceIndex) { mutableListOf() }.add(kv)
                 }
+
                 else -> {
                     grouped.getOrPut(keyByte) { mutableListOf() }.add(kv)
                 }
@@ -111,10 +115,7 @@ object StateCodec {
 
         // Privileged services (χ)
         val privilegedServices = grouped[StateKeys.PRIVILEGED_SERVICES.toInt() and 0xFF]?.firstOrNull()?.let {
-            println("[DEBUG-PRIVILEGES-RAW] key=0x${StateKeys.PRIVILEGED_SERVICES.toString(16)}, raw bytes (${it.value.bytes.size}): ${it.value.bytes.take(50).joinToString("") { "%02x".format(it) }}...")
-            val privs = Privileges.fromBytes(it.value.bytes, 0, config.CORES_COUNT).first
-            println("[DEBUG-PRIVILEGES] Loaded privileges: bless=${privs.bless}, assign=${privs.assign}, alwaysAcc=${privs.alwaysAcc}")
-            privs
+            Privileges.fromBytes(it.value.bytes, 0, config.CORES_COUNT).first
         } ?: Privileges(0, List(config.CORES_COUNT) { 0L }, 0, 0, emptyList())
 
         // Activity statistics
@@ -143,9 +144,10 @@ object StateCodec {
         } ?: List(config.EPOCH_LENGTH) { emptyList() }
 
         // Last accumulation outputs
-        val lastAccumulationOutputs = grouped[StateKeys.LAST_ACCUMULATION_OUTPUTS.toInt() and 0xFF]?.firstOrNull()?.let {
-            decodeLastAccumulationOutputs(it.value.bytes)
-        } ?: emptyMap()
+        val lastAccumulationOutputs =
+            grouped[StateKeys.LAST_ACCUMULATION_OUTPUTS.toInt() and 0xFF]?.firstOrNull()?.let {
+                decodeLastAccumulationOutputs(it.value.bytes)
+            } ?: emptyMap()
 
         // Service accounts - combine account metadata with storage/preimage data
         val serviceAccountsList = serviceAccountKvs.map { (serviceIndex, kv) ->
@@ -258,9 +260,9 @@ object StateCodec {
     private fun extractServiceIndex255(key: JamByteArray): Int {
         val bytes = key.bytes
         return (bytes[1].toInt() and 0xFF) or
-               ((bytes[3].toInt() and 0xFF) shl 8) or
-               ((bytes[5].toInt() and 0xFF) shl 16) or
-               ((bytes[7].toInt() and 0xFF) shl 24)
+            ((bytes[3].toInt() and 0xFF) shl 8) or
+            ((bytes[5].toInt() and 0xFF) shl 16) or
+            ((bytes[7].toInt() and 0xFF) shl 24)
     }
 
     /**
@@ -269,9 +271,9 @@ object StateCodec {
     private fun extractServiceIndexInterleaved(key: JamByteArray): Int {
         val bytes = key.bytes
         return (bytes[0].toInt() and 0xFF) or
-               ((bytes[2].toInt() and 0xFF) shl 8) or
-               ((bytes[4].toInt() and 0xFF) shl 16) or
-               ((bytes[6].toInt() and 0xFF) shl 24)
+            ((bytes[2].toInt() and 0xFF) shl 8) or
+            ((bytes[4].toInt() and 0xFF) shl 16) or
+            ((bytes[6].toInt() and 0xFF) shl 24)
     }
 
     /**
@@ -383,9 +385,6 @@ object StateCodec {
             val (coreRecord, coreBytes) = CoreStatisticsRecord.fromBytes(value, offset)
             coreStats.add(coreRecord)
             offset += coreBytes
-            if (coreRecord.daLoad > 0 || coreRecord.popularity > 0 || coreRecord.bundleSize > 0) {
-                println("[DEBUG] Decoded core $i stats: daLoad=${coreRecord.daLoad}, pop=${coreRecord.popularity}, imports=${coreRecord.imports}, extC=${coreRecord.extrinsicCount}, extS=${coreRecord.extrinsicSize}, exports=${coreRecord.exports}, bundle=${coreRecord.bundleSize}, gas=${coreRecord.gasUsed}")
-            }
         }
 
         // Decode service statistics (compact length + entries)
@@ -500,22 +499,27 @@ object StateCodec {
                     // Timeslot: 4 bytes little-endian
                     tau = decodeFixedWidthInteger(value, 0, 4, false)
                 }
+
                 StateKeys.ENTROPY_POOL.toInt() and 0xFF -> {
                     // Entropy pool: 4 x 32-byte hashes
                     decodeEntropyPool(value, eta)
                 }
+
                 StateKeys.CURRENT_VALIDATORS.toInt() and 0xFF -> {
                     // Current validators (κ) - delegate to ValidatorKey.fromBytes()
                     kappa = decodeValidatorList(value, config.VALIDATORS_COUNT)
                 }
+
                 StateKeys.PREVIOUS_VALIDATORS.toInt() and 0xFF -> {
                     // Previous validators (λ)
                     lambda = decodeValidatorList(value, config.VALIDATORS_COUNT)
                 }
+
                 StateKeys.VALIDATOR_QUEUE.toInt() and 0xFF -> {
                     // Pending validators (ι)
                     iota = decodeValidatorList(value, config.VALIDATORS_COUNT)
                 }
+
                 StateKeys.SAFROLE_STATE.toInt() and 0xFF -> {
                     // Safrole gamma state (γk, γz, γs, γa) - delegate to SafroleGammaState.fromBytes()
                     val decoded = SafroleGammaState.fromBytes(value, 0, config.VALIDATORS_COUNT, config.EPOCH_LENGTH)
