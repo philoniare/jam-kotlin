@@ -150,13 +150,13 @@ object InputExtractor {
         // Compute header hash
         val headerHash = JamByteArray(blakeHash(block.header.encode()))
 
-        // Extract work packages from guarantees
+        // Extract work packages from guarantees, sorted by hash (as per GP spec)
         val workPackages = block.extrinsic.guarantees.map { guarantee ->
             ReportedWorkPackage(
                 hash = guarantee.report.packageSpec.hash,
                 exportsRoot = guarantee.report.packageSpec.exportsRoot
             )
-        }
+        }.sortedBy { it.hash.toHex() }
 
         return HistoricalInput(
             headerHash = headerHash,
