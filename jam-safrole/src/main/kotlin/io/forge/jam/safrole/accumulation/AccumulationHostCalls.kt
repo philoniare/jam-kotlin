@@ -267,14 +267,17 @@ class AccumulationHostCalls(
         val offset = instance.getReg10().toInt()
         val length = instance.getReg11().toInt()
 
-        // Read hash from memory
+        println("[LOOKUP-PARAMS] serviceId=$serviceId, hashAddr=0x${hashAddr.toString(16)}, outputAddr=0x${outputAddr.toString(16)}, offset=$offset, length=$length")
+
+        // Read hash from memory - panic on OOB (matches Swift behavior)
         val hashBuffer = ByteArray(32)
         val readResult = instance.readMemoryInto(hashAddr, hashBuffer)
         if (readResult.isFailure) {
-            instance.setReg7(HostCallResult.OOB)
-            return
+            println("[LOOKUP-FAIL] PANIC: Failed to read hash from memory at 0x${hashAddr.toString(16)}")
+            throw RuntimeException("Lookup PANIC: Failed to read hash from memory at 0x${hashAddr.toString(16)}")
         }
         val hash = JamByteArray(hashBuffer)
+        println("[LOOKUP-HASH] hash=${hash.toHex()}")
 
         // Determine which account to look up from
         val targetServiceId = if (serviceId == -1L || serviceId == context.serviceIndex) {
