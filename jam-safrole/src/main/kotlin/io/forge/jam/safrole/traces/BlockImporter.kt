@@ -553,11 +553,14 @@ class BlockImporter(private val config: ImporterConfig = ImporterConfig()) {
 
         val allAccumulatedServiceIds = yieldedServiceIds + modifiedServiceIds
 
-        // For accumulated services, remove keys that are NOT in postAccumulationRawData
-        // (those were deleted during accumulation)
+        // Compute ejected services
+        val postAccServiceIds = accumulationAccounts.map { it.id.toInt() }.toSet()
+        val ejectedServiceIds = preStateAccountIds - postAccServiceIds
+
+        // For ejected services, remove ALL their keys
         val postRawDataKeyHexes = postAccumulationRawData.keys.map { it.toHex() }.toSet()
         val keysToRemove = kvMap.keys.filter { keyHex ->
-            // Check if this key belongs to an accumulated service
+            // Check if this key belongs to an accumulated or ejected service
             val keyBytes = keyHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             if (keyBytes.size == 31) {
                 // Extract service index from interleaved bytes (positions 0, 2, 4, 6)
@@ -565,8 +568,11 @@ class BlockImporter(private val config: ImporterConfig = ImporterConfig()) {
                     ((keyBytes[2].toInt() and 0xFF) shl 8) or
                     ((keyBytes[4].toInt() and 0xFF) shl 16) or
                     ((keyBytes[6].toInt() and 0xFF) shl 24)
-                // Remove if: 1) belongs to accumulated service AND 2) not in post-accumulation data
-                serviceIndex in allAccumulatedServiceIds && keyHex !in postRawDataKeyHexes
+                // Remove if: 
+                // 1) belongs to accumulated service AND not in post-accumulation data, OR
+                // 2) belongs to ejected service (all keys should be removed)
+                (serviceIndex in allAccumulatedServiceIds && keyHex !in postRawDataKeyHexes) ||
+                    serviceIndex in ejectedServiceIds
             } else {
                 false
             }
@@ -574,7 +580,21 @@ class BlockImporter(private val config: ImporterConfig = ImporterConfig()) {
         keysToRemove.forEach { kvMap.remove(it) }
 
         // Add/update entries from postAccumulationRawData (includes new writes and updates)
+        // Skip keys belonging to ejected services
         for ((key, value) in postAccumulationRawData) {
+            // Check if this key belongs to an ejected service
+            val keyBytes = key.bytes
+            val keyServiceIndex = if (keyBytes.size == 31) {
+                (keyBytes[0].toInt() and 0xFF) or
+                    ((keyBytes[2].toInt() and 0xFF) shl 8) or
+                    ((keyBytes[4].toInt() and 0xFF) shl 16) or
+                    ((keyBytes[6].toInt() and 0xFF) shl 24)
+            } else null
+
+            if (keyServiceIndex != null && keyServiceIndex in ejectedServiceIds) {
+                continue // Skip keys for ejected services
+            }
+
             kvMap[key.toHex()] = KeyValue(key = key, value = value)
         }
 

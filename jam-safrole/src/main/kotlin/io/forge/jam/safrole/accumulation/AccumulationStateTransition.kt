@@ -11,8 +11,27 @@ import java.nio.ByteOrder
  * Handles ring buffer management for ready_queue and accumulated arrays,
  * dependency resolution, and PVM execution for service accumulation.
  */
+/**
+ * Snapshot of privilege state values at a point in time.
+ * Used for applying the R function to merge parallel privilege updates.
+ */
+data class PrivilegeSnapshot(
+    val manager: Long,
+    val delegator: Long,
+    val registrar: Long,
+    val assigners: List<Long>,
+    val alwaysAccers: Map<Long, Long>
+)
+
 class AccumulationStateTransition(private val config: AccumulationConfig) {
     private val executor = AccumulationExecutor(config)
+
+    /**
+     * Gray Paper R function for merging privilege updates.
+     */
+    private fun privilegeR(original: Long, managerPost: Long, holderPost: Long): Long {
+        return if (managerPost == original) holderPost else managerPost
+    }
 
     fun transition(
         input: AccumulationInput,
@@ -183,18 +202,55 @@ class AccumulationStateTransition(private val config: AccumulationConfig) {
             }
         }
 
-        // 13. Build final state
+        // 13. Build final state with R function for privilege merging
+        val origManager = preState.privileges.bless
+        val origDelegator = preState.privileges.designate
+        val origRegistrar = preState.privileges.register
+        val origAssigners = preState.privileges.assign
+
+        // Get privilege snapshots for R function
+        val privilegeSnapshots = outerResult.privilegeSnapshots
+        val managerSnapshot = privilegeSnapshots[origManager]
+
+        // Manager service controls itself - no R needed for manager
+        val finalManager = newPartialState.manager
+
+        // Apply R function for delegator: R(origDelegator, managerPost.delegator, delegatorPost.delegator)
+        val managerPostDelegator = managerSnapshot?.delegator ?: origDelegator
+        val delegatorSnapshot = privilegeSnapshots[origDelegator]
+        val delegatorPostDelegator = delegatorSnapshot?.delegator ?: origDelegator
+        val finalDelegator = privilegeR(origDelegator, managerPostDelegator, delegatorPostDelegator)
+
+        // Apply R function for registrar: R(origRegistrar, managerPost.registrar, registrarPost.registrar)
+        val managerPostRegistrar = managerSnapshot?.registrar ?: origRegistrar
+        val registrarSnapshot = privilegeSnapshots[origRegistrar]
+        val registrarPostRegistrar = registrarSnapshot?.registrar ?: origRegistrar
+        val finalRegistrar = privilegeR(origRegistrar, managerPostRegistrar, registrarPostRegistrar)
+
+        // Apply R function for each assigner: R(origAssigners[c], managerPost.assigners[c], assignerPost.assigners[c])
+        val finalAssigners = origAssigners.mapIndexed { c, origAssigner ->
+            val managerPostAssigner = managerSnapshot?.assigners?.getOrNull(c) ?: origAssigner
+            val assignerSnapshot = privilegeSnapshots[origAssigner]
+            val assignerPostAssigner = assignerSnapshot?.assigners?.getOrNull(c) ?: origAssigner
+            privilegeR(origAssigner, managerPostAssigner, assignerPostAssigner)
+        }
+
+        // AlwaysAccers comes from manager's post-state
+        val finalAlwaysAccers = newPartialState.alwaysAccers
+
+        println("[DEBUG-PRIVILEGES-R] origDelegator=$origDelegator, managerPost=$managerPostDelegator, delegatorPost=$delegatorPostDelegator -> final=$finalDelegator")
+
         val finalState = AccumulationState(
             slot = input.slot,
             entropy = preState.entropy.copy(),
             readyQueue = finalReadyQueue,
             accumulated = newAccumulatedArray,
             privileges = Privileges(
-                bless = newPartialState.manager,
-                assign = newPartialState.assigners.toList(),
-                designate = newPartialState.delegator,
-                register = newPartialState.registrar,
-                alwaysAcc = newPartialState.alwaysAccers.entries.sortedBy { it.key }
+                bless = finalManager,
+                assign = finalAssigners,
+                designate = finalDelegator,
+                register = finalRegistrar,
+                alwaysAcc = finalAlwaysAccers.entries.sortedBy { it.key }
                     .map { (id, gas) -> AlwaysAccItem(id, gas) }
             ),
             statistics = newStatistics,
@@ -386,7 +442,8 @@ class AccumulationStateTransition(private val config: AccumulationConfig) {
         val postState: PartialState,
         val gasUsedMap: Map<Long, Long>,
         val commitments: Map<Long, JamByteArray>,  // service -> yield hash
-        val deferredTransfers: List<DeferredTransfer> = emptyList()  // transfers to process in next round
+        val deferredTransfers: List<DeferredTransfer> = emptyList(),  // transfers to process in next round
+        val privilegeSnapshots: Map<Long, PrivilegeSnapshot> = emptyMap()  // service -> privilege snapshot after execution
     )
 
     /**
@@ -396,7 +453,8 @@ class AccumulationStateTransition(private val config: AccumulationConfig) {
         val reportsAccumulated: Int,
         val postState: PartialState,
         val gasUsedMap: Map<Long, Long>,
-        val commitments: Map<Long, JamByteArray>
+        val commitments: Map<Long, JamByteArray>,
+        val privilegeSnapshots: Map<Long, PrivilegeSnapshot> = emptyMap()  // service -> privilege snapshot
     )
 
     /**
@@ -440,7 +498,8 @@ class AccumulationStateTransition(private val config: AccumulationConfig) {
                 reportsAccumulated = 0,
                 postState = partialState,
                 gasUsedMap = emptyMap(),
-                commitments = emptyMap()
+                commitments = emptyMap(),
+                privilegeSnapshots = emptyMap()
             )
         }
 
@@ -476,16 +535,20 @@ class AccumulationStateTransition(private val config: AccumulationConfig) {
             entropy = entropy
         )
 
-        // Merge results
+        // Merge results - first iteration snapshots take precedence
         val mergedGasUsed = (parallelResult.gasUsedMap.keys + outerResult.gasUsedMap.keys).associateWith { serviceId ->
             (parallelResult.gasUsedMap[serviceId] ?: 0L) + (outerResult.gasUsedMap[serviceId] ?: 0L)
         }
+        // Merge privilege snapshots - first snapshot for each service takes precedence
+        val mergedSnapshots =
+            parallelResult.privilegeSnapshots + outerResult.privilegeSnapshots.filterKeys { it !in parallelResult.privilegeSnapshots }
 
         return OuterAccumulationResult(
             reportsAccumulated = i + outerResult.reportsAccumulated,
             postState = outerResult.postState,
             gasUsedMap = mergedGasUsed,
-            commitments = parallelResult.commitments + outerResult.commitments
+            commitments = parallelResult.commitments + outerResult.commitments,
+            privilegeSnapshots = mergedSnapshots
         )
     }
 
@@ -549,6 +612,9 @@ class AccumulationStateTransition(private val config: AccumulationConfig) {
             return AccumulationExecResult(partialState, emptyMap(), emptyMap(), emptyList())
         }
 
+        // Track privilege snapshots for each service after execution (for R function)
+        val privilegeSnapshots = mutableMapOf<Long, PrivilegeSnapshot>()
+
         // Execute for each service in sorted order
         for (serviceId in servicesToAccumulate.sorted()) {
             // Get operands for this service (may be empty for always-accumulate services)
@@ -575,6 +641,15 @@ class AccumulationStateTransition(private val config: AccumulationConfig) {
             currentState = execResult.postState
             gasUsedMap[serviceId] = (gasUsedMap[serviceId] ?: 0L) + execResult.gasUsed
 
+            // Capture privilege snapshot after this service's execution
+            privilegeSnapshots[serviceId] = PrivilegeSnapshot(
+                manager = currentState.manager,
+                delegator = currentState.delegator,
+                registrar = currentState.registrar,
+                assigners = currentState.assigners.toList(),
+                alwaysAccers = currentState.alwaysAccers.toMap()
+            )
+
             // Collect yield/commitment if present
             execResult.yield?.let { commitments[serviceId] = it }
 
@@ -590,7 +665,7 @@ class AccumulationStateTransition(private val config: AccumulationConfig) {
             currentState = preimageIntegration(allProvisions, currentState, timeslot)
         }
 
-        return AccumulationExecResult(currentState, gasUsedMap, commitments, newDeferredTransfers)
+        return AccumulationExecResult(currentState, gasUsedMap, commitments, newDeferredTransfers, privilegeSnapshots)
     }
 
     /**

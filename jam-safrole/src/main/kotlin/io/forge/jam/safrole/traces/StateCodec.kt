@@ -148,10 +148,10 @@ object StateCodec {
             grouped[StateKeys.LAST_ACCUMULATION_OUTPUTS.toInt() and 0xFF]?.firstOrNull()?.let {
                 decodeLastAccumulationOutputs(it.value.bytes)
             } ?: emptyMap()
-
         // Service accounts - combine account metadata with storage/preimage data
         val serviceAccountsList = serviceAccountKvs.map { (serviceIndex, kv) ->
-            val (accountData, _) = AccumulationServiceData.fromBytes(kv.value.bytes, 0)
+            val rawBytes = kv.value.bytes
+            val (accountData, _) = AccumulationServiceData.fromBytes(rawBytes, 0)
             AccumulationServiceItem(serviceIndex.toUInt().toLong(), accountData)
         }.sortedBy { it.id }.toMutableList()
 
@@ -291,7 +291,6 @@ object StateCodec {
             StateKeys.ACCUMULATION_QUEUE.toInt() and 0xFF,
             StateKeys.ACCUMULATION_HISTORY.toInt() and 0xFF,
             StateKeys.LAST_ACCUMULATION_OUTPUTS.toInt() and 0xFF,
-            StateKeys.SERVICE_STATISTICS.toInt() and 0xFF,
             0xFF // Service account prefix
         )
         return keyByte !in knownPrefixes
