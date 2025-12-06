@@ -348,12 +348,12 @@ class AccumulationHostCalls(
         val length = instance.getReg12().toInt()
         println("[DEBUG-READ-REGS] serviceId=$serviceId, keyAddr=$keyAddr, keyLen=$keyLen, outputAddr=$outputAddr, offset=$offset, length=$length")
 
-        // Read key from memory
+        // Read key from memory - PANIC on memory failure
         val keyBuffer = ByteArray(keyLen)
         val readResult = instance.readMemoryInto(keyAddr, keyBuffer)
         if (readResult.isFailure) {
-            instance.setReg7(HostCallResult.OOB)
-            return
+            println("[READ-PANIC] Failed to read key from memory at 0x${keyAddr.toString(16)} len $keyLen")
+            throw RuntimeException("Read PANIC: Failed to read key from memory at 0x${keyAddr.toString(16)} len $keyLen")
         }
         val key = JamByteArray(keyBuffer)
 
@@ -393,8 +393,8 @@ class AccumulationHostCalls(
 
         val writeResult = instance.writeMemory(outputAddr, slice)
         if (writeResult.isFailure) {
-            instance.setReg7(HostCallResult.OOB)
-            return
+            println("[READ-PANIC] Failed to write to output memory at 0x${outputAddr.toString(16)}")
+            throw RuntimeException("Read PANIC: Failed to write to output memory at 0x${outputAddr.toString(16)}")
         }
 
         println("[DEBUG-READ-RETURN] key=${key.toHex()}, data.size=${data.size}, returning ${data.size} to r7")
@@ -661,30 +661,62 @@ class AccumulationHostCalls(
     }
 
     /**
-     * assign (15): Set core assigner (privileged).
+     * assign (15): Set core assigner and authorization queue (privileged).
+     * reg7 = targetCoreIndex, reg8 = authorizationQueue address, reg9 = new assigner
      */
     private fun handleAssign(instance: RawInstance) {
-        val coreIndex = instance.getReg7().toInt()
-        val newAssigner = instance.getReg8().toLong()
+        val targetCoreIndex = instance.getReg7().toInt()
+        val startAddr = instance.getReg8().toUInt()
+        val newAssigner = instance.getReg9().toLong()
 
-        // Check if caller is manager or current assigner for this core
-        val canAssign = context.serviceIndex == context.x.manager ||
-            (coreIndex < context.x.assigners.size && context.x.assigners[coreIndex] == context.serviceIndex)
-
-        if (!canAssign) {
-            instance.setReg7(HostCallResult.HUH)
-            return
+        // Read authorization queue from memory (32 bytes * AUTH_QUEUE_SIZE)
+        val queueLength = 32 * config.AUTH_QUEUE_SIZE
+        val queueBuffer = ByteArray(queueLength)
+        val readResult = instance.readMemoryInto(startAddr, queueBuffer)
+        if (readResult.isFailure) {
+            // PANIC if memory is not readable
+            throw RuntimeException("Assign PANIC: Failed to read authorization queue from memory at $startAddr")
         }
 
-        if (coreIndex >= config.EPOCH_LENGTH) {
+        // Check core index bounds
+        if (targetCoreIndex >= config.CORES_COUNT) {
             instance.setReg7(HostCallResult.CORE)
             return
         }
 
-        while (context.x.assigners.size <= coreIndex) {
+        // Check if caller is current assigner for this core
+        if (targetCoreIndex >= context.x.assigners.size ||
+            context.x.assigners[targetCoreIndex] != context.serviceIndex
+        ) {
+            instance.setReg7(HostCallResult.HUH)
+            return
+        }
+
+        // Check assigner is valid service index (fits in UInt32)
+        if (newAssigner.toULong() > UInt.MAX_VALUE.toULong()) {
+            instance.setReg7(HostCallResult.WHO)
+            return
+        }
+
+        // Parse authorization queue (list of 32-byte hashes)
+        val authQueueList = mutableListOf<JamByteArray>()
+        for (i in 0 until config.AUTH_QUEUE_SIZE) {
+            val hash = queueBuffer.copyOfRange(i * 32, (i + 1) * 32)
+            authQueueList.add(JamByteArray(hash))
+        }
+
+        // Update authorization queue for this core
+        while (context.x.authQueue.size <= targetCoreIndex) {
+            context.x.authQueue.add(mutableListOf())
+        }
+        context.x.authQueue[targetCoreIndex] = authQueueList
+
+        // Update assigner for this core
+        while (context.x.assigners.size <= targetCoreIndex) {
             context.x.assigners.add(0)
         }
-        context.x.assigners[coreIndex] = newAssigner
+        context.x.assigners[targetCoreIndex] = newAssigner
+
         instance.setReg7(HostCallResult.OK)
     }
 
@@ -1164,9 +1196,8 @@ class AccumulationHostCalls(
         val hashBuffer = ByteArray(32)
         val readResult = instance.readMemoryInto(hashAddr, hashBuffer)
         if (readResult.isFailure) {
-            println("[QUERY] OOB - failed to read hash from memory")
-            instance.setReg7(HostCallResult.OOB)
-            return
+            println("[QUERY-PANIC] Failed to read hash from memory at 0x${hashAddr.toString(16)}")
+            throw RuntimeException("Query PANIC: Failed to read hash from memory at 0x${hashAddr.toString(16)}")
         }
 
         val key = PreimageKey(JamByteArray(hashBuffer), length)
@@ -1394,8 +1425,8 @@ class AccumulationHostCalls(
         val hashBuffer = ByteArray(32)
         val readResult = instance.readMemoryInto(hashAddr, hashBuffer)
         if (readResult.isFailure) {
-            instance.setReg7(HostCallResult.OOB)
-            return
+            println("[YIELD-PANIC] Failed to read hash from memory at 0x${hashAddr.toString(16)}")
+            throw RuntimeException("Yield PANIC: Failed to read hash from memory at 0x${hashAddr.toString(16)}")
         }
 
         // Store the yield in the context
@@ -1416,8 +1447,8 @@ class AccumulationHostCalls(
         val blobBuffer = ByteArray(blobLen)
         val readResult = instance.readMemoryInto(blobAddr, blobBuffer)
         if (readResult.isFailure) {
-            instance.setReg7(HostCallResult.OOB)
-            return
+            println("[PROVIDE-PANIC] Failed to read blob from memory at 0x${blobAddr.toString(16)} len $blobLen")
+            throw RuntimeException("Provide PANIC: Failed to read blob from memory at 0x${blobAddr.toString(16)} len $blobLen")
         }
 
         context.provisions.add(Pair(targetServiceId, JamByteArray(blobBuffer)))
