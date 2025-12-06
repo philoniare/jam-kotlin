@@ -114,7 +114,13 @@ class InterpretedInstance private constructor(
 
     fun sbrk(size: UInt): UInt? =
         if (!module.isDynamicPaging()) {
-            basicMemory.sbrk(module, size)
+            try {
+                basicMemory.sbrk(module, size)
+            } catch (e: Throwable) {
+                println("[SBRK-ERROR] Exception in basicMemory.sbrk: ${e.javaClass.name}: ${e.message}")
+                e.printStackTrace()
+                null
+            }
         } else {
             try {
                 dynamicMemory.generalMemory().sbrk(size)

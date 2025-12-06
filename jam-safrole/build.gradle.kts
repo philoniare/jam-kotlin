@@ -17,6 +17,7 @@ dependencies {
 }
 
 tasks.test {
+    maxHeapSize = "4g"
     testLogging {
         events("passed", "skipped", "failed", "standardOut", "standardError")
         showStandardStreams = true

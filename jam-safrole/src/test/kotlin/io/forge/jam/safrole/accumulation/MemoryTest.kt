@@ -234,37 +234,39 @@ class MemoryTest {
         }
 
         @Test
-        fun `initial heap size is zero`() {
-            assertEquals(0u, instance.heapSize())
+        fun `initial heap size includes rwData pages`() {
+            val initialHeapSize = instance.heapSize()
+            assertTrue(initialHeapSize >= defaultPageSize, "Initial heapSize should include rwData pages")
         }
 
         @Test
         fun `sbrk allocates heap memory`() {
             val pageSize = memoryMap.pageSize
             val initialHeapSize = instance.heapSize()
-            assertEquals(0u, initialHeapSize)
 
             // Allocate 1.25 pages worth
             val allocSize = pageSize + (pageSize / 4u)
             val newHeapEnd = instance.sbrk(allocSize)
 
             assertNotNull(newHeapEnd)
-            assertEquals(allocSize, instance.heapSize())
+            // heapSize should grow by allocSize
+            assertEquals(initialHeapSize + allocSize, instance.heapSize())
         }
 
         @Test
         fun `sbrk returns previous heap end address`() {
             val heapBase = memoryMap.heapBase
+            val initialHeapSize = instance.heapSize()
             val allocSize = 4096u
 
             // sbrk returns the PREVIOUS heap end (start of newly allocated memory)
             val prevHeapEnd = instance.sbrk(allocSize)
 
             assertNotNull(prevHeapEnd)
-            // Initial heapSize was 0, so previous heap end equals heapBase
-            assertEquals(heapBase, prevHeapEnd)
-            // After allocation, heapSize should be updated
-            assertEquals(allocSize, instance.heapSize())
+            // Previous heap end = heapBase + initialHeapSize (which includes rwData pages)
+            assertEquals(heapBase + initialHeapSize, prevHeapEnd)
+            // After allocation, heapSize should grow by allocSize
+            assertEquals(initialHeapSize + allocSize, instance.heapSize())
         }
 
         @Test
@@ -297,17 +299,19 @@ class MemoryTest {
 
         @Test
         fun `multiple sbrk calls accumulate`() {
+            val initialHeapSize = instance.heapSize()
+
             val first = instance.sbrk(1024u)
             assertNotNull(first)
-            assertEquals(1024u, instance.heapSize())
+            assertEquals(initialHeapSize + 1024u, instance.heapSize())
 
             val second = instance.sbrk(1024u)
             assertNotNull(second)
-            assertEquals(2048u, instance.heapSize())
+            assertEquals(initialHeapSize + 2048u, instance.heapSize())
 
             val third = instance.sbrk(512u)
             assertNotNull(third)
-            assertEquals(2560u, instance.heapSize())
+            assertEquals(initialHeapSize + 2560u, instance.heapSize())
         }
     }
 
@@ -460,10 +464,12 @@ class MemoryTest {
         }
 
         @Test
-        fun `reset clears heap size when memory is dirty`() {
+        fun `reset restores heap size to initial value when memory is dirty`() {
+            val initialHeapSize = instance.heapSize()
+
             // Allocate some heap
             instance.sbrk(4096u)
-            assertTrue(instance.heapSize() > 0u)
+            assertTrue(instance.heapSize() > initialHeapSize)
 
             // Write something to make memory dirty
             val rwStart = memoryMap.rwDataAddress
@@ -472,8 +478,8 @@ class MemoryTest {
             // Reset memory (will call forceReset since memory is dirty)
             instance.resetMemory().getOrThrow()
 
-            // Heap size should be zero after reset
-            assertEquals(0u, instance.heapSize())
+            // Heap size should be restored to initial value after reset
+            assertEquals(initialHeapSize, instance.heapSize())
         }
 
         @Test

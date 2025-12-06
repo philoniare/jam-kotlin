@@ -87,9 +87,10 @@ data class FullJamState(
     val serviceStatistics: List<ServiceStatisticsEntry>,
 
     // Raw service data keyvals (storage, preimages, preimage info)
-    // These are kept as raw keyvals because the state keys are hashed
-    // and we cannot recover the original keys for re-encoding.
-    val rawServiceDataKvs: List<KeyValue> = emptyList()
+    val rawServiceDataKvs: List<KeyValue> = emptyList(),
+
+    // Raw service account keyvals (prefix 0xFF) for lazy account lookup
+    val rawServiceAccountKvs: List<KeyValue> = emptyList()
 ) {
     /**
      * Convert to SafroleState for Safrole STF.
@@ -199,6 +200,11 @@ data class FullJamState(
             kv.key to kv.value
         }.toMutableMap()
 
+        // Convert raw service account keyvals to map indexed by state key for lazy account lookup
+        val rawServiceAccountMap = rawServiceAccountKvs.associate { kv ->
+            kv.key to kv.value
+        }.toMutableMap()
+
         return AccumulationState(
             slot = timeslot,
             entropy = entropy,
@@ -207,7 +213,8 @@ data class FullJamState(
             privileges = privilegedServices,
             statistics = serviceStatistics,
             accounts = serviceAccounts,
-            rawServiceDataByStateKey = rawServiceDataMap
+            rawServiceDataByStateKey = rawServiceDataMap,
+            rawServiceAccountsByStateKey = rawServiceAccountMap
         )
     }
 

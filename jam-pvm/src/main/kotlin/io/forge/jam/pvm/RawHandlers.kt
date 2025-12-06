@@ -2050,6 +2050,9 @@ object RawHandlers {
         val base = transmuteReg(args.a2)
         val offset = args.a3
 
+        val baseValBefore = visitor.get64(base.toRegImm())
+        val computedAddress = (baseValBefore.toUInt() + offset)
+
         val result = visitor.load<U64LoadTy>(
             programCounter,
             dst,
@@ -2060,8 +2063,13 @@ object RawHandlers {
         )
         if (result != null) {
             val value = visitor.get64(dst.toRegImm())
-            val baseVal = visitor.get64(base.toRegImm())
-            println("[DEBUG-LOAD] LoadIndirectU64Basic: base=$base($baseVal), offset=$offset, value=$value")
+            println(
+                "[DEBUG-LOAD] LoadIndirectU64Basic: base=$base(0x${baseValBefore.toString(16)}), offset=$offset, addr=0x${
+                    computedAddress.toString(
+                        16
+                    )
+                }, value=0x${value.toString(16)}"
+            )
         }
         result
     }
@@ -2725,8 +2733,6 @@ object RawHandlers {
         val src = transmuteReg(args.a1)
         val base = transmuteReg(args.a2)
         val offset = args.a3
-
-        println("Args: ${args}")
 
         logger.debug("[${visitor.inner.compiledOffset}]: store_indirect_u64_basic [$base + 0x${offset.toString(16)}] = $src")
 

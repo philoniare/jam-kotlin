@@ -4,6 +4,7 @@ import io.forge.jam.core.JamByteArray
 import io.forge.jam.core.decodeFixedWidthInteger
 import io.forge.jam.pvm.engine.RawInstance
 import io.forge.jam.pvm.program.Reg
+import io.forge.jam.safrole.report.ServiceInfo
 
 /**
  * Host call result constants as defined in Gray Paper.
@@ -45,6 +46,23 @@ object HostCall {
     const val YIELD = 25u
     const val PROVIDE = 26u
     const val LOG = 100u  // Debug logging (JIP-1), gas cost = 0
+}
+
+/**
+ * Computes the state key for a service account (ServiceAccountDetails).
+ */
+fun computeServiceAccountKey(serviceIndex: Long): JamByteArray {
+    val key = ByteArray(31)
+    key[0] = 255.toByte()  // Prefix for ServiceAccountKey
+
+    // Interleave service index bytes (little-endian) at positions 1, 3, 5, 7
+    val idx = serviceIndex.toInt()
+    key[1] = (idx and 0xFF).toByte()
+    key[3] = ((idx shr 8) and 0xFF).toByte()
+    key[5] = ((idx shr 16) and 0xFF).toByte()
+    key[7] = ((idx shr 24) and 0xFF).toByte()
+
+    return JamByteArray(key)
 }
 
 /**
@@ -275,7 +293,7 @@ class AccumulationHostCalls(
             }, offset=$offset, length=$length"
         )
 
-        // Read hash from memory - panic on OOB (matches Swift behavior)
+        // Read hash from memory - panic on OOB
         val hashBuffer = ByteArray(32)
         val readResult = instance.readMemoryInto(hashAddr, hashBuffer)
         if (readResult.isFailure) {
@@ -690,7 +708,7 @@ class AccumulationHostCalls(
      */
     private fun handleCheckpoint(instance: RawInstance) {
         context.checkpoint()
-        instance.setReg7(HostCallResult.OK)
+        instance.setReg7(instance.gas().toULong())
     }
 
     /**
@@ -785,7 +803,7 @@ class AccumulationHostCalls(
 
         // Create new account with calculated threshold balance
         val newAccount = ServiceAccount(
-            info = io.forge.jam.safrole.report.ServiceInfo(
+            info = ServiceInfo(
                 codeHash = codeHash,
                 balance = thresholdBalance,
                 minItemGas = minAccumulateGas,
@@ -892,7 +910,7 @@ class AccumulationHostCalls(
      * 0.7.1: Gas is g = 10 + gasLimit (charged regardless of success/failure).
      */
     private fun handleTransfer(instance: RawInstance) {
-        val destination = instance.getReg7().toLong()
+        val destination = (instance.getReg7() and 0xFFFFFFFFuL).toLong()
         val amount = instance.getReg8().toLong()
         val gasLimit = instance.getReg9().toLong()
         val memoAddr = instance.getReg10().toUInt()
@@ -910,12 +928,55 @@ class AccumulationHostCalls(
         }
 
         // 2. Check if destination exists (WHO)
-        val destinationAsInt = destination.toInt().toLong()
-        val destExists = accounts.containsKey(destination) || accounts.containsKey(destinationAsInt)
-        val actualDest = if (accounts.containsKey(destination)) destination else destinationAsInt
+        var destExists = accounts.containsKey(destination)
+        if (!destExists) {
+            val destStateKey = computeServiceAccountKey(destination)
+
+            val rawMap = context.x.rawServiceAccountsByStateKey
+            val rawDestData = rawMap.entries.find { it.key.toHex() == destStateKey.toHex() }?.value
+            if (rawDestData != null) {
+                try {
+                    val bytes = rawDestData.bytes
+                    if (bytes.size >= 89) {
+                        // Decode ServiceInfo from raw bytes (little-endian)
+                        val codeHash = JamByteArray(bytes.sliceArray(0 until 32))
+                        val balance = decodeFixedWidthInteger(bytes, 32, 8)
+                        val minItemGas = decodeFixedWidthInteger(bytes, 40, 8)
+                        val minMemoGas = decodeFixedWidthInteger(bytes, 48, 8)
+                        val byteCount = decodeFixedWidthInteger(bytes, 56, 8)
+                        val items = decodeFixedWidthInteger(bytes, 64, 4).toInt()
+                        val depositOffset = decodeFixedWidthInteger(bytes, 68, 8)
+                        // Skip last 13 bytes (padding/reserved)
+
+                        val destInfo = ServiceInfo(
+                            codeHash = codeHash,
+                            balance = balance,
+                            minItemGas = minItemGas,
+                            minMemoGas = minMemoGas,
+                            bytes = byteCount,
+                            items = items,
+                            depositOffset = depositOffset
+                        )
+                        val destAccount = ServiceAccount(
+                            info = destInfo,
+                            storage = mutableMapOf(),
+                            preimages = mutableMapOf(),
+                            preimageRequests = mutableMapOf()
+                        )
+                        // Add to accounts map for future lookups
+                        accounts[destination] = destAccount
+                        destExists = true
+                        println("[TRANSFER] Successfully lazy-loaded destination $destination: balance=${destInfo.balance}, minMemoGas=${destInfo.minMemoGas}")
+                    }
+                } catch (e: Exception) {
+                    println("[TRANSFER] Failed to decode destination account from raw state: ${e.message}")
+                }
+            }
+        }
+
         if (!destExists) {
             println(
-                "[TRANSFER-FAIL] WHO: destination $destination (or $destinationAsInt) not in accounts. Keys: ${
+                "[TRANSFER-FAIL] WHO: destination $destination not in accounts and not in rawState. Keys: ${
                     accounts.keys.map {
                         "$it (0x${
                             it.toString(
@@ -928,8 +989,6 @@ class AccumulationHostCalls(
             instance.setReg7(HostCallResult.WHO)
             return
         }
-        // Use the key that actually exists
-        actualDest
 
         // 3. Check if gasLimit >= destination.minMemoGas (LOW)
         val destAccount = accounts[destination]!!
@@ -942,6 +1001,12 @@ class AccumulationHostCalls(
         // b = caller.balance - amount
         // Check: b < caller.minBalance
         if (account == null) {
+            instance.setReg7(HostCallResult.CASH)
+            return
+        }
+
+        // Check for underflow before subtraction - if amount > balance, insufficient funds
+        if (amount.toULong() > account.info.balance.toULong()) {
             instance.setReg7(HostCallResult.CASH)
             return
         }

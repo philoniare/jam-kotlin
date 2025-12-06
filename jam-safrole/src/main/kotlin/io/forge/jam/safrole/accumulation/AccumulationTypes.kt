@@ -216,7 +216,7 @@ sealed class AccumulationOperand {
 }
 
 /**
- * Partial state as defined in Gray Paper equation 133.
+ * Mutable subset of JAM state used during accumulation.
  * Contains state components both needed and mutable by the accumulation process.
  */
 data class PartialState(
@@ -228,8 +228,8 @@ data class PartialState(
     var delegator: Long,                                 // Delegator service ID
     var registrar: Long,                                 // Registrar service ID
     val alwaysAccers: MutableMap<Long, Long>,            // Always-accumulate services -> gas
-    // Raw service data keyvals indexed by hashed state key (for storage/preimage lookups)
-    val rawServiceDataByStateKey: MutableMap<JamByteArray, JamByteArray> = mutableMapOf()
+    val rawServiceDataByStateKey: MutableMap<JamByteArray, JamByteArray> = mutableMapOf(),
+    val rawServiceAccountsByStateKey: MutableMap<JamByteArray, JamByteArray> = mutableMapOf()
 ) {
     fun deepCopy(): PartialState {
         return PartialState(
@@ -241,7 +241,8 @@ data class PartialState(
             delegator = delegator,
             registrar = registrar,
             alwaysAccers = alwaysAccers.toMutableMap(),
-            rawServiceDataByStateKey = rawServiceDataByStateKey.toMutableMap()
+            rawServiceDataByStateKey = rawServiceDataByStateKey.toMutableMap(),
+            rawServiceAccountsByStateKey = rawServiceAccountsByStateKey.toMutableMap()
         )
     }
 }

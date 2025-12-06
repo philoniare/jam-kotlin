@@ -101,7 +101,7 @@ object Abi {
                 rwDataSize.toLong()
             )?.toULong() ?: throw IllegalStateException("the size of read-write data is too big")
 
-            val originalRwDataSize = rwDataSize
+            rwDataSize
             val alignedRwDataSize = Utils.alignToNextPageInt(
                 pageSize.toInt(),
                 rwDataSize.toInt()
@@ -134,12 +134,8 @@ object Abi {
             addressLow += VM_MAX_PAGE_SIZE.toULong()
 
             val rwDataAddress = addressLow.toUInt()
-            // heapBase should point to the start of the heap (right after actual rwData content)
-            // Use actualRwDataLen if set, otherwise fall back to originalRwDataSize for PolkaVM format
-            val effectiveRwDataLen = if (actualRwDataLen > 0u) actualRwDataLen else originalRwDataSize
-            val heapBase = addressLow + effectiveRwDataLen.toULong()
+            val heapBase = addressLow
             addressLow += rwDataAddressSpace
-            val heapSlack = addressLow - heapBase
             addressLow += VM_MAX_PAGE_SIZE.toULong()
 
             var addressHigh: Long = VM_ADDRESS_SPACE_TOP.toLong()
@@ -153,7 +149,7 @@ object Abi {
                 throw IllegalStateException("maximum memory size exceeded")
             }
 
-            val maxHeapSize = (addressHigh.toULong() - addressLow + heapSlack).toUInt()
+            val maxHeapSize = (addressHigh.toULong() - heapBase).toUInt()
 
             MemoryMap(
                 pageSize = pageSize,

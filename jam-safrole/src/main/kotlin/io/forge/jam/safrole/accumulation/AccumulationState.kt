@@ -27,7 +27,9 @@ data class AccumulationState(
     // Raw service data keyvals indexed by hashed state key (for storage lookups)
     // Transient field - not serialized
     @kotlinx.serialization.Transient
-    val rawServiceDataByStateKey: MutableMap<JamByteArray, JamByteArray> = mutableMapOf()
+    val rawServiceDataByStateKey: MutableMap<JamByteArray, JamByteArray> = mutableMapOf(),
+    @kotlinx.serialization.Transient
+    val rawServiceAccountsByStateKey: MutableMap<JamByteArray, JamByteArray> = mutableMapOf()
 ) : Encodable {
     companion object {
         fun fromBytes(
@@ -162,7 +164,8 @@ data class AccumulationState(
             delegator = privileges.designate,
             registrar = privileges.register,
             alwaysAccers = privileges.alwaysAcc.associate { it.id to it.gas }.toMutableMap(),
-            rawServiceDataByStateKey = rawServiceDataByStateKey.toMutableMap()
+            rawServiceDataByStateKey = rawServiceDataByStateKey.toMutableMap(),
+            rawServiceAccountsByStateKey = rawServiceAccountsByStateKey.toMutableMap()
         )
     }
 }

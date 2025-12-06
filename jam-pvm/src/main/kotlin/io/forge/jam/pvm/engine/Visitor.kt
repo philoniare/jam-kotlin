@@ -267,9 +267,6 @@ class Visitor(
             this.programCounter = programCounter
             this.programCounterValid = true
             this.nextProgramCounter = programCounter
-            if (module.gasMetering() != null) {
-                gas -= 1
-            }
             this.interrupt = InterruptKind.Segfault(
                 SegfaultInfo(
                     pageAddress = pageAddress,

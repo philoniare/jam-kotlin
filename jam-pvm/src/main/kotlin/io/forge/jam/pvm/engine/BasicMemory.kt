@@ -3,14 +3,114 @@ package io.forge.jam.pvm.engine
 import io.forge.jam.pvm.PvmConstants
 
 /**
+ * Memory-efficient byte buffer that uses ByteArray
+ */
+class ByteBuffer(initialCapacity: Int = 0) {
+    private var data: ByteArray = ByteArray(initialCapacity)
+    var size: Int = initialCapacity
+        private set
+
+    fun resize(newSize: Int) {
+        if (newSize > data.size) {
+            // Grow the backing array
+            val newData = ByteArray(newSize)
+            data.copyInto(newData, 0, 0, size)
+            data = newData
+        }
+        size = newSize
+    }
+
+    operator fun get(index: Int): UByte = data[index].toUByte()
+
+    operator fun set(index: Int, value: UByte) {
+        data[index] = value.toByte()
+    }
+
+    fun getByte(index: Int): Byte = data[index]
+
+    fun setByte(index: Int, value: Byte) {
+        data[index] = value
+    }
+
+    fun copyFrom(source: ByteArray, destOffset: Int) {
+        source.copyInto(data, destOffset)
+    }
+
+    fun copyTo(dest: ByteArray, srcOffset: Int, length: Int) {
+        data.copyInto(dest, 0, srcOffset, srcOffset + length)
+    }
+
+    fun toByteArray(offset: Int, length: Int): ByteArray {
+        val result = ByteArray(length)
+        data.copyInto(result, 0, offset, offset + length)
+        return result
+    }
+
+    fun clear() {
+        data = ByteArray(0)
+        size = 0
+    }
+
+    fun addAll(bytes: List<UByte>) {
+        val oldSize = size
+        resize(size + bytes.size)
+        bytes.forEachIndexed { i, b -> data[oldSize + i] = b.toByte() }
+    }
+
+    fun addAll(bytes: ByteArray) {
+        val oldSize = size
+        resize(size + bytes.size)
+        bytes.copyInto(data, oldSize)
+    }
+
+    /**
+     * Returns a MutableList view of a portion of this buffer.
+     * Changes to the list will be reflected in the buffer.
+     */
+    fun subList(fromIndex: Int, toIndex: Int): MutableList<UByte> =
+        ByteBufferSubList(this, fromIndex, toIndex)
+}
+
+/**
+ * A MutableList view backed by a portion of a ByteBuffer.
+ */
+private class ByteBufferSubList(
+    private val buffer: ByteBuffer,
+    private val offset: Int,
+    private var endIndex: Int
+) : AbstractMutableList<UByte>() {
+    override val size: Int get() = endIndex - offset
+
+    override fun get(index: Int): UByte {
+        if (index < 0 || index >= size) throw IndexOutOfBoundsException("Index: $index, Size: $size")
+        return buffer[offset + index]
+    }
+
+    override fun set(index: Int, element: UByte): UByte {
+        if (index < 0 || index >= size) throw IndexOutOfBoundsException("Index: $index, Size: $size")
+        val old = buffer[offset + index]
+        buffer[offset + index] = element
+        return old
+    }
+
+    override fun add(index: Int, element: UByte) {
+        throw UnsupportedOperationException("Cannot add to ByteBuffer sublist")
+    }
+
+    override fun removeAt(index: Int): UByte {
+        throw UnsupportedOperationException("Cannot remove from ByteBuffer sublist")
+    }
+}
+
+/**
  * Basic memory implementation for non-dynamic paging mode.
  * Implements the Memory interface with per-page access control via PageMap.
  */
 class BasicMemory private constructor(
     private var _pageMap: PageMap,
-    private val rwData: MutableList<UByte>,
-    private val stack: MutableList<UByte>,
-    private val aux: MutableList<UByte>,
+    private val rwData: ByteBuffer,
+    private val stack: ByteBuffer,
+    private val aux: ByteBuffer,
     private var isMemoryDirty: Boolean,
     private var _heapSize: UInt
 ) : Memory {
@@ -20,22 +120,22 @@ class BasicMemory private constructor(
     companion object {
         fun new(): BasicMemory = BasicMemory(
             _pageMap = PageMap(PvmConstants.ZP),
-            rwData = mutableListOf(),
-            stack = mutableListOf(),
-            aux = mutableListOf(),
+            rwData = ByteBuffer(),
+            stack = ByteBuffer(),
+            aux = ByteBuffer(),
             isMemoryDirty = false,
             _heapSize = 0u
         )
 
-        fun MutableList<UByte>.resize(newSize: Int, padValue: UByte = 0u) {
-            when {
-                size > newSize -> subList(newSize, size).clear()
-                size < newSize -> addAll(List(newSize - size) { padValue })
-            }
-        }
-
         fun alignToNextPageSize(pageSize: Int, size: Int): Int {
             return ((size + pageSize - 1) / pageSize) * pageSize
+        }
+
+        /**
+         * Aligns size to the next page boundary using unsigned arithmetic.
+         */
+        fun alignToNextPageSizeUInt(pageSize: UInt, size: UInt): UInt {
+            return ((size + pageSize - 1u) / pageSize) * pageSize
         }
     }
 
@@ -282,26 +382,12 @@ class BasicMemory private constructor(
         _heapSize = newHeapSize
         val newHeapEnd = memoryMap.heapBase + newHeapSize
 
-        // Expand rwData if needed
-        if (newHeapEnd.toInt() > memoryMap.rwDataAddress.toInt() + rwData.size) {
-            val newSize = alignToNextPageSize(
-                pageSize = memoryMap.pageSize.toInt(),
-                size = newHeapEnd.toInt()
-            ) - memoryMap.rwDataAddress.toInt()
-
-            println("[SBRK-KOTLIN] Expanding rwData: oldSize=${rwData.size}, newSize=$newSize, newHeapEnd=$newHeapEnd")
-            rwData.resize(newSize)
-        }
-
-        // Update PageMap for newly allocated pages
-        val prevPageBoundary = alignToNextPageSize(memoryMap.pageSize.toInt(), prevHeapEnd.toInt())
-        if (newHeapEnd.toInt() > prevPageBoundary) {
-            val startPage = prevPageBoundary.toUInt() / memoryMap.pageSize
-            val endPage =
-                alignToNextPageSize(memoryMap.pageSize.toInt(), newHeapEnd.toInt()).toUInt() / memoryMap.pageSize
+        val prevPageBoundary = alignToNextPageSizeUInt(memoryMap.pageSize, prevHeapEnd)
+        if (newHeapEnd > prevPageBoundary) {
+            val startPage = prevPageBoundary / memoryMap.pageSize
+            val endPage = alignToNextPageSizeUInt(memoryMap.pageSize, newHeapEnd) / memoryMap.pageSize
             val pageCount = (endPage - startPage).toInt()
             if (pageCount > 0) {
-                println("[SBRK-KOTLIN] Adding pages: startPage=$startPage, endPage=$endPage, pageCount=$pageCount")
                 _pageMap.updatePages(startPage, pageCount, PageAccess.READ_WRITE)
             }
         }
@@ -318,6 +404,27 @@ class BasicMemory private constructor(
     private fun readInternal(address: UInt, length: UInt): ByteArray? {
         val memoryMap = getMemoryMapFromContext() ?: return null
 
+        if (address >= memoryMap.roDataAddress() && address < memoryMap.rwDataAddress) {
+            val interpretedModule = currentModule?.interpretedModule() ?: return null
+            val roData = interpretedModule.roData
+            val start = memoryMap.roDataAddress()
+            val offset = (address - start).toInt()
+            val endOffset = offset + length.toInt()
+
+            if (offset >= roData.size) {
+                return ByteArray(length.toInt())
+            }
+
+            val availableBytes = roData.size - offset
+            if (availableBytes >= length.toInt()) {
+                return roData.sliceArray(offset until endOffset)
+            } else {
+                val result = ByteArray(length.toInt())
+                roData.copyInto(result, 0, offset, offset + availableBytes)
+                return result
+            }
+        }
+
         val (start, memorySlice) = when {
             address >= memoryMap.auxDataAddress ->
                 memoryMap.auxDataAddress to aux
@@ -329,23 +436,32 @@ class BasicMemory private constructor(
             address >= memoryMap.stackAddressLow() ->
                 memoryMap.stackAddressLow() to stack
 
-            address >= memoryMap.rwDataAddress -> {
+            address >= memoryMap.rwDataAddress ->
                 memoryMap.rwDataAddress to rwData
-            }
-
-            address >= memoryMap.roDataAddress() -> {
-                val interpretedModule = currentModule?.interpretedModule() ?: return null
-                memoryMap.roDataAddress() to interpretedModule.roData.map { it.toUByte() }
-            }
 
             else -> return null
         }
 
         val offset = (address - start).toInt()
-        return memorySlice
-            .subList(offset, (offset + length.toInt()).coerceAtMost(memorySlice.size))
-            .map { it.toByte() }
-            .toByteArray()
+        offset + length.toInt()
+
+        if (offset >= memorySlice.size) {
+            return ByteArray(length.toInt())
+        }
+
+        val availableBytes = memorySlice.size - offset
+        if (availableBytes >= length.toInt()) {
+            // All requested bytes are available
+            return memorySlice.toByteArray(offset, length.toInt())
+        } else {
+            // Partial read - some bytes from memory, rest are zeros
+            val result = ByteArray(length.toInt())
+            for (i in 0 until availableBytes) {
+                result[i] = memorySlice[offset + i].toByte()
+            }
+            // Rest of result is already zeros
+            return result
+        }
     }
 
     /**
@@ -370,6 +486,15 @@ class BasicMemory private constructor(
 
         isMemoryDirty = true
         val offset = (address - start).toInt()
+        val requiredSize = offset + data.size
+
+        // Lazy allocation: expand memory slice if needed
+        if (requiredSize > memorySlice.size && memorySlice === rwData) {
+            // Only expand rwData lazily, not stack or aux
+            val alignedSize = alignToNextPageSize(memoryMap.pageSize.toInt(), requiredSize)
+            rwData.resize(alignedSize)
+        }
+
         data.forEachIndexed { index, byte ->
             if (offset + index < memorySlice.size) {
                 memorySlice[offset + index] = byte.toUByte()
@@ -395,9 +520,19 @@ class BasicMemory private constructor(
 
     /**
      * Gets a read-only slice of memory (legacy method for Visitor compatibility).
+     * Throws ArrayIndexOutOfBoundsException for PageMap violations (caught by Visitor for PAGE_FAULT).
+     * Returns null only for truly out-of-range accesses (causes PANIC in Visitor).
      */
     fun getMemorySlice(module: Module, address: UInt, length: UInt): ByteArray? {
         currentModule = module
+
+        // Check PageMap first - if not readable, throw exception for PAGE_FAULT handling
+        val (isReadable, failedAddress) = pageMap.isReadable(address, length.toInt())
+        if (!isReadable) {
+            // Throw exception that Visitor.load() will catch and convert to Segfault/PAGE_FAULT
+            throw ArrayIndexOutOfBoundsException("Page at 0x${failedAddress.toString(16)} is not readable")
+        }
+
         return readInternal(address, length)
     }
 
@@ -432,6 +567,14 @@ class BasicMemory private constructor(
 
         isMemoryDirty = true
         val offset = (address - start).toInt()
+        val requiredSize = offset + length.toInt()
+
+        // Lazy allocation: expand rwData if needed
+        if (requiredSize > memorySlice.size && memorySlice === rwData) {
+            val alignedSize = alignToNextPageSize(memoryMap.pageSize.toInt(), requiredSize)
+            rwData.resize(alignedSize)
+        }
+
         return memorySlice.subList(offset, (offset + length.toInt()).coerceAtMost(memorySlice.size))
     }
 

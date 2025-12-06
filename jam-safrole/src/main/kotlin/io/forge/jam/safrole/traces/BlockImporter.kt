@@ -522,7 +522,9 @@ class BlockImporter(private val config: ImporterConfig = ImporterConfig()) {
                 accumulationOutput.outputs.map { it.serviceIndex.toInt() }.toSet(),
                 preState.serviceAccounts.map { it.id.toInt() }.toSet(),
                 preimageOutput.rawServiceDataUpdates
-            )
+            ),
+            // Pass through raw service account keyvals for lazy lookup during accumulation
+            rawServiceAccountKvs = preState.rawServiceAccountKvs
         )
     }
 

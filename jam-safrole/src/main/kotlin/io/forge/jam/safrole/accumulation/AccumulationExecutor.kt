@@ -284,8 +284,8 @@ class AccumulationExecutor(
                 }
 
                 is InterruptKind.Segfault -> {
-                    // val segfault = interrupt as InterruptKind.Segfault
-                    // println("[SEGFAULT] service=${context.serviceIndex}, pageAddress=${segfault.fault.pageAddress}, pageSize=${segfault.fault.pageSize}")
+                    val segfault = interrupt as InterruptKind.Segfault
+                    println("[SEGFAULT] service=${context.serviceIndex}, pageAddress=${segfault.fault.pageAddress}, pageSize=${segfault.fault.pageSize}, pc=${instance.programCounter()}, gas=${instance.gas()}")
                     exitReason = ExitReason.PAGE_FAULT
                     break
                 }

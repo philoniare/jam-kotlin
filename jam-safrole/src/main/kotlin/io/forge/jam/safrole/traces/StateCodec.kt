@@ -264,7 +264,8 @@ object StateCodec {
             lastAccumulationOutputs = lastAccumulationOutputs,
             serviceAccounts = serviceAccounts,
             serviceStatistics = serviceStatistics,
-            rawServiceDataKvs = rawServiceDataKvs
+            rawServiceDataKvs = rawServiceDataKvs,
+            rawServiceAccountKvs = serviceAccountKvs.values.toList().sortedBy { it.key.toHex() }
         )
     }
 
