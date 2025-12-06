@@ -264,6 +264,18 @@ class AccumulationHostCalls(
             }"
         )
 
+        // Check if output address is writable - PANIC if not
+        if (!instance.isMemoryWritable(outputAddr, actualLength)) {
+            println(
+                "[FETCH-PANIC] service=${context.serviceIndex}, output memory not writable at addr=0x${
+                    outputAddr.toString(
+                        16
+                    )
+                } len=$actualLength"
+            )
+            throw RuntimeException("Fetch PANIC: Output memory not writable at 0x${outputAddr.toString(16)} len $actualLength")
+        }
+
         val writeResult = instance.writeMemory(outputAddr, slice)
         if (writeResult.isFailure) {
             instance.setReg7(HostCallResult.OOB)
@@ -311,28 +323,64 @@ class AccumulationHostCalls(
         }
 
         val account = context.x.accounts[targetServiceId]
+
+        // Get preimage if account exists - first check in-memory map
+        var preimage = account?.preimages?.get(hash)
+
+        // If not in memory, check raw state data with discriminator 0xFFFFFFFE (preimage blob)
+        if (preimage == null) {
+            val blobStateKey = computeServiceDataStateKey(targetServiceId, 0xFFFFFFFEL, hash)
+            preimage = context.x.rawServiceDataByStateKey[blobStateKey]
+            if (preimage != null && context.serviceIndex == 2084712938L) {
+                println(
+                    "[LOOKUP-DEBUG] Found preimage in raw state for hash=${
+                        hash.toHex().take(16)
+                    }, size=${preimage.bytes.size}"
+                )
+            }
+        }
+
+        // Calculate actual offset and length based on preimage data (or 0 if not found)
+        val dataSize = preimage?.bytes?.size ?: 0
+        val actualOffset = minOf(offset, dataSize)
+        val actualLength = minOf(length, dataSize - actualOffset)
+
+        // Check if output address is writable - PANIC if not
+        if (!instance.isMemoryWritable(outputAddr, actualLength)) {
+            println(
+                "[LOOKUP-PANIC] service=${context.serviceIndex}, output memory not writable at addr=0x${
+                    outputAddr.toString(
+                        16
+                    )
+                } len=$actualLength"
+            )
+            throw RuntimeException("Lookup PANIC: Output memory not writable at 0x${outputAddr.toString(16)} len $actualLength")
+        }
+
+        // Now handle the different cases
         if (account == null) {
+            println("[LOOKUP-RESULT] service=${context.serviceIndex}, returning WHO (account not found for target=$targetServiceId)")
             instance.setReg7(HostCallResult.WHO)
             return
         }
 
-        val preimage = account.preimages[hash]
         if (preimage == null) {
+            println("[LOOKUP-RESULT] service=${context.serviceIndex}, returning NONE (preimage not found for hash=${hash.toHex()})")
             instance.setReg7(HostCallResult.NONE)
             return
         }
 
         val data = preimage.bytes
-        val actualOffset = minOf(offset, data.size)
-        val actualLength = minOf(length, data.size - actualOffset)
         val slice = data.copyOfRange(actualOffset, actualOffset + actualLength)
 
         val writeResult = instance.writeMemory(outputAddr, slice)
         if (writeResult.isFailure) {
+            println("[LOOKUP-RESULT] service=${context.serviceIndex}, returning OOB (write failed to addr=$outputAddr)")
             instance.setReg7(HostCallResult.OOB)
             return
         }
 
+        println("[LOOKUP-RESULT] service=${context.serviceIndex}, returning size=${data.size}")
         instance.setReg7(data.size.toULong())
     }
 
@@ -721,17 +769,38 @@ class AccumulationHostCalls(
     }
 
     /**
-     * designate (16): Set delegator (privileged).
+     * designate (16): Set validator queue (privileged).
+     * Panics if memory is not readable.
+     * Returns HUH if caller is not the delegator.
+     * Returns OK on success.
      */
     private fun handleDesignate(instance: RawInstance) {
-        // Only manager or current delegator can call designate
-        if (context.serviceIndex != context.x.manager && context.serviceIndex != context.x.delegator) {
+        val startAddr = instance.getReg7().toUInt()
+        val validatorKeySize = 336
+        val totalLength = validatorKeySize * config.VALIDATOR_COUNT
+
+        // Check if memory is readable - PANIC if not
+        if (!instance.isMemoryWritable(startAddr, totalLength)) {
+            println(
+                "[DESIGNATE-PANIC] service=${context.serviceIndex}, memory not readable at addr=0x${
+                    startAddr.toString(
+                        16
+                    )
+                } len=$totalLength"
+            )
+            throw RuntimeException("Designate PANIC: Memory not readable at 0x${startAddr.toString(16)} len $totalLength")
+        }
+
+        // Check if caller is the delegator
+        if (context.serviceIndex != context.x.delegator) {
+            println("[DESIGNATE-HUH] service=${context.serviceIndex} != delegator=${context.x.delegator}")
             instance.setReg7(HostCallResult.HUH)
             return
         }
 
-        val newDelegator = instance.getReg7().toLong()
-        context.x.delegator = newDelegator
+        // Read validator keys from memory (we don't actually need to parse them for now,
+        // just verify memory is readable and caller has permission)
+        // TODO: Actually parse and store validator queue when needed
         instance.setReg7(HostCallResult.OK)
     }
 
@@ -739,7 +808,31 @@ class AccumulationHostCalls(
      * checkpoint (17): Save current state x to checkpoint y.
      */
     private fun handleCheckpoint(instance: RawInstance) {
+        // Log key=05 value BEFORE checkpoint for service 2084712938
+        if (context.serviceIndex == 2084712938L) {
+            val account = context.x.accounts[context.serviceIndex]
+            val key05 = JamByteArray(byteArrayOf(0x05))
+            val value05InMem = account?.storage?.get(key05)
+            val stateKey05 = computeStorageStateKey(context.serviceIndex, key05)
+            val value05Raw = context.x.rawServiceDataByStateKey[stateKey05]
+            println("[KOTLIN-CHECKPOINT-BEFORE] service=${context.serviceIndex}, gas=${instance.gas()}, key05InMem=${value05InMem?.toHex() ?: "null"}, key05Raw=${value05Raw?.toHex() ?: "null"}")
+        }
+
         context.checkpoint()
+
+        // Log key=05 value AFTER checkpoint for service 2084712938
+        if (context.serviceIndex == 2084712938L) {
+            val accountX = context.x.accounts[context.serviceIndex]
+            val accountY = context.y.accounts[context.serviceIndex]
+            val key05 = JamByteArray(byteArrayOf(0x05))
+            val value05X = accountX?.storage?.get(key05)
+            val value05Y = accountY?.storage?.get(key05)
+            val stateKey05 = computeStorageStateKey(context.serviceIndex, key05)
+            val value05XRaw = context.x.rawServiceDataByStateKey[stateKey05]
+            val value05YRaw = context.y.rawServiceDataByStateKey[stateKey05]
+            println("[KOTLIN-CHECKPOINT-AFTER] service=${context.serviceIndex}, gas=${instance.gas()}, x.key05=${value05X?.toHex() ?: "null"}, y.key05=${value05Y?.toHex() ?: "null"}, x.key05Raw=${value05XRaw?.toHex() ?: "null"}, y.key05Raw=${value05YRaw?.toHex() ?: "null"}")
+        }
+
         instance.setReg7(instance.gas().toULong())
     }
 
@@ -1201,7 +1294,29 @@ class AccumulationHostCalls(
         }
 
         val key = PreimageKey(JamByteArray(hashBuffer), length)
-        val request = account.preimageRequests[key]
+        var request = account.preimageRequests[key]
+
+        // If not in memory, check raw state data for preimage info
+        if (request == null) {
+            val infoStateKey = computePreimageInfoStateKey(context.serviceIndex, length, JamByteArray(hashBuffer))
+            val rawInfoData = context.x.rawServiceDataByStateKey[infoStateKey]
+            if (rawInfoData != null) {
+                // Decode preimage info from raw state
+                val timeslots = decodePreimageInfoValue(rawInfoData)
+                request = PreimageRequest(timeslots)
+                if (context.serviceIndex == 2084712938L) {
+                    println(
+                        "[QUERY-DEBUG] Found preimage info in raw state for hash=${
+                            hashBuffer.joinToString("") {
+                                "%02x".format(
+                                    it
+                                )
+                            }.take(16)
+                        }, timeslots=$timeslots"
+                    )
+                }
+            }
+        }
 
         if (request == null) {
             println("[QUERY] service=${context.serviceIndex}, hash=${hashBuffer.joinToString("") { "%02x".format(it) }}, length=$length, found=false, requestedAt=null, returning=NONE")

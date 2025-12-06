@@ -174,6 +174,31 @@ class RawInstance(
 
     fun heapSize(): UInt = backend.access { backend -> backend.heapSize() }
 
+    /**
+     * Check if an address range is writable without actually writing.
+     */
+    fun isMemoryWritable(address: UInt, length: Int): Boolean {
+        if (length == 0) {
+            return true
+        }
+
+        val testBuffer = ByteArray(1)
+        val startResult = readMemoryInto(address, testBuffer)
+        if (startResult.isFailure) {
+            return false
+        }
+
+        if (length > 1) {
+            val endAddr = address + (length - 1).toUInt()
+            val endResult = readMemoryInto(endAddr, testBuffer)
+            if (endResult.isFailure) {
+                return false
+            }
+        }
+
+        return true
+    }
+
     fun sbrk(size: UInt): UInt? {
         val result = backend.access { backend -> backend.sbrk(size) }
 

@@ -579,7 +579,7 @@ class AccumulationStateTransition(private val config: AccumulationConfig) {
         val commitments = mutableSetOf<Commitment>()
         val newDeferredTransfers = mutableListOf<DeferredTransfer>()
         val allProvisions = mutableSetOf<Pair<Long, JamByteArray>>()
-        var currentState = partialState
+        val initialState = partialState.deepCopy()
 
         // Group work items by service, preserving report order
         val serviceOperands = mutableMapOf<Long, MutableList<AccumulationOperand>>()
@@ -626,7 +626,11 @@ class AccumulationStateTransition(private val config: AccumulationConfig) {
         // Track privilege snapshots for each service after execution (for R function)
         val privilegeSnapshots = mutableMapOf<Long, PrivilegeSnapshot>()
 
+        // Collect account changes from all services for merging
+        val allAccountChanges = AccountChanges()
+
         // Execute for each service in sorted order
+        // Each service gets a COPY of the initial state
         for (serviceId in servicesToAccumulate.sorted()) {
             // Get operands for this service (may be empty for always-accumulate services)
             val operands = serviceOperands[serviceId] ?: mutableListOf()
@@ -639,9 +643,10 @@ class AccumulationStateTransition(private val config: AccumulationConfig) {
             val transferGas = operands.filterIsInstance<AccumulationOperand.Transfer>()
                 .sumOf { it.transfer.gasLimit }
             val totalGasLimit = workItemGas + alwaysAccGas + transferGas
+            val serviceInitialState = initialState.deepCopy()
 
             val execResult = executor.executeService(
-                partialState = currentState,
+                partialState = serviceInitialState,
                 timeslot = timeslot,
                 serviceId = serviceId,
                 gasLimit = totalGasLimit,
@@ -649,16 +654,20 @@ class AccumulationStateTransition(private val config: AccumulationConfig) {
                 operands = operands
             )
 
-            currentState = execResult.postState
+            // Compute changes this service made (diff from initial state)
+            val serviceChanges = computeServiceChanges(serviceId, initialState, execResult.postState)
+            // Merge changes (will throw if conflicts detected)
+            allAccountChanges.checkAndMerge(serviceChanges)
+
             gasUsedMap[serviceId] = (gasUsedMap[serviceId] ?: 0L) + execResult.gasUsed
 
             // Capture privilege snapshot after this service's execution
             privilegeSnapshots[serviceId] = PrivilegeSnapshot(
-                manager = currentState.manager,
-                delegator = currentState.delegator,
-                registrar = currentState.registrar,
-                assigners = currentState.assigners.toList(),
-                alwaysAccers = currentState.alwaysAccers.toMap()
+                manager = execResult.postState.manager,
+                delegator = execResult.postState.delegator,
+                registrar = execResult.postState.registrar,
+                assigners = execResult.postState.assigners.toList(),
+                alwaysAccers = execResult.postState.alwaysAccers.toMap()
             )
 
             // Collect yield/commitment if present (allows same service to have multiple commitments)
@@ -671,12 +680,24 @@ class AccumulationStateTransition(private val config: AccumulationConfig) {
             allProvisions.addAll(execResult.provisions)
         }
 
-        // Process preimage integrations
-        if (allProvisions.isNotEmpty()) {
-            currentState = preimageIntegration(allProvisions, currentState, timeslot)
+        // Apply all merged account changes to the initial state to get final state
+        val finalState = initialState.deepCopy()
+        allAccountChanges.applyTo(finalState)
+
+        // Process preimage integrations on the final merged state
+        val stateAfterPreimages = if (allProvisions.isNotEmpty()) {
+            preimageIntegration(allProvisions, finalState, timeslot)
+        } else {
+            finalState
         }
 
-        return AccumulationExecResult(currentState, gasUsedMap, commitments, newDeferredTransfers, privilegeSnapshots)
+        return AccumulationExecResult(
+            stateAfterPreimages,
+            gasUsedMap,
+            commitments,
+            newDeferredTransfers,
+            privilegeSnapshots
+        )
     }
 
     /**

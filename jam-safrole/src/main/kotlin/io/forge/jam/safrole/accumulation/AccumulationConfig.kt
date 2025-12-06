@@ -11,5 +11,6 @@ data class AccumulationConfig(
     val CORES_COUNT: Int = 2,
     val WORK_REPORT_ACCUMULATION_GAS: Long = 10_000_000L,
     val TOTAL_ACCUMULATION_GAS: Long = 20_000_000L,
-    val MIN_PUBLIC_SERVICE_INDEX: Long = 1L shl 16  // 65536, S_S in Gray Paper
+    val MIN_PUBLIC_SERVICE_INDEX: Long = 1L shl 16,  // 65536, S_S in Gray Paper
+    val VALIDATOR_COUNT: Int = 6
 )

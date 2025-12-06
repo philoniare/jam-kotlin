@@ -246,13 +246,7 @@ class PageMap(
     }
 
     fun updatePages(pageIndex: UInt, pages: Int, access: PageAccess) {
-        println("[PAGEMAP] updatePages: pageIndex=$pageIndex, pages=$pages, access=$access, readableBits.size=${readableBits.size}, writableBits.size=${writableBits.size}")
         setPageAccessRange(pageIndex, pages, access)
-        // Verify the pages were actually set
-        for (i in 0 until pages) {
-            val page = pageIndex + i.toUInt()
-            println("[PAGEMAP] After update: page=$page writable=${isPageWritable(page)} readable=${isPageReadable(page)}")
-        }
     }
 
     fun update(address: UInt, length: Int, access: PageAccess) {
