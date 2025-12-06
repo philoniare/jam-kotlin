@@ -58,6 +58,8 @@ object RawHandlers {
         val imm = args.a1
         val nextProgramCounter = ProgramCounter(args.a2)
         logger.debug("Ecalli at ${programCounter.value}: host call $imm")
+        // Trace ALL ecalli instructions
+        println("[ECALLI-TRACE] pc=${programCounter.value}, hostCall=$imm, nextPc=${nextProgramCounter.value}")
         with(visitor.inner) {
             this.programCounter = programCounter
             this.programCounterValid = true

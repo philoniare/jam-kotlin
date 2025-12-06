@@ -56,8 +56,11 @@ class BasicMemory private constructor(
             address >= memoryMap.stackAddressLow() ->
                 address < memoryMap.stackAddressLow() + memoryMap.stackSize
 
-            address >= memoryMap.rwDataAddress ->
-                address < memoryMap.rwDataAddress + memoryMap.rwDataSize
+            address >= memoryMap.rwDataAddress -> {
+                val heapEnd = memoryMap.heapBase + _heapSize
+                val effectiveEnd = maxOf(memoryMap.rwDataAddress + memoryMap.rwDataSize, heapEnd)
+                address < effectiveEnd
+            }
 
             address >= memoryMap.roDataAddress() ->
                 module.interpretedModule() != null &&
@@ -253,8 +256,14 @@ class BasicMemory private constructor(
         // Calculate current heap end (heapBase + heapSize)
         val prevHeapEnd = memoryMap.heapBase + _heapSize
 
-        println("[SBRK-KOTLIN] size=$size, heapBase=${memoryMap.heapBase}, _heapSize=$_heapSize, prevHeapEnd=$prevHeapEnd")
-        println("[SBRK-KOTLIN] rwDataAddress=${memoryMap.rwDataAddress}, rwDataSize=${memoryMap.rwDataSize}")
+        println(
+            "[SBRK-KOTLIN] size=$size, heapBase=${memoryMap.heapBase}, _heapSize=$_heapSize, prevHeapEnd=$prevHeapEnd, instanceId=${
+                System.identityHashCode(
+                    this
+                )
+            }"
+        )
+        println("[SBRK-KOTLIN] rwDataAddress=${memoryMap.rwDataAddress}, rwDataSize=${memoryMap.rwDataSize}, maxHeapSize=${memoryMap.maxHeapSize}, rwData.size=${rwData.size}")
 
         // If size is 0, just return current heap end
         if (size == 0u) {
@@ -265,8 +274,10 @@ class BasicMemory private constructor(
         val newHeapSize = _heapSize.plus(size).takeIf { it >= _heapSize } ?: return null
 
         if (newHeapSize > memoryMap.maxHeapSize) {
+            println("[SBRK-KOTLIN] FAILED: newHeapSize=$newHeapSize > maxHeapSize=${memoryMap.maxHeapSize}")
             return null
         }
+        println("[SBRK-KOTLIN] OK: newHeapSize=$newHeapSize, newHeapEnd=${memoryMap.heapBase + newHeapSize}")
 
         _heapSize = newHeapSize
         val newHeapEnd = memoryMap.heapBase + newHeapSize
@@ -278,6 +289,7 @@ class BasicMemory private constructor(
                 size = newHeapEnd.toInt()
             ) - memoryMap.rwDataAddress.toInt()
 
+            println("[SBRK-KOTLIN] Expanding rwData: oldSize=${rwData.size}, newSize=$newSize, newHeapEnd=$newHeapEnd")
             rwData.resize(newSize)
         }
 
@@ -289,6 +301,7 @@ class BasicMemory private constructor(
                 alignToNextPageSize(memoryMap.pageSize.toInt(), newHeapEnd.toInt()).toUInt() / memoryMap.pageSize
             val pageCount = (endPage - startPage).toInt()
             if (pageCount > 0) {
+                println("[SBRK-KOTLIN] Adding pages: startPage=$startPage, endPage=$endPage, pageCount=$pageCount")
                 _pageMap.updatePages(startPage, pageCount, PageAccess.READ_WRITE)
             }
         }
@@ -316,8 +329,9 @@ class BasicMemory private constructor(
             address >= memoryMap.stackAddressLow() ->
                 memoryMap.stackAddressLow() to stack
 
-            address >= memoryMap.rwDataAddress ->
+            address >= memoryMap.rwDataAddress -> {
                 memoryMap.rwDataAddress to rwData
+            }
 
             address >= memoryMap.roDataAddress() -> {
                 val interpretedModule = currentModule?.interpretedModule() ?: return null

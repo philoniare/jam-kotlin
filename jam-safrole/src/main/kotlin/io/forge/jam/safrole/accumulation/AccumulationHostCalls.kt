@@ -267,7 +267,13 @@ class AccumulationHostCalls(
         val offset = instance.getReg10().toInt()
         val length = instance.getReg11().toInt()
 
-        println("[LOOKUP-PARAMS] serviceId=$serviceId, hashAddr=0x${hashAddr.toString(16)}, outputAddr=0x${outputAddr.toString(16)}, offset=$offset, length=$length")
+        println(
+            "[LOOKUP-PARAMS] serviceId=$serviceId, hashAddr=0x${hashAddr.toString(16)}, outputAddr=0x${
+                outputAddr.toString(
+                    16
+                )
+            }, offset=$offset, length=$length"
+        )
 
         // Read hash from memory - panic on OOB (matches Swift behavior)
         val hashBuffer = ByteArray(32)
@@ -387,7 +393,13 @@ class AccumulationHostCalls(
         val keyLen = instance.getReg8().toInt()
         val valueAddr = instance.getReg9().toUInt()
         val valueLen = instance.getReg10().toInt()
-        println("[DEBUG-WRITE] keyAddr=$keyAddr, keyLen=$keyLen, valueAddr=$valueAddr, valueLen=$valueLen")
+        println(
+            "[DEBUG-WRITE] keyAddr=$keyAddr (0x${keyAddr.toString(16)}), keyLen=$keyLen, valueAddr=$valueAddr (0x${
+                valueAddr.toString(
+                    16
+                )
+            }), valueLen=$valueLen"
+        )
 
         val account = context.x.accounts[context.serviceIndex]
         if (account == null) {
@@ -836,11 +848,23 @@ class AccumulationHostCalls(
 
         // Read new code hash from memory
         val codeHashBuffer = ByteArray(32)
-        println("[DEBUG-UPGRADE] service=${context.serviceIndex}, codeHashAddr=$codeHashAddr (0x${codeHashAddr.toString(16)})")
+        println(
+            "[DEBUG-UPGRADE] service=${context.serviceIndex}, codeHashAddr=$codeHashAddr (0x${
+                codeHashAddr.toString(
+                    16
+                )
+            })"
+        )
         val readResult = instance.readMemoryInto(codeHashAddr, codeHashBuffer)
         if (readResult.isFailure) {
             println("[DEBUG-UPGRADE] Memory read FAILED: ${readResult.exceptionOrNull()}")
-            throw RuntimeException("Upgrade PANIC: Failed to read code hash from memory at address $codeHashAddr (0x${codeHashAddr.toString(16)}): ${readResult.exceptionOrNull()}")
+            throw RuntimeException(
+                "Upgrade PANIC: Failed to read code hash from memory at address $codeHashAddr (0x${
+                    codeHashAddr.toString(
+                        16
+                    )
+                }): ${readResult.exceptionOrNull()}"
+            )
         }
 
         println(
@@ -1342,16 +1366,16 @@ class AccumulationHostCalls(
     private fun handleLog(instance: RawInstance) {
         // Log is a no-op - just for debugging purposes
         // No return value set, execution continues
-        instance.getReg7()
-        instance.getReg8()
+        val level = instance.getReg7()
+        val target = instance.getReg8()
         val ptr = instance.getReg10().toUInt()
         val len = instance.getReg11().toInt()
 
         val buffer = ByteArray(len)
         val result = instance.readMemoryInto(ptr, buffer)
         if (result.isSuccess) {
-            String(buffer)
-        } else {
+            val msg = String(buffer)
+            println("[LOG] service=${context.serviceIndex}, level=$level, target=$target, msg=$msg")
         }
     }
 
