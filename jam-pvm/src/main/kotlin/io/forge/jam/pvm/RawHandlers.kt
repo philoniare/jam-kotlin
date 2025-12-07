@@ -7,6 +7,60 @@ import io.forge.jam.pvm.program.ProgramCounter
 import io.forge.jam.pvm.program.Reg
 import io.forge.jam.pvm.program.toRegImm
 
+/**
+ * Logger for tracking per-instruction execution with service ID context.
+ * Used for debugging
+ */
+object InstructionLogger {
+    @Volatile
+    var currentServiceId: Long = 0
+
+    @Volatile
+    var instructionCount: Int = 0
+    private const val MAX_LOG_COUNT = Int.MAX_VALUE
+    private const val TARGET_SERVICE: Long = 2084712938L
+
+    @Volatile
+    var traceRegisters: Boolean = false
+
+    private const val TRACE_START_GAS: Long = 4966810
+    private const val TRACE_END_GAS: Long = 4966670
+
+    fun startService(serviceId: Long) {
+        currentServiceId = serviceId
+        instructionCount = 0
+        traceRegisters = false
+    }
+
+    fun enableRegisterTracing() {
+        traceRegisters = true
+    }
+
+    fun disableRegisterTracing() {
+        traceRegisters = false
+    }
+
+    fun logInstruction(pc: UInt, gas: Long, opcodeName: String) {
+        if (currentServiceId == TARGET_SERVICE && instructionCount < MAX_LOG_COUNT) {
+            println("[INSTR] svc=$currentServiceId pc=$pc gas=$gas op=$opcodeName count=$instructionCount")
+            instructionCount++
+        }
+    }
+
+    fun logInstructionWithRegs(pc: UInt, gas: Long, opcodeName: String, regs: ULongArray) {
+        if (currentServiceId == TARGET_SERVICE && instructionCount < MAX_LOG_COUNT) {
+            println("[INSTR] svc=$currentServiceId pc=$pc gas=$gas op=$opcodeName count=$instructionCount")
+
+            if (gas <= TRACE_START_GAS && gas >= TRACE_END_GAS) {
+                val regStr =
+                    regs.take(13).mapIndexed { i, v -> "r$i=${v.toString(16).padStart(16, '0')}" }.joinToString(",")
+                println("[REGS] gas=$gas $regStr")
+            }
+            instructionCount++
+        }
+    }
+}
+
 typealias Target = UInt
 typealias Handler = (Visitor) -> Target?
 
@@ -1969,8 +2023,7 @@ object RawHandlers {
         val dst = transmuteReg(args.a1)
         val base = transmuteReg(args.a2)
         val offset = args.a3
-
-        val result = visitor.load<U8LoadTy>(
+        visitor.load<U8LoadTy>(
             programCounter,
             dst,
             base,
@@ -1978,12 +2031,6 @@ object RawHandlers {
             1u,
             false
         )
-        if (result != null) {
-            val value = visitor.get32(dst.toRegImm())
-            val baseVal = visitor.get64(base.toRegImm())
-            println("[DEBUG-LOAD] LoadIndirectU8Basic: base=$base($baseVal), offset=$offset, value=$value")
-        }
-        result
     }
 
     val loadIndirectU8Dynamic: Handler = { visitor ->
@@ -2050,10 +2097,7 @@ object RawHandlers {
         val base = transmuteReg(args.a2)
         val offset = args.a3
 
-        val baseValBefore = visitor.get64(base.toRegImm())
-        val computedAddress = (baseValBefore.toUInt() + offset)
-
-        val result = visitor.load<U64LoadTy>(
+        visitor.load<U64LoadTy>(
             programCounter,
             dst,
             base,
@@ -2061,17 +2105,6 @@ object RawHandlers {
             8u,
             false
         )
-        if (result != null) {
-            val value = visitor.get64(dst.toRegImm())
-            println(
-                "[DEBUG-LOAD] LoadIndirectU64Basic: base=$base(0x${baseValBefore.toString(16)}), offset=$offset, addr=0x${
-                    computedAddress.toString(
-                        16
-                    )
-                }, value=0x${value.toString(16)}"
-            )
-        }
-        result
     }
 
     val loadIndirectU64Dynamic: Handler = { visitor ->

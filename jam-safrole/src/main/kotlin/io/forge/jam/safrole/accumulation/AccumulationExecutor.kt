@@ -2,6 +2,7 @@ package io.forge.jam.safrole.accumulation
 
 import io.forge.jam.core.JamByteArray
 import io.forge.jam.core.WorkReport
+import io.forge.jam.pvm.InstructionLogger
 import io.forge.jam.pvm.engine.*
 import io.forge.jam.pvm.program.ArcBytes
 import io.forge.jam.pvm.program.ProgramBlob
@@ -38,6 +39,9 @@ class AccumulationExecutor(
     ): AccumulationOneResult {
         val account = partialState.accounts[serviceId]
             ?: return createEmptyResult(partialState, serviceId, timeslot, operands)
+
+        // Start instruction logging for this service
+        InstructionLogger.startService(serviceId)
 
         println("[EXEC-START] service=$serviceId, initialBalance=${account.info.balance}, bytes=${account.info.bytes}, items=${account.info.items}")
 

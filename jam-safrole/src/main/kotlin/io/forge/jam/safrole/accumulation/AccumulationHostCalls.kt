@@ -167,6 +167,10 @@ class AccumulationHostCalls(
                 instance.setReg7(HostCallResult.WHAT)
             }
         }
+
+        val r7After = instance.getReg7()
+        val r7Hex = r7After.toString(16).padStart(16, '0')
+        println("[HOST-RETURN] service=${context.serviceIndex}, hostCallId=$hostCallId, r7=$r7After (0x$r7Hex)")
     }
 
     /**
@@ -561,7 +565,7 @@ class AccumulationHostCalls(
             // Write new value to both in-memory storage and raw service data
             account.storage[key] = newValue!!
             context.x.rawServiceDataByStateKey[stateKey] = newValue
-            println("[WRITE-SET] key=${key.toHex()}, value=${newValue.toHex()}, valueLen=$valueLen, keyWasPresent=$keyWasPresent, newBytes=$newBytes, newItems=$newItems")
+            println("[WRITE-SET] service=${context.serviceIndex}, stateKey=${stateKey.toHex()}, key=${key.toHex()}, value=${newValue.toHex()}, valueLen=$valueLen, keyWasPresent=$keyWasPresent, newBytes=$newBytes, newItems=$newItems")
         }
 
         // Update account info with new bytes/items
@@ -1351,7 +1355,7 @@ class AccumulationHostCalls(
      */
     private fun handleSolicit(instance: RawInstance) {
         val hashAddr = instance.getReg7().toUInt()
-        val length = instance.getReg8().toInt()
+        val length = (instance.getReg8() and 0xFFFFFFFFuL).toInt()
 
         val account = context.x.accounts[context.serviceIndex]
         if (account == null) {
@@ -1367,7 +1371,29 @@ class AccumulationHostCalls(
         }
 
         val key = PreimageKey(JamByteArray(hashBuffer), length)
-        val existingRequest = account.preimageRequests[key]
+        var existingRequest = account.preimageRequests[key]
+
+        // Also check raw state for preimage info if not found in memory
+        if (existingRequest == null) {
+            val infoStateKey = computePreimageInfoStateKey(context.serviceIndex, length, JamByteArray(hashBuffer))
+            val rawInfoData = context.x.rawServiceDataByStateKey[infoStateKey]
+            // Debug: list keys starting with 'ea1d' (preimage info keys for this service)
+            val matchingKeys = context.x.rawServiceDataByStateKey.keys.filter {
+                it.toHex().startsWith("ea1d") || it.toHex().startsWith("ead6")
+            }
+            println(
+                "[SOLICIT-LOOKUP] service=${context.serviceIndex}, length=$length (0x${
+                    length.toUInt().toString(16)
+                }), hash=${
+                    hashBuffer.joinToString("") { "%02x".format(it) }.take(16)
+                }, stateKey=${infoStateKey.toHex()}, found=${rawInfoData != null}, matchingKeys=${matchingKeys.map { it.toHex() }}"
+            )
+            if (rawInfoData != null) {
+                val timeslots = decodePreimageInfoValue(rawInfoData)
+                existingRequest = PreimageRequest(timeslots)
+                println("[SOLICIT-DEBUG] Found preimage info in raw state, timeslots=$timeslots")
+            }
+        }
 
         val notRequestedYet = existingRequest == null
         val isPreviouslyAvailable = existingRequest?.requestedAt?.size == 2
@@ -1379,10 +1405,11 @@ class AccumulationHostCalls(
         }
 
         // Calculate new footprint for threshold balance check
+        val lengthUnsigned = length.toUInt().toLong()
         val info = account.info
         val (newItems, newBytes) = if (notRequestedYet) {
             // Add: increase count by 2 and bytes by 81 + length
-            Pair(info.items + 2, info.bytes + 81 + length)
+            Pair(info.items + 2, info.bytes + 81 + lengthUnsigned)
         } else {
             // Update: no change to footprint
             Pair(info.items, info.bytes)
@@ -1458,7 +1485,19 @@ class AccumulationHostCalls(
         println("[FORGET] hash=${hashBuffer.joinToString("") { "%02x".format(it) }}")
 
         val key = PreimageKey(JamByteArray(hashBuffer), length)
-        val existingRequest = account.preimageRequests[key]
+        var existingRequest = account.preimageRequests[key]
+
+        // Also check raw state for preimage info if not found in memory
+        if (existingRequest == null) {
+            val infoStateKey = computePreimageInfoStateKey(context.serviceIndex, length, JamByteArray(hashBuffer))
+            val rawInfoData = context.x.rawServiceDataByStateKey[infoStateKey]
+            if (rawInfoData != null) {
+                val timeslots = decodePreimageInfoValue(rawInfoData)
+                existingRequest = PreimageRequest(timeslots)
+                println("[FORGET-DEBUG] Found preimage info in raw state, timeslots=$timeslots")
+            }
+        }
+
         println(
             "[FORGET] existingRequest=$existingRequest, preimageRequestsKeys=${
                 account.preimageRequests.keys.map {

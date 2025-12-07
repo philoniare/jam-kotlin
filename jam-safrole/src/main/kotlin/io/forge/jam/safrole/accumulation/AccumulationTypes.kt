@@ -85,6 +85,33 @@ fun encodePreimageInfoValue(timeslots: List<Long>): JamByteArray {
 }
 
 /**
+ * Decodes a preimage info value (list of 0-3 timeslots).
+ */
+fun decodePreimageInfoValue(data: JamByteArray): List<Long> {
+    if (data.bytes.isEmpty()) {
+        return emptyList()
+    }
+
+    val count = data.bytes[0].toInt() and 0xFF
+    if (count == 0) {
+        return emptyList()
+    }
+
+    val timeslots = mutableListOf<Long>()
+    for (i in 0 until count) {
+        val offset = 1 + i * 4
+        if (offset + 4 > data.bytes.size) break
+        val ts = (data.bytes[offset].toLong() and 0xFF) or
+            ((data.bytes[offset + 1].toLong() and 0xFF) shl 8) or
+            ((data.bytes[offset + 2].toLong() and 0xFF) shl 16) or
+            ((data.bytes[offset + 3].toLong() and 0xFF) shl 24)
+        timeslots.add(ts)
+    }
+
+    return timeslots
+}
+
+/**
  * Operand tuple as defined in Gray Paper equation 106.
  * Contains extracted work item data combined with work report context.
  */
@@ -213,6 +240,251 @@ sealed class AccumulationOperand {
             return result
         }
     }
+}
+
+/**
+ * Tracks account changes from a single service's accumulation.
+ * Used to merge changes from parallel service executions.
+ */
+class AccountChanges {
+    // Track which service accounts were altered (by service index)
+    val alteredServices: MutableSet<Long> = mutableSetOf()
+
+    // Track new accounts created (service index -> account)
+    val newAccounts: MutableMap<Long, ServiceAccount> = mutableMapOf()
+
+    // Track removed accounts (service indices)
+    val removedAccounts: MutableSet<Long> = mutableSetOf()
+
+    // Track storage updates (service index -> (key -> value or null for deletion))
+    val storageUpdates: MutableMap<Long, MutableMap<JamByteArray, JamByteArray?>> = mutableMapOf()
+
+    // Track preimage updates (service index -> (hash -> blob or null))
+    val preimageUpdates: MutableMap<Long, MutableMap<JamByteArray, JamByteArray?>> = mutableMapOf()
+
+    // Track account info updates (service index -> new info)
+    val accountInfoUpdates: MutableMap<Long, ServiceInfo> = mutableMapOf()
+
+    // Track raw state key updates
+    val rawStateKeyUpdates: MutableMap<JamByteArray, JamByteArray?> = mutableMapOf()
+
+    /**
+     * Check for conflicts and merge with another AccountChanges.
+     * Throws if the same service was altered by both.
+     */
+    fun checkAndMerge(other: AccountChanges) {
+        // Check for conflicts - same service altered by both
+        val alteredConflict = alteredServices.intersect(other.alteredServices)
+        if (alteredConflict.isNotEmpty()) {
+            throw IllegalStateException("Duplicate contribution to services: $alteredConflict")
+        }
+
+        val newAccountConflict = newAccounts.keys.intersect(other.newAccounts.keys)
+        if (newAccountConflict.isNotEmpty()) {
+            throw IllegalStateException("Duplicate new service accounts: $newAccountConflict")
+        }
+
+        val removedConflict = removedAccounts.intersect(other.removedAccounts)
+        if (removedConflict.isNotEmpty()) {
+            throw IllegalStateException("Duplicate removed service accounts: $removedConflict")
+        }
+
+        // Merge
+        alteredServices.addAll(other.alteredServices)
+        newAccounts.putAll(other.newAccounts)
+        removedAccounts.addAll(other.removedAccounts)
+
+        for ((serviceId, updates) in other.storageUpdates) {
+            storageUpdates.computeIfAbsent(serviceId) { mutableMapOf() }.putAll(updates)
+        }
+
+        for ((serviceId, updates) in other.preimageUpdates) {
+            preimageUpdates.computeIfAbsent(serviceId) { mutableMapOf() }.putAll(updates)
+        }
+
+        accountInfoUpdates.putAll(other.accountInfoUpdates)
+        rawStateKeyUpdates.putAll(other.rawStateKeyUpdates)
+    }
+
+    /**
+     * Apply all changes to a state.
+     */
+    fun applyTo(state: PartialState) {
+        // Apply new accounts
+        for ((serviceId, account) in newAccounts) {
+            state.accounts[serviceId] = account.copy()
+        }
+
+        // Apply removed accounts
+        for (serviceId in removedAccounts) {
+            state.accounts.remove(serviceId)
+        }
+
+        // Apply storage updates
+        for ((serviceId, updates) in storageUpdates) {
+            val account = state.accounts[serviceId] ?: continue
+            for ((key, value) in updates) {
+                if (value != null) {
+                    account.storage[key] = value
+                } else {
+                    account.storage.remove(key)
+                }
+            }
+        }
+
+        // Apply preimage updates
+        for ((serviceId, updates) in preimageUpdates) {
+            val account = state.accounts[serviceId] ?: continue
+            for ((hash, blob) in updates) {
+                if (blob != null) {
+                    account.preimages[hash] = blob
+                } else {
+                    account.preimages.remove(hash)
+                }
+            }
+        }
+
+        // Apply account info updates
+        for ((serviceId, info) in accountInfoUpdates) {
+            val account = state.accounts[serviceId] ?: continue
+            state.accounts[serviceId] = account.copy(info = info)
+        }
+
+        // Apply raw state key updates
+        for ((key, value) in rawStateKeyUpdates) {
+            if (value != null) {
+                state.rawServiceDataByStateKey[key] = value
+            } else {
+                state.rawServiceDataByStateKey.remove(key)
+            }
+        }
+    }
+}
+
+/**
+ * Compute changes between initial state and post state for a specific service.
+ */
+fun computeServiceChanges(
+    serviceId: Long,
+    initialState: PartialState,
+    postState: PartialState
+): AccountChanges {
+    val changes = AccountChanges()
+
+    val initialAccount = initialState.accounts[serviceId]
+    val postAccount = postState.accounts[serviceId]
+
+    // Check for new account
+    if (initialAccount == null && postAccount != null) {
+        changes.newAccounts[serviceId] = postAccount.copy()
+        changes.alteredServices.add(serviceId)
+        return changes
+    }
+
+    // Check for removed account
+    if (initialAccount != null && postAccount == null) {
+        changes.removedAccounts.add(serviceId)
+        changes.alteredServices.add(serviceId)
+        return changes
+    }
+
+    // Both exist - check for modifications
+    if (initialAccount != null && postAccount != null) {
+        var modified = false
+
+        // Check storage changes
+        val storageChanges = mutableMapOf<JamByteArray, JamByteArray?>()
+
+        // New or modified keys
+        for ((key, value) in postAccount.storage) {
+            val initialValue = initialAccount.storage[key]
+            if (initialValue == null || !initialValue.bytes.contentEquals(value.bytes)) {
+                storageChanges[key] = value
+                modified = true
+            }
+        }
+
+        // Deleted keys
+        for (key in initialAccount.storage.keys) {
+            if (!postAccount.storage.containsKey(key)) {
+                storageChanges[key] = null
+                modified = true
+            }
+        }
+
+        if (storageChanges.isNotEmpty()) {
+            changes.storageUpdates[serviceId] = storageChanges
+        }
+
+        // Check preimage changes
+        val preimageChanges = mutableMapOf<JamByteArray, JamByteArray?>()
+
+        for ((hash, blob) in postAccount.preimages) {
+            val initialBlob = initialAccount.preimages[hash]
+            if (initialBlob == null || !initialBlob.bytes.contentEquals(blob.bytes)) {
+                preimageChanges[hash] = blob
+                modified = true
+            }
+        }
+
+        for (hash in initialAccount.preimages.keys) {
+            if (!postAccount.preimages.containsKey(hash)) {
+                preimageChanges[hash] = null
+                modified = true
+            }
+        }
+
+        if (preimageChanges.isNotEmpty()) {
+            changes.preimageUpdates[serviceId] = preimageChanges
+        }
+
+        // Check info changes (balance, bytes, items, codeHash, etc.)
+        if (initialAccount.info != postAccount.info) {
+            changes.accountInfoUpdates[serviceId] = postAccount.info.copy()
+            modified = true
+        }
+
+        if (modified) {
+            changes.alteredServices.add(serviceId)
+        }
+    }
+
+    for ((otherServiceId, postOtherAccount) in postState.accounts) {
+        if (otherServiceId == serviceId) continue
+
+        val initialOtherAccount = initialState.accounts[otherServiceId]
+
+        // New account created by this service
+        if (initialOtherAccount == null) {
+            changes.newAccounts[otherServiceId] = postOtherAccount.copy()
+            changes.alteredServices.add(otherServiceId)
+        }
+    }
+
+    // Check for accounts removed
+    for (otherServiceId in initialState.accounts.keys) {
+        if (otherServiceId == serviceId) continue
+        if (!postState.accounts.containsKey(otherServiceId)) {
+            changes.removedAccounts.add(otherServiceId)
+            changes.alteredServices.add(otherServiceId)
+        }
+    }
+
+    // Check raw state key changes
+    for ((key, value) in postState.rawServiceDataByStateKey) {
+        val initialValue = initialState.rawServiceDataByStateKey[key]
+        if (initialValue == null || !initialValue.bytes.contentEquals(value.bytes)) {
+            changes.rawStateKeyUpdates[key] = value
+        }
+    }
+
+    for (key in initialState.rawServiceDataByStateKey.keys) {
+        if (!postState.rawServiceDataByStateKey.containsKey(key)) {
+            changes.rawStateKeyUpdates[key] = null
+        }
+    }
+
+    return changes
 }
 
 /**
@@ -362,7 +634,7 @@ class AccumulationContext(
      */
     fun collapse(exitReason: ExitReason): PartialState {
         return when (exitReason) {
-            ExitReason.PANIC, ExitReason.OUT_OF_GAS -> y
+            ExitReason.PANIC, ExitReason.OUT_OF_GAS, ExitReason.PAGE_FAULT -> y
             ExitReason.INVALID_CODE -> y
             else -> x
         }

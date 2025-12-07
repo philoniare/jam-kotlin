@@ -56,6 +56,7 @@ abstract class BaseTraceTest {
         // Load and test trace steps one at a time to avoid OOM
         for ((index, filename) in filenamesToTest.withIndex()) {
             val blockNum = index + 1
+            println("[$traceName] Testing block $blockNum...")
             val (step, _) = TestFileLoader.loadTestDataFromTestVectors<TraceStep>(
                 "traces/$traceName", filename
             )
@@ -253,12 +254,132 @@ abstract class BaseTraceTest {
                 val minLen = minOf(expectedHex.length, actualHex.length)
                 for (i in 0 until minLen) {
                     if (expectedHex[i] != actualHex[i]) {
-                        println("    First diff at char $i: expected '${expectedHex[i]}', actual '${actualHex[i]}'")
+                        println("    First diff at char $i (byte ${i/2}): expected '${expectedHex[i]}', actual '${actualHex[i]}'")
                         // Show some context around the difference
                         val start = maxOf(0, i - 10)
                         val end = minOf(minLen, i + 50)
                         println("    Expected around diff: ...${expectedHex.substring(start, end)}...")
                         println("    Actual around diff:   ...${actualHex.substring(start, minOf(actualHex.length, end))}...")
+
+                        // Try to decode what field this is
+                        val bytePos = i / 2
+                        val keyFirstByte = expectedMap[key]!!.key.bytes[0].toInt() and 0xFF
+                        println("    [DEBUG] Key first byte: 0x${String.format("%02x", keyFirstByte)} = ${StateKeys.getComponent(expectedMap[key]!!.key)}")
+                        println("    [DEBUG] Byte position $bytePos in state value")
+
+                        // Decode expected and actual to find what differs
+                        val expectedBytes = expectedMap[key]!!.value.bytes
+                        val actualBytes = actualMap[key]!!.value.bytes
+
+                        // Manually parse to understand structure
+                        println("    [DEBUG] Total bytes: ${expectedBytes.size}")
+
+                        // If it's RecentHistory, decode as HistoricalBetaContainer
+                        if (keyFirstByte == 3) {
+                            try {
+                                val (expHistory, _) = io.forge.jam.safrole.historical.HistoricalBetaContainer.fromBytes(expectedBytes)
+                                val (actHistory, _) = io.forge.jam.safrole.historical.HistoricalBetaContainer.fromBytes(actualBytes)
+
+                                println("    [DEBUG] Expected history length: ${expHistory.history.size}")
+                                println("    [DEBUG] Actual history length: ${actHistory.history.size}")
+                                println("    [DEBUG] Expected MMR peaks: ${expHistory.mmr.peaks.map { it?.toHex()?.take(16) ?: "nil" }}")
+                                println("    [DEBUG] Actual MMR peaks: ${actHistory.mmr.peaks.map { it?.toHex()?.take(16) ?: "nil" }}")
+
+                                // Compare history entries
+                                for (j in 0 until minOf(expHistory.history.size, actHistory.history.size)) {
+                                    val expEntry = expHistory.history[j]
+                                    val actEntry = actHistory.history[j]
+                                    if (expEntry.headerHash.toHex() != actEntry.headerHash.toHex()) {
+                                        println("    [DEBUG] History[$j] headerHash differs")
+                                    }
+                                    if (expEntry.beefyRoot.toHex() != actEntry.beefyRoot.toHex()) {
+                                        println("    [DEBUG] History[$j] beefyRoot differs:")
+                                        println("      Expected: ${expEntry.beefyRoot.toHex()}")
+                                        println("      Actual:   ${actEntry.beefyRoot.toHex()}")
+                                    }
+                                    if (expEntry.stateRoot.toHex() != actEntry.stateRoot.toHex()) {
+                                        println("    [DEBUG] History[$j] stateRoot differs:")
+                                        println("      Expected: ${expEntry.stateRoot.toHex()}")
+                                        println("      Actual:   ${actEntry.stateRoot.toHex()}")
+                                    }
+                                    if (expEntry.reported.size != actEntry.reported.size) {
+                                        println("    [DEBUG] History[$j] reported count differs: ${expEntry.reported.size} vs ${actEntry.reported.size}")
+                                    } else {
+                                        // Compare reported entries
+                                        for (k in 0 until expEntry.reported.size) {
+                                            if (expEntry.reported[k].hash.toHex() != actEntry.reported[k].hash.toHex()) {
+                                                println("    [DEBUG] History[$j] reported[$k] differs:")
+                                                println("      Expected: ${expEntry.reported[k].hash.toHex()}")
+                                                println("      Actual:   ${actEntry.reported[k].hash.toHex()}")
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Also compare raw encoding offsets
+                                val expEnc = expHistory.encode()
+                                val actEnc = actHistory.encode()
+                                println("    [DEBUG] Expected encoding size: ${expEnc.size}")
+                                println("    [DEBUG] Actual encoding size: ${actEnc.size}")
+                                for (b in 0 until minOf(expEnc.size, actEnc.size)) {
+                                    if (expEnc[b] != actEnc[b]) {
+                                        println("    [DEBUG] First encoding diff at byte $b: exp=0x${String.format("%02x", expEnc[b])}, act=0x${String.format("%02x", actEnc[b])}")
+                                        break
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                println("    [DEBUG] Failed to decode history: ${e.message}")
+                            }
+                        }
+
+                        // ServiceInfo is 89 bytes, then storage list starts
+                        val storageOffset = 89
+                        // Storage list starts with compact length
+                        println("    [DEBUG] Bytes at offset 89-95: ${expectedBytes.copyOfRange(89, minOf(96, expectedBytes.size)).map { String.format("%02x", it) }.joinToString(" ")}")
+                        val (storageLen, storageLenBytes) = io.forge.jam.core.decodeCompactInteger(expectedBytes, storageOffset)
+                        println("    [DEBUG] Storage list length: $storageLen (encoded in $storageLenBytes bytes)")
+
+                        // Parse storage entries to find which one differs
+                        var currentOffset = storageOffset + storageLenBytes
+                        var entryIndex = 0
+                        var entryStartOffset = currentOffset
+
+                        while (currentOffset < bytePos && entryIndex < storageLen.toInt()) {
+                            entryStartOffset = currentOffset
+                            // key length + key
+                            val (keyLen, keyLenBytes) = io.forge.jam.core.decodeCompactInteger(expectedBytes, currentOffset)
+                            currentOffset += keyLenBytes + keyLen.toInt()
+                            // value length + value
+                            val (valLen, valLenBytes) = io.forge.jam.core.decodeCompactInteger(expectedBytes, currentOffset)
+                            currentOffset += valLenBytes + valLen.toInt()
+                            entryIndex++
+                        }
+
+                        println("    [DEBUG] Diff is in storage entry index ${entryIndex}, starting at byte $entryStartOffset")
+                        println("    [DEBUG] Offset within entry: ${bytePos - entryStartOffset}")
+
+                        // Decode the specific entry that differs
+                        if (true) {
+                            val prevEntryStart = entryStartOffset
+                            val (keyLen, keyLenBytes) = io.forge.jam.core.decodeCompactInteger(expectedBytes, prevEntryStart)
+                            val keyStart = prevEntryStart + keyLenBytes
+                            val expKey = expectedBytes.copyOfRange(keyStart, keyStart + keyLen.toInt())
+                            val actKey = actualBytes.copyOfRange(keyStart, keyStart + keyLen.toInt())
+
+                            val valLenOffset = keyStart + keyLen.toInt()
+                            val (valLen, valLenBytes) = io.forge.jam.core.decodeCompactInteger(expectedBytes, valLenOffset)
+                            val valStart = valLenOffset + valLenBytes
+                            val expVal = expectedBytes.copyOfRange(valStart, minOf(valStart + valLen.toInt(), expectedBytes.size))
+                            val actVal = actualBytes.copyOfRange(valStart, minOf(valStart + valLen.toInt(), actualBytes.size))
+
+                            println("    [DEBUG] Entry key (${keyLen} bytes): ${io.forge.jam.core.JamByteArray(expKey).toHex()}")
+                            println("    [DEBUG] Expected value (${valLen} bytes): ${io.forge.jam.core.JamByteArray(expVal).toHex().take(128)}...")
+                            println("    [DEBUG] Actual value (${valLen} bytes): ${io.forge.jam.core.JamByteArray(actVal).toHex().take(128)}...")
+
+                            // Find diff position within value
+                            val diffInValue = bytePos - valStart
+                            println("    [DEBUG] Diff at byte $diffInValue within the value")
+                        }
                         break
                     }
                 }

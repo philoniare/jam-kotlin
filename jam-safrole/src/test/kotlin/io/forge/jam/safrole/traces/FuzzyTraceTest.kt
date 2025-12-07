@@ -10,15 +10,15 @@ import kotlin.test.Test
 class FuzzyTraceTest : BaseTraceTest() {
     override val traceName = "fuzzy"
 
-//    @Test
-//    fun testFuzzyStateChain() = runStateChainTests()
-//
-//    @Test
-//    fun testFuzzyEncoding() = runEncodingTests()
+    @Test
+    fun testFuzzyStateChain() = runStateChainTests()
 
     @Test
-    fun testFuzzyBlockImport() = runSingleBlockTest(42)
+    fun testFuzzyEncoding() = runEncodingTests()
 
-//    @Test
-//    fun testFuzzyDecoding() = runDecodingTests()
+    @Test
+    fun testFuzzyBlockImport() = runTraceTests()
+
+    @Test
+    fun testFuzzyDecoding() = runDecodingTests()
 }
