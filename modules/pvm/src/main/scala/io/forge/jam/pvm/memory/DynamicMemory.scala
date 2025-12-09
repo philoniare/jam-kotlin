@@ -2,7 +2,7 @@ package io.forge.jam.pvm.memory
 
 import spire.math.{UByte, UShort, UInt, ULong}
 import scala.collection.mutable
-import io.forge.jam.pvm.{MemoryResult, MemoryMap, Abi}
+import io.forge.jam.pvm.{MemoryResult, MemoryMap, Abi, AlignmentOps}
 import io.forge.jam.pvm.types.*
 
 /**
@@ -175,10 +175,10 @@ final class DynamicMemory private (
     val newHeapEnd = memoryMap.heapBase + newHeapSize
 
     // Update page map for new heap pages
-    val prevPageBoundary = alignToNextPageSize(prevHeapEnd)
+    val prevPageBoundary = AlignmentOps.alignUp(prevHeapEnd, memoryMap.pageSize)
     if newHeapEnd.toLong > prevPageBoundary.toLong then
       val startPage = UInt((prevPageBoundary.toLong / memoryMap.pageSize.toLong).toInt)
-      val endPage = UInt((alignToNextPageSize(newHeapEnd).toLong / memoryMap.pageSize.toLong).toInt)
+      val endPage = UInt((AlignmentOps.alignUp(newHeapEnd, memoryMap.pageSize).toLong / memoryMap.pageSize.toLong).toInt)
       val pageCount = (endPage.signed - startPage.signed)
       if pageCount > 0 then
         _pageMap.updatePages(startPage, pageCount, PageAccess.ReadWrite)
@@ -188,20 +188,6 @@ final class DynamicMemory private (
   // ============================================================================
   // Internal Helpers
   // ============================================================================
-
-  private def checkReadable(address: UInt, length: Int): Option[MemoryResult[Nothing]] =
-    val (isReadable, failAddr) = _pageMap.isReadable(address, length)
-    if !isReadable then
-      Some(MemoryResult.Segfault(address, _pageMap.alignToPageStart(failAddr)))
-    else
-      None
-
-  private def checkWritable(address: UInt, length: Int): Option[MemoryResult[Nothing]] =
-    val (isWritable, failAddr) = _pageMap.isWritable(address, length)
-    if !isWritable then
-      Some(MemoryResult.Segfault(address, _pageMap.alignToPageStart(failAddr)))
-    else
-      None
 
   /**
    * Gets the page address for a given address.
@@ -239,14 +225,6 @@ final class DynamicMemory private (
     val page = getOrCreatePage(address)
     val offset = getPageOffset(address)
     page(offset) = value
-
-  /**
-   * Aligns a size up to the next page boundary.
-   */
-  private def alignToNextPageSize(size: UInt): UInt =
-    val ps = memoryMap.pageSize.toLong
-    val sz = size.toLong
-    UInt((((sz + ps - 1) / ps) * ps).toInt)
 
   /**
    * Clears all allocated pages.
