@@ -39,8 +39,8 @@ trait ExecutionContext:
   /** Handles indirect jump via jump table */
   def jumpIndirect(pc: ProgramCounter, address: UInt): Option[UInt]
 
-  /** Branch helper - jumps if condition is true, otherwise continues */
-  def branch(condition: Boolean, pc: ProgramCounter, offset: Int, nextPc: ProgramCounter): Option[UInt]
+  /** Branch helper - jumps to target if condition is true, otherwise continues to nextPc */
+  def branch(condition: Boolean, pc: ProgramCounter, target: Int, nextPc: ProgramCounter): Option[UInt]
 
   // ============================================================================
   // Interrupts

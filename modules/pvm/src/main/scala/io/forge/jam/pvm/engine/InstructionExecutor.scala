@@ -70,8 +70,8 @@ object InstructionExecutor:
         ctx.resolveJump(ProgramCounter(target.toInt))
 
       case Instruction.LoadImmAndJumpIndirect(dst, base, imm, offset) =>
-        ctx.setReg32(dst, UInt(imm.toInt))
         val addr = (ctx.getReg(base) + offset).toInt
+        ctx.setReg32(dst, UInt(imm.toInt))
         ctx.jumpIndirect(pc, UInt(addr))
 
       // ========================================================================
@@ -313,13 +313,13 @@ object InstructionExecutor:
         ctx.op2Imm32(dst, src, imm.toInt & 31)((v, s) => v >> s)
 
       case Instruction.ShiftLogicalLeftImmAlt32(dst, src, imm) =>
-        ctx.op2Imm32(dst, src, imm.toInt & 31)((s, v) => v << s)
+        ctx.op2Imm32(dst, src, imm.toInt)((shift, v) => v << (shift & 31))
 
       case Instruction.ShiftLogicalRightImmAlt32(dst, src, imm) =>
-        ctx.op2Imm32(dst, src, imm.toInt & 31)((s, v) => v >>> s)
+        ctx.op2Imm32(dst, src, imm.toInt)((shift, v) => v >>> (shift & 31))
 
       case Instruction.ShiftArithmeticRightImmAlt32(dst, src, imm) =>
-        ctx.op2Imm32(dst, src, imm.toInt & 31)((s, v) => v >> s)
+        ctx.op2Imm32(dst, src, imm.toInt)((shift, v) => v >> (shift & 31))
 
       // ========================================================================
       // Shift with Immediate (64-bit)
@@ -334,13 +334,13 @@ object InstructionExecutor:
         ctx.op2Imm64(dst, src, imm & 63)((v, s) => v >> s.toInt)
 
       case Instruction.ShiftLogicalLeftImmAlt64(dst, src, imm) =>
-        ctx.op2Imm64(dst, src, imm & 63)((s, v) => v << s.toInt)
+        ctx.op2Imm64(dst, src, imm)((shift, v) => v << (shift.toInt & 63))
 
       case Instruction.ShiftLogicalRightImmAlt64(dst, src, imm) =>
-        ctx.op2Imm64(dst, src, imm & 63)((s, v) => v >>> s.toInt)
+        ctx.op2Imm64(dst, src, imm)((shift, v) => v >>> (shift.toInt & 63))
 
       case Instruction.ShiftArithmeticRightImmAlt64(dst, src, imm) =>
-        ctx.op2Imm64(dst, src, imm & 63)((s, v) => v >> s.toInt)
+        ctx.op2Imm64(dst, src, imm)((shift, v) => v >> (shift.toInt & 63))
 
       // ========================================================================
       // Rotate with Immediate
