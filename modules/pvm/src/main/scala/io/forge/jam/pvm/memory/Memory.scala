@@ -164,6 +164,30 @@ trait Memory:
       case 8 => storeU64(address, ULong(value))
       case _ => MemoryResult.OutOfBounds(address)
 
+  // ============================================================================
+  // Permission Checking Helpers
+  // ============================================================================
+
+  /**
+   * Checks if an address range is readable, returning a Segfault error if not.
+   */
+  protected def checkReadable(address: UInt, length: Int): Option[MemoryResult[Nothing]] =
+    val (isReadable, failAddr) = pageMap.isReadable(address, length)
+    if !isReadable then
+      Some(MemoryResult.Segfault(address, pageMap.alignToPageStart(failAddr)))
+    else
+      None
+
+  /**
+   * Checks if an address range is writable, returning a Segfault error if not.
+   */
+  protected def checkWritable(address: UInt, length: Int): Option[MemoryResult[Nothing]] =
+    val (isWritable, failAddr) = pageMap.isWritable(address, length)
+    if !isWritable then
+      Some(MemoryResult.Segfault(address, pageMap.alignToPageStart(failAddr)))
+    else
+      None
+
 object Memory:
   /**
    * Checks if an address range is readable.

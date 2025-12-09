@@ -1,7 +1,7 @@
 package io.forge.jam.pvm.memory
 
 import spire.math.{UByte, UShort, UInt, ULong}
-import io.forge.jam.pvm.{MemoryResult, MemoryMap, Abi, PvmConstants}
+import io.forge.jam.pvm.{MemoryResult, MemoryMap, Abi, PvmConstants, ByteOps, AlignmentOps}
 import io.forge.jam.pvm.types.*
 
 /**
@@ -188,10 +188,10 @@ final class BasicMemory private (
     val newHeapEnd = memoryMap.heapBase + newHeapSize
 
     // Update page map for new heap pages
-    val prevPageBoundary = alignToNextPageSize(memoryMap.pageSize, prevHeapEnd)
+    val prevPageBoundary = AlignmentOps.alignUp(prevHeapEnd, memoryMap.pageSize)
     if newHeapEnd.toLong > prevPageBoundary.toLong then
       val startPage = UInt((prevPageBoundary.toLong / memoryMap.pageSize.toLong).toInt)
-      val endPage = UInt((alignToNextPageSize(memoryMap.pageSize, newHeapEnd).toLong / memoryMap.pageSize.toLong).toInt)
+      val endPage = UInt((AlignmentOps.alignUp(newHeapEnd, memoryMap.pageSize).toLong / memoryMap.pageSize.toLong).toInt)
       val pageCount = (endPage.signed - startPage.signed)
       if pageCount > 0 then
         _pageMap.updatePages(startPage, pageCount, PageAccess.ReadWrite)
@@ -201,20 +201,6 @@ final class BasicMemory private (
   // ============================================================================
   // Internal Helpers
   // ============================================================================
-
-  private def checkReadable(address: UInt, length: Int): Option[MemoryResult[Nothing]] =
-    val (isReadable, failAddr) = _pageMap.isReadable(address, length)
-    if !isReadable then
-      Some(MemoryResult.Segfault(address, _pageMap.alignToPageStart(failAddr)))
-    else
-      None
-
-  private def checkWritable(address: UInt, length: Int): Option[MemoryResult[Nothing]] =
-    val (isWritable, failAddr) = _pageMap.isWritable(address, length)
-    if !isWritable then
-      Some(MemoryResult.Segfault(address, _pageMap.alignToPageStart(failAddr)))
-    else
-      None
 
   /**
    * Reads a single byte from the appropriate region.
@@ -338,14 +324,6 @@ final class BasicMemory private (
     true
 
   /**
-   * Aligns a size up to the next page boundary.
-   */
-  private def alignToNextPageSize(pageSize: UInt, size: UInt): UInt =
-    val ps = pageSize.toLong
-    val sz = size.toLong
-    UInt((((sz + ps - 1) / ps) * ps).toInt)
-
-  /**
    * Marks memory as dirty (needs reset before reuse).
    */
   def markDirty(): Unit = isDirty = true
@@ -445,9 +423,3 @@ object BasicMemory:
         mappings += ((auxStart, memoryMap.auxDataSize, PageAccess.ReadOnly))
 
     PageMap.create(mappings.toList, memoryMap.pageSize)
-
-  /**
-   * Aligns size to the next page boundary.
-   */
-  def alignToNextPageSize(pageSize: Int, size: Int): Int =
-    ((size + pageSize - 1) / pageSize) * pageSize
