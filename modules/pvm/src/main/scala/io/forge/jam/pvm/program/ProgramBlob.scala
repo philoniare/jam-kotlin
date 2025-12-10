@@ -41,6 +41,116 @@ final case class ProgramBlob(
   def codeLength: Int = code.length
 
 object ProgramBlob:
+
+  /**
+   * Creates a ProgramBlob from raw code+jumptable bytes (JAM format).
+   *
+   * - Varint: jump table entry count
+   * - Byte: jump table entry size
+   * - Varint: code length
+   * - Jump table bytes
+   * - Code bytes
+   * - Bitmask bytes
+   */
+  def fromCodeAndJumpTable(
+    data: Array[Byte],
+    roData: Array[Byte] = Array.empty,
+    rwData: Array[Byte] = Array.empty,
+    stackSize: Int = 0,
+    is64Bit: Boolean = true
+  ): Option[ProgramBlob] =
+    if data.isEmpty then return None
+
+    var offset = 0
+
+    // Read jump table entry count (varint)
+    val jumpTableEntryCount = readTestVarint(data, offset) match
+      case Some((count, newOffset)) =>
+        offset = newOffset
+        count.toInt
+      case None => return None
+
+    if offset >= data.length then return None
+
+    // Read jump table entry size (single byte)
+    val jumpTableEntrySize = data(offset) & 0xFF
+    offset += 1
+
+    // Read code length (varint)
+    val codeLength = readTestVarint(data, offset) match
+      case Some((len, newOffset)) =>
+        offset = newOffset
+        len.toInt
+      case None => return None
+
+    // Calculate jump table length
+    val jumpTableLength = jumpTableEntryCount * jumpTableEntrySize
+
+    // Calculate bitmask length
+    val bitmaskLength = (codeLength + 7) / 8
+
+    // Verify we have enough data
+    val expectedTotal = offset + jumpTableLength + codeLength + bitmaskLength
+    if data.length < expectedTotal then return None
+
+    // JAM format: jump table comes BEFORE code
+    // Extract jump table
+    val jumpTableData = new Array[Byte](jumpTableLength)
+    if jumpTableLength > 0 then
+      System.arraycopy(data, offset, jumpTableData, 0, jumpTableLength)
+    offset += jumpTableLength
+
+    // Extract code
+    val code = new Array[Byte](codeLength)
+    System.arraycopy(data, offset, code, 0, codeLength)
+    offset += codeLength
+
+    // Extract bitmask
+    val bitmask = new Array[Byte](bitmaskLength)
+    System.arraycopy(data, offset, bitmask, 0, bitmaskLength)
+
+    val jumpTable = JumpTable(jumpTableData, jumpTableEntrySize)
+
+    Some(ProgramBlob(
+      code = code,
+      bitmask = bitmask,
+      jumpTable = jumpTable,
+      is64Bit = is64Bit,
+      roData = roData,
+      rwData = rwData,
+      stackSize = stackSize
+    ))
+
+  /**
+   * Read a varint from data at offset. Used for test vectors.
+   * Returns (value, newOffset) or None on failure.
+   */
+  private def readTestVarint(data: Array[Byte], offset: Int): Option[(Long, Int)] =
+    if offset >= data.length then return None
+
+    val firstByte = data(offset) & 0xFF
+
+    // Count leading 1 bits to determine length
+    var byteLength = 0
+    var temp = firstByte
+    while (temp & 0x80) != 0 && byteLength < 8 do
+      byteLength += 1
+      temp = (temp << 1) & 0xFF
+
+    if offset + 1 + byteLength > data.length then return None
+
+    // Read additional bytes (little-endian)
+    var result: Long = 0L
+    for i <- 0 until byteLength do
+      result = result | ((data(offset + 1 + i).toLong & 0xFF) << (8 * i))
+
+    // Mask for top bits from first byte
+    val mask = (1 << (8 - byteLength)) - 1
+    val topBits = firstByte & mask
+
+    val value = result + (topBits.toLong << (8 * byteLength))
+    Some((value, offset + 1 + byteLength))
+
   /**
    * Simple reader for parsing PVM blobs.
    * Tracks position and uses Varint utilities for varint decoding.

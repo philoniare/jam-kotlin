@@ -5,7 +5,7 @@ import spire.math.{UInt, UByte, UShort, ULong}
 import io.forge.jam.pvm.types.*
 import io.forge.jam.pvm.{InterruptKind, SegfaultInfo, Abi, Opcode, Instruction, MemoryResult}
 import io.forge.jam.pvm.memory.{BasicMemory, DynamicMemory}
-import io.forge.jam.pvm.program.Program
+import io.forge.jam.pvm.program.{Program, InstructionDecoder}
 
 /**
  * Packed target value combining jump validity and handler offset.
@@ -86,6 +86,7 @@ final class InterpretedInstance private (
 
   def gas: Long = _gas
   def setGas(value: Long): Unit = _gas = value
+  def consumeGas(amount: Long): Unit = _gas -= amount
 
   def programCounter: Option[ProgramCounter] =
     if _programCounterValid then Some(_programCounter) else None
@@ -120,13 +121,16 @@ final class InterpretedInstance private (
     Some(compiledOffset + UInt(1))
 
   override def resolveJump(pc: ProgramCounter): Option[UInt] =
-    compiledOffsetForBlock.get(pc.value) match
-      case Some(packed) =>
-        val (isValid, offset) = PackedTarget.unpack(packed)
-        if isValid then Some(offset) else None
-      case None =>
-        if !isJumpTargetValid(pc) then None
-        else compileBlock(pc)
+    if pc.value.signed == Abi.VmAddrReturnToHost.signed then
+      finished()
+    else
+      compiledOffsetForBlock.get(pc.value) match
+        case Some(packed) =>
+          val (isValid, offset) = PackedTarget.unpack(packed)
+          if isValid then Some(offset) else None
+        case None =>
+          if !isJumpTargetValid(pc) then None
+          else compileBlock(pc)
 
   override def resolveFallthrough(pc: ProgramCounter): Option[UInt] =
     compiledOffsetForBlock.get(pc.value) match
@@ -138,15 +142,17 @@ final class InterpretedInstance private (
 
   override def jumpIndirect(pc: ProgramCounter, address: UInt): Option[UInt] =
     if address == Abi.VmAddrReturnToHost then
+      _programCounter = pc
+      _programCounterValid = true
       finished()
     else
       module.blob.jumpTable.getByAddress(address.signed) match
         case Some(targetInt) => resolveJump(ProgramCounter(targetInt))
         case None => panic(pc)
 
-  override def branch(condition: Boolean, pc: ProgramCounter, offset: Int, nextPc: ProgramCounter): Option[UInt] =
+  override def branch(condition: Boolean, pc: ProgramCounter, target: Int, nextPc: ProgramCounter): Option[UInt] =
     if condition then
-      val targetPc = ProgramCounter(pc.toInt + offset)
+      val targetPc = ProgramCounter(target)
       resolveJump(targetPc).orElse(panic(pc))
     else
       resolveFallthrough(nextPc)
@@ -174,9 +180,9 @@ final class InterpretedInstance private (
     None
 
   override def finished(): Option[UInt] =
-    _programCounterValid = false
+    _programCounterValid = true
     _nextProgramCounter = None
-    _nextProgramCounterChanged = true
+    _nextProgramCounterChanged = false
     _interrupt = InterruptKind.Finished
     None
 
@@ -342,11 +348,17 @@ final class InterpretedInstance private (
         if continue then
           // Execute the instruction using pattern matching
           compiledOffset = offset
+          _programCounter = compiled.pc
+          _programCounterValid = true
           InstructionExecutor.execute(compiled.instruction, this, compiled.pc, compiled.nextPc) match
             case None =>
               continue = false
             case Some(nextOffset) =>
               offset = nextOffset
+              if stepTracing then
+                compiledOffset = nextOffset
+                _interrupt = InterruptKind.Step
+                continue = false
 
     _interrupt
 
@@ -407,33 +419,8 @@ final class InterpretedInstance private (
     if offset >= code.length then
       return (Instruction.Panic, ProgramCounter(offset + 1))
 
-    val opcodeValue = code(offset) & 0xFF
-    val opcode = Opcode.fromByte(opcodeValue).getOrElse(Opcode.Panic)
-
-    val (skip, _) = Program.parseBitmaskSlow(bitmask, code.length, offset)
-    val nextOffset = offset + skip + 1
-
-    // Parse instruction based on opcode
-    val instruction = opcode match
-      case Opcode.Panic => Instruction.Panic
-      case Opcode.Fallthrough => Instruction.Fallthrough
-      case Opcode.Jump =>
-        val target = if offset + 1 < code.length then code(offset + 1) & 0xFF else 0
-        Instruction.Jump(target.toLong)
-      case Opcode.LoadImm =>
-        val reg = if offset + 1 < code.length then (code(offset + 1) & 0x0F) else 0
-        val imm = if offset + 2 < code.length then (code(offset + 2) & 0xFF) else 0
-        Instruction.LoadImm(reg, imm.toLong)
-      case Opcode.Add32 =>
-        val chunk = if offset + 1 < code.length then (code(offset + 1) & 0xFF) else 0
-        val d = chunk & 0x0F
-        val s1 = (chunk >> 4) & 0x0F
-        val s2 = if offset + 2 < code.length then (code(offset + 2) & 0x0F) else 0
-        Instruction.Add32(d % 13, s1 % 13, s2 % 13)
-      case _ =>
-        Instruction.Panic
-
-    (instruction, ProgramCounter(nextOffset))
+    val (instruction, skip) = InstructionDecoder.decode(code, bitmask, offset)
+    (instruction, ProgramCounter(offset + skip))
 
   private def compileOutOfRangeStub(): Unit =
     // Add a panic instruction at index 0 for out-of-range jumps
