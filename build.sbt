@@ -14,6 +14,7 @@ lazy val core = (project in file("modules/core"))
         name := "jam-core",
         libraryDependencies ++= Seq(
             "org.typelevel" %% "spire" % "0.18.0",
+            "org.bouncycastle" % "bcprov-jdk18on" % "1.77",
             "org.scalatest" %% "scalatest" % "3.2.17" % Test
         ),
         scalacOptions ++= Seq(
