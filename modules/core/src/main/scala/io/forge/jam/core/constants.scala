@@ -40,6 +40,16 @@ object constants:
   val U: Int = 10
 
   // ══════════════════════════════════════════════════════════════════════════
+  // Authorization Constants
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /** O = 8: Maximum number of items in the authorizations pool */
+  val O: Int = 8
+
+  /** Q = 80: Number of items in the authorizations queue */
+  val Q: Int = 80
+
+  // ══════════════════════════════════════════════════════════════════════════
   // Memory and Size Constants
   // ══════════════════════════════════════════════════════════════════════════
   

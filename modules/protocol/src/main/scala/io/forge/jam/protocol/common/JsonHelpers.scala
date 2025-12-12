@@ -50,3 +50,16 @@ object JsonHelpers:
       else
         Right(bytes)
     }
+
+  /**
+   * Parse a nested list of hex strings to a nested list of Hash.
+   * Used for authorization pools/queues and similar structures.
+   */
+  def parseHashListList(lists: List[List[String]]): Either[DecodingFailure, List[List[Hash]]] =
+    val results = lists.map { inner =>
+      val innerResults = inner.map(parseHash)
+      val (errors, successes) = innerResults.partitionMap(identity)
+      if errors.nonEmpty then Left(errors.head) else Right(successes)
+    }
+    val (errors, successes) = results.partitionMap(identity)
+    if errors.nonEmpty then Left(errors.head) else Right(successes)
