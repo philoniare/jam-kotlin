@@ -19,17 +19,27 @@ object primitives:
   /**
    * A 256-bit hash value (32 bytes).
    * Used for Blake2b-256 hashes throughout the protocol.
+   * Uses content-based equality.
    */
-  opaque type Hash = Array[Byte]
+  final case class Hash private (private val underlying: Array[Byte]):
+    def bytes: Array[Byte] = underlying.clone()
+    def toHex: String = underlying.map(b => f"${b & 0xff}%02x").mkString
+    def size: Int = underlying.length
+
+    override def equals(obj: Any): Boolean = obj match
+      case that: Hash => java.util.Arrays.equals(this.underlying, that.underlying)
+      case _ => false
+
+    override def hashCode(): Int = java.util.Arrays.hashCode(underlying)
 
   object Hash:
     val Size: Int = 32
 
     def apply(bytes: Array[Byte]): Hash =
       require(bytes.length == Size, s"Hash must be $Size bytes, got ${bytes.length}")
-      bytes.clone()
+      new Hash(bytes.clone())
 
-    def zero: Hash = new Array[Byte](Size)
+    def zero: Hash = new Hash(new Array[Byte](Size))
 
     def fromHex(hex: String): Either[String, Hash] =
       if hex.length != Size * 2 then
@@ -37,105 +47,106 @@ object primitives:
       else
         try
           val bytes = hex.grouped(2).map(Integer.parseInt(_, 16).toByte).toArray
-          Right(bytes)
+          Right(new Hash(bytes))
         catch
           case _: NumberFormatException => Left("Invalid hex string")
-
-  extension (h: Hash)
-    def bytes: Array[Byte] = h.clone()
-    def toHex: String = h.map(b => f"${b & 0xff}%02x").mkString
-    def size: Int = h.length
 
   // ══════════════════════════════════════════════════════════════════════════
   // Bandersnatch Types
   // ══════════════════════════════════════════════════════════════════════════
 
   /** Bandersnatch public key (32 bytes) */
-  opaque type BandersnatchPublicKey = Array[Byte]
+  final case class BandersnatchPublicKey private (private val underlying: Array[Byte]):
+    def bytes: Array[Byte] = underlying.clone()
+    override def equals(obj: Any): Boolean = obj match
+      case that: BandersnatchPublicKey => java.util.Arrays.equals(this.underlying, that.underlying)
+      case _ => false
+    override def hashCode(): Int = java.util.Arrays.hashCode(underlying)
 
   object BandersnatchPublicKey:
     val Size: Int = 32
     def apply(bytes: Array[Byte]): BandersnatchPublicKey =
       require(bytes.length == Size)
-      bytes.clone()
-    def zero: BandersnatchPublicKey = new Array[Byte](Size)
-
-  extension (pk: BandersnatchPublicKey)
-    @targetName("bandersnatchPublicKeyBytes")
-    def bytes: Array[Byte] = pk.clone()
+      new BandersnatchPublicKey(bytes.clone())
+    def zero: BandersnatchPublicKey = new BandersnatchPublicKey(new Array[Byte](Size))
 
   /** Bandersnatch signature (96 bytes) */
-  opaque type BandersnatchSignature = Array[Byte]
+  final case class BandersnatchSignature private (private val underlying: Array[Byte]):
+    def bytes: Array[Byte] = underlying.clone()
+    override def equals(obj: Any): Boolean = obj match
+      case that: BandersnatchSignature => java.util.Arrays.equals(this.underlying, that.underlying)
+      case _ => false
+    override def hashCode(): Int = java.util.Arrays.hashCode(underlying)
 
   object BandersnatchSignature:
     val Size: Int = 96
     def apply(bytes: Array[Byte]): BandersnatchSignature =
       require(bytes.length == Size)
-      bytes.clone()
-
-  extension (sig: BandersnatchSignature)
-    @targetName("bandersnatchSignatureBytes")
-    def bytes: Array[Byte] = sig.clone()
+      new BandersnatchSignature(bytes.clone())
 
   // ══════════════════════════════════════════════════════════════════════════
   // Ed25519 Types
   // ══════════════════════════════════════════════════════════════════════════
 
   /** Ed25519 public key (32 bytes) */
-  opaque type Ed25519PublicKey = Array[Byte]
+  final case class Ed25519PublicKey private (private val underlying: Array[Byte]):
+    def bytes: Array[Byte] = underlying.clone()
+    override def equals(obj: Any): Boolean = obj match
+      case that: Ed25519PublicKey => java.util.Arrays.equals(this.underlying, that.underlying)
+      case _ => false
+    override def hashCode(): Int = java.util.Arrays.hashCode(underlying)
 
   object Ed25519PublicKey:
     val Size: Int = 32
     def apply(bytes: Array[Byte]): Ed25519PublicKey =
       require(bytes.length == Size)
-      bytes.clone()
-
-  extension (pk: Ed25519PublicKey)
-    @targetName("ed25519PublicKeyBytes")
-    def bytes: Array[Byte] = pk.clone()
+      new Ed25519PublicKey(bytes.clone())
 
   /** Ed25519 signature (64 bytes) */
-  opaque type Ed25519Signature = Array[Byte]
+  final case class Ed25519Signature private (private val underlying: Array[Byte]):
+    def bytes: Array[Byte] = underlying.clone()
+    override def equals(obj: Any): Boolean = obj match
+      case that: Ed25519Signature => java.util.Arrays.equals(this.underlying, that.underlying)
+      case _ => false
+    override def hashCode(): Int = java.util.Arrays.hashCode(underlying)
 
   object Ed25519Signature:
     val Size: Int = 64
     def apply(bytes: Array[Byte]): Ed25519Signature =
       require(bytes.length == Size)
-      bytes.clone()
-
-  extension (sig: Ed25519Signature)
-    @targetName("ed25519SignatureBytes")
-    def bytes: Array[Byte] = sig.clone()
+      new Ed25519Signature(bytes.clone())
 
   // ══════════════════════════════════════════════════════════════════════════
   // BLS Types
   // ══════════════════════════════════════════════════════════════════════════
 
   /** BLS public key (144 bytes) */
-  opaque type BlsPublicKey = Array[Byte]
+  final case class BlsPublicKey private (private val underlying: Array[Byte]):
+    def bytes: Array[Byte] = underlying.clone()
+    override def equals(obj: Any): Boolean = obj match
+      case that: BlsPublicKey => java.util.Arrays.equals(this.underlying, that.underlying)
+      case _ => false
+    override def hashCode(): Int = java.util.Arrays.hashCode(underlying)
 
   object BlsPublicKey:
     val Size: Int = 144
     def apply(bytes: Array[Byte]): BlsPublicKey =
       require(bytes.length == Size)
-      bytes.clone()
-
-  extension (pk: BlsPublicKey)
-    @targetName("blsPublicKeyBytes")
-    def bytes: Array[Byte] = pk.clone()
+      new BlsPublicKey(bytes.clone())
 
   /** BLS signature (48 bytes) */
-  opaque type BlsSignature = Array[Byte]
+  final case class BlsSignature private (private val underlying: Array[Byte]):
+    def bytes: Array[Byte] = underlying.clone()
+    override def equals(obj: Any): Boolean = obj match
+      case that: BlsSignature => java.util.Arrays.equals(this.underlying, that.underlying)
+      case _ => false
+    override def hashCode(): Int = java.util.Arrays.hashCode(underlying)
 
   object BlsSignature:
     val Size: Int = 48
     def apply(bytes: Array[Byte]): BlsSignature =
       require(bytes.length == Size)
-      bytes.clone()
-
-  extension (sig: BlsSignature)
-    @targetName("blsSignatureBytes")
-    def bytes: Array[Byte] = sig.clone()
+      new BlsSignature(bytes.clone())
 
   // ══════════════════════════════════════════════════════════════════════════
   // Protocol Identifiers
