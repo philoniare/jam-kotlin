@@ -146,7 +146,7 @@ object work:
     given Decoder[Vote] = Decoder.instance { cursor =>
       for
         vote <- cursor.get[Boolean]("vote")
-        validatorIndex <- cursor.get[Int]("validator_index")
+        validatorIndex <- cursor.get[Int]("index")
         signature <- cursor.get[String]("signature")
       yield Vote(vote, ValidatorIndex(validatorIndex), Ed25519Signature(parseHex(signature)))
     }

@@ -2,6 +2,7 @@ package io.forge.jam.core
 
 import scala.annotation.targetName
 import spire.math.{UByte, UShort, UInt, ULong}
+import io.forge.jam.core.codec.{JamEncoder, JamDecoder}
 
 /**
  * Core primitive types for JAM using Spire unsigned types.
@@ -50,6 +51,13 @@ object primitives:
           Right(new Hash(bytes))
         catch
           case _: NumberFormatException => Left("Invalid hex string")
+
+    given JamEncoder[Hash] with
+      def encode(a: Hash): JamBytes = JamBytes(a.bytes)
+
+    given JamDecoder[Hash] with
+      def decode(bytes: JamBytes, offset: Int): (Hash, Int) =
+        (Hash(bytes.toArray.slice(offset, offset + Size)), Size)
 
   // ══════════════════════════════════════════════════════════════════════════
   // Bandersnatch Types
@@ -101,6 +109,13 @@ object primitives:
     def apply(bytes: Array[Byte]): Ed25519PublicKey =
       require(bytes.length == Size)
       new Ed25519PublicKey(bytes.clone())
+
+    given JamEncoder[Ed25519PublicKey] with
+      def encode(a: Ed25519PublicKey): JamBytes = JamBytes(a.bytes)
+
+    given JamDecoder[Ed25519PublicKey] with
+      def decode(bytes: JamBytes, offset: Int): (Ed25519PublicKey, Int) =
+        (Ed25519PublicKey(bytes.toArray.slice(offset, offset + Size)), Size)
 
   /** Ed25519 signature (64 bytes) */
   final case class Ed25519Signature private (private val underlying: Array[Byte]):

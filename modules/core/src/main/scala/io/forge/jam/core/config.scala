@@ -39,6 +39,9 @@ final case class ChainConfig(
   /** Supermajority threshold: strictly more than 2/3 of validators */
   val superMajority: Int = (2 * validatorCount) / 3
 
+  /** One-third threshold */
+  val oneThird: Int = validatorCount / 3
+
 object ChainConfig:
   /**
    * Tiny configuration for fast testing with 6 validators.
