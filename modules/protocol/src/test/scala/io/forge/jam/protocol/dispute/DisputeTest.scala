@@ -10,7 +10,7 @@ import io.forge.jam.core.types.dispute.{Culprit, Fault}
 import io.forge.jam.core.types.work.Vote
 import io.forge.jam.protocol.TestFileLoader
 import io.forge.jam.core.types.epoch.ValidatorKey
-import io.forge.jam.protocol.assurance.AssuranceTypes.AvailabilityAssignment
+import io.forge.jam.core.types.workpackage.AvailabilityAssignment
 import io.forge.jam.protocol.dispute.DisputeTypes.*
 import io.forge.jam.protocol.dispute.DisputeTransition
 

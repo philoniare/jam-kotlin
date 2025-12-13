@@ -9,7 +9,7 @@ import io.forge.jam.core.primitives.{Hash, BandersnatchPublicKey, Ed25519PublicK
 import io.forge.jam.core.types.epoch.ValidatorKey
 import io.forge.jam.core.types.extrinsic.AssuranceExtrinsic
 import io.forge.jam.core.types.work.PackageSpec
-import io.forge.jam.core.types.workpackage.WorkReport
+import io.forge.jam.core.types.workpackage.{WorkReport, AvailabilityAssignment}
 import io.forge.jam.core.types.context.Context
 import io.forge.jam.core.types.workresult.{WorkResult, RefineLoad}
 import io.forge.jam.core.types.work.ExecutionResult

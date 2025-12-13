@@ -97,12 +97,32 @@ object constants:
   
   /** Hash size in bytes (Blake2b-256) */
   val HashSize: Int = 32
-  
+
   /** Bandersnatch public key size */
   val BandersnatchKeySize: Int = 32
-  
+
   /** Ed25519 public key size */
   val Ed25519KeySize: Int = 32
-  
+
   /** BLS public key size */
   val BlsKeySize: Int = 144
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Signature Prefixes (for Ed25519 message signing)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /** Prefix for guarantee signatures (work report guarantees) */
+  val JAM_GUARANTEE: String = "jam_guarantee"
+  val JAM_GUARANTEE_BYTES: Array[Byte] = JAM_GUARANTEE.getBytes("UTF-8")
+
+  /** Prefix for availability assurance signatures */
+  val JAM_AVAILABLE: String = "jam_available"
+  val JAM_AVAILABLE_BYTES: Array[Byte] = JAM_AVAILABLE.getBytes("UTF-8")
+
+  /** Prefix for valid vote signatures (disputes) */
+  val JAM_VALID: String = "jam_valid"
+  val JAM_VALID_BYTES: Array[Byte] = JAM_VALID.getBytes("UTF-8")
+
+  /** Prefix for invalid vote signatures (disputes) */
+  val JAM_INVALID: String = "jam_invalid"
+  val JAM_INVALID_BYTES: Array[Byte] = JAM_INVALID.getBytes("UTF-8")

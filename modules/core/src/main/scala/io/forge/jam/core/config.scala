@@ -31,7 +31,13 @@ final case class ChainConfig(
     /** Minimum public service index */
     minPublicServiceIndex: Long = 1L << 16,
     /** Assurance timeout period in slots */
-    assuranceTimeoutPeriod: Int = 5
+    assuranceTimeoutPeriod: Int = 5,
+    /** Maximum age of lookup anchor in slots */
+    maxLookupAnchorAge: Long = 14_000L,
+    /** Maximum number of dependencies per work report */
+    maxDependencies: Int = 8,
+    /** Maximum accumulation gas per work report */
+    maxAccumulationGas: Long = 10_000_000L
 ):
   /** Votes per verdict (2/3 * validators + 1 for supermajority) */
   val votesPerVerdict: Int = (2 * validatorCount / 3) + 1

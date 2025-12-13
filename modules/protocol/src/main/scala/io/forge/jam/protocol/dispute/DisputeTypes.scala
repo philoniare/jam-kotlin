@@ -5,8 +5,8 @@ import io.forge.jam.core.codec.{JamEncoder, JamDecoder, encode, decodeAs}
 import io.forge.jam.core.primitives.{Hash, Ed25519PublicKey, Ed25519Signature}
 import io.forge.jam.core.types.extrinsic.Dispute
 import io.forge.jam.core.types.epoch.ValidatorKey
+import io.forge.jam.core.types.workpackage.AvailabilityAssignment
 import io.forge.jam.core.json.JsonHelpers.parseHex
-import io.forge.jam.protocol.assurance.AssuranceTypes.AvailabilityAssignment
 import io.circe.Decoder
 import spire.math.UInt
 

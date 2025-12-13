@@ -1,11 +1,11 @@
 package io.forge.jam.protocol.history
 
 import io.forge.jam.core.{JamBytes, codec, ChainConfig, constants}
-import io.forge.jam.core.codec.{JamEncoder, JamDecoder}
+import io.forge.jam.core.codec.{JamEncoder, JamDecoder, encode, decodeAs}
 import io.forge.jam.core.primitives.Hash
-import io.circe.Decoder
+import io.forge.jam.core.types.history.{ReportedWorkPackage, HistoricalBeta, HistoricalMmr, HistoricalBetaContainer}
 import io.forge.jam.core.json.JsonHelpers.parseHash
-import io.forge.jam.protocol.common.SharedTypes.ReportedWorkPackage
+import io.circe.Decoder
 
 /**
  * Types for the History State Transition Function.
@@ -13,160 +13,11 @@ import io.forge.jam.protocol.common.SharedTypes.ReportedWorkPackage
  * for efficient beefy root calculation.
  */
 object HistoryTypes:
-  export io.forge.jam.protocol.common.SharedTypes.ReportedWorkPackage
-
-  /**
-   * Historical block entry containing header hash, beefy root, state root,
-   * and reported work packages.
-   */
-  final case class HistoricalBeta(
-    headerHash: Hash,
-    beefyRoot: Hash,
-    stateRoot: Hash,
-    reported: List[ReportedWorkPackage]
-  )
-
-  object HistoricalBeta:
-    given JamEncoder[HistoricalBeta] with
-      def encode(a: HistoricalBeta): JamBytes =
-        val builder = JamBytes.newBuilder
-        builder ++= a.headerHash.bytes
-        builder ++= a.beefyRoot.bytes
-        builder ++= a.stateRoot.bytes
-        builder ++= codec.encodeCompactInteger(a.reported.length.toLong)
-        for pkg <- a.reported do
-          builder ++= summon[JamEncoder[ReportedWorkPackage]].encode(pkg)
-        builder.result()
-
-    given JamDecoder[HistoricalBeta] with
-      def decode(bytes: JamBytes, offset: Int): (HistoricalBeta, Int) =
-        val arr = bytes.toArray
-        var pos = offset
-        val headerHash = Hash(arr.slice(pos, pos + Hash.Size))
-        pos += Hash.Size
-        val beefyRoot = Hash(arr.slice(pos, pos + Hash.Size))
-        pos += Hash.Size
-        val stateRoot = Hash(arr.slice(pos, pos + Hash.Size))
-        pos += Hash.Size
-        val (reportedLength, reportedLengthBytes) = codec.decodeCompactInteger(arr, pos)
-        pos += reportedLengthBytes
-        val reported = (0 until reportedLength.toInt).map { _ =>
-          val (pkg, consumed) = summon[JamDecoder[ReportedWorkPackage]].decode(bytes, pos)
-          pos += consumed
-          pkg
-        }.toList
-        (HistoricalBeta(headerHash, beefyRoot, stateRoot, reported), pos - offset)
-
-    given Decoder[HistoricalBeta] =
-      Decoder.instance { cursor =>
-        for
-          headerHashHex <- cursor.get[String]("header_hash")
-          beefyRootHex <- cursor.get[String]("beefy_root")
-          stateRootHex <- cursor.get[String]("state_root")
-          reported <- cursor.get[List[ReportedWorkPackage]]("reported")
-          headerHash <- parseHash(headerHashHex)
-          beefyRoot <- parseHash(beefyRootHex)
-          stateRoot <- parseHash(stateRootHex)
-        yield HistoricalBeta(headerHash, beefyRoot, stateRoot, reported)
-      }
-
-  /**
-   * Merkle Mountain Range (MMR) with optional peaks.
-   * Peaks are ordered by tree height, with None representing empty positions.
-   */
-  final case class HistoricalMmr(
-    peaks: List[Option[Hash]]
-  )
-
-  object HistoricalMmr:
-    val empty: HistoricalMmr = HistoricalMmr(List.empty)
-
-    given JamEncoder[HistoricalMmr] with
-      def encode(a: HistoricalMmr): JamBytes =
-        val builder = JamBytes.newBuilder
-        builder ++= codec.encodeCompactInteger(a.peaks.length.toLong)
-        for peak <- a.peaks do
-          peak match
-            case None =>
-              builder += 0.toByte
-            case Some(hash) =>
-              builder += 1.toByte
-              builder ++= hash.bytes
-        builder.result()
-
-    given JamDecoder[HistoricalMmr] with
-      def decode(bytes: JamBytes, offset: Int): (HistoricalMmr, Int) =
-        val arr = bytes.toArray
-        var pos = offset
-        val (length, lengthBytes) = codec.decodeCompactInteger(arr, pos)
-        pos += lengthBytes
-        val peaks = (0 until length.toInt).map { _ =>
-          val optionByte = arr(pos).toInt & 0xFF
-          pos += 1
-          if optionByte == 0 then
-            None
-          else
-            val hash = Hash(arr.slice(pos, pos + Hash.Size))
-            pos += Hash.Size
-            Some(hash)
-        }.toList
-        (HistoricalMmr(peaks), pos - offset)
-
-    given Decoder[HistoricalMmr] =
-      Decoder.instance { cursor =>
-        cursor.get[List[Option[String]]]("peaks").flatMap { peaksOpt =>
-          val peaksResult = peaksOpt.map {
-            case None => Right(None)
-            case Some(hex) => parseHash(hex).map(Some(_))
-          }
-          val (errors, successes) = peaksResult.partitionMap(identity)
-          if errors.nonEmpty then
-            Left(io.circe.DecodingFailure(errors.head.message, cursor.history))
-          else
-            Right(HistoricalMmr(successes))
-        }
-      }
-
-  /**
-   * Container for historical beta entries and MMR.
-   */
-  final case class HistoricalBetaContainer(
-    history: List[HistoricalBeta] = List.empty,
-    mmr: HistoricalMmr = HistoricalMmr.empty
-  )
-
-  object HistoricalBetaContainer:
-    given JamEncoder[HistoricalBetaContainer] with
-      def encode(a: HistoricalBetaContainer): JamBytes =
-        val builder = JamBytes.newBuilder
-        builder ++= codec.encodeCompactInteger(a.history.length.toLong)
-        for beta <- a.history do
-          builder ++= summon[JamEncoder[HistoricalBeta]].encode(beta)
-        builder ++= summon[JamEncoder[HistoricalMmr]].encode(a.mmr)
-        builder.result()
-
-    given JamDecoder[HistoricalBetaContainer] with
-      def decode(bytes: JamBytes, offset: Int): (HistoricalBetaContainer, Int) =
-        val arr = bytes.toArray
-        var pos = offset
-        val (historyLength, historyLengthBytes) = codec.decodeCompactInteger(arr, pos)
-        pos += historyLengthBytes
-        val history = (0 until historyLength.toInt).map { _ =>
-          val (beta, consumed) = summon[JamDecoder[HistoricalBeta]].decode(bytes, pos)
-          pos += consumed
-          beta
-        }.toList
-        val (mmr, mmrBytes) = summon[JamDecoder[HistoricalMmr]].decode(bytes, pos)
-        pos += mmrBytes
-        (HistoricalBetaContainer(history, mmr), pos - offset)
-
-    given Decoder[HistoricalBetaContainer] =
-      Decoder.instance { cursor =>
-        for
-          history <- cursor.get[List[HistoricalBeta]]("history")
-          mmr <- cursor.get[HistoricalMmr]("mmr")
-        yield HistoricalBetaContainer(history, mmr)
-      }
+  // Re-export core types for backward compatibility
+  export io.forge.jam.core.types.history.ReportedWorkPackage
+  export io.forge.jam.core.types.history.HistoricalBeta
+  export io.forge.jam.core.types.history.HistoricalMmr
+  export io.forge.jam.core.types.history.HistoricalBetaContainer
 
   /**
    * Historical state containing the beta container.

@@ -260,3 +260,37 @@ object workpackage:
         results
       )
     }
+
+  /**
+   * Availability assignment for a core.
+   * Contains a work report and a timeout slot.
+   */
+  final case class AvailabilityAssignment(
+    report: WorkReport,
+    timeout: Long
+  )
+
+  object AvailabilityAssignment:
+    given JamEncoder[AvailabilityAssignment] with
+      def encode(a: AvailabilityAssignment): JamBytes =
+        val builder = JamBytes.newBuilder
+        builder ++= a.report.encode
+        builder ++= codec.encodeU32LE(UInt(a.timeout.toInt))
+        builder.result()
+
+    given JamDecoder[AvailabilityAssignment] with
+      def decode(bytes: JamBytes, offset: Int): (AvailabilityAssignment, Int) =
+        var pos = offset
+        val (report, reportBytes) = bytes.decodeAs[WorkReport](pos)
+        pos += reportBytes
+        val timeout = codec.decodeU32LE(bytes.toArray, pos).toLong
+        pos += 4
+        (AvailabilityAssignment(report, timeout), pos - offset)
+
+    given Decoder[AvailabilityAssignment] =
+      Decoder.instance { cursor =>
+        for
+          report <- cursor.get[WorkReport]("report")
+          timeout <- cursor.get[Long]("timeout")
+        yield AvailabilityAssignment(report, timeout)
+      }

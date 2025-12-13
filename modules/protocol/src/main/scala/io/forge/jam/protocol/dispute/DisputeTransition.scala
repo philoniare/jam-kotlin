@@ -1,15 +1,14 @@
 package io.forge.jam.protocol.dispute
 
-import io.forge.jam.core.{ChainConfig, Hashing}
+import io.forge.jam.core.{ChainConfig, Hashing, constants}
 import io.forge.jam.core.JamBytes.compareUnsigned
 import io.forge.jam.core.primitives.{Hash, Ed25519PublicKey, Ed25519Signature, Timeslot}
 import io.forge.jam.core.types.extrinsic.{Dispute, Verdict}
 import io.forge.jam.core.types.dispute.{Culprit, Fault}
 import io.forge.jam.core.types.work.Vote
 import io.forge.jam.core.types.epoch.ValidatorKey
-import io.forge.jam.protocol.assurance.AssuranceTypes.AvailabilityAssignment
 import io.forge.jam.protocol.dispute.DisputeTypes.*
-import io.forge.jam.core.types.workpackage.WorkReport
+import io.forge.jam.core.types.workpackage.{WorkReport, AvailabilityAssignment}
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
 import org.bouncycastle.crypto.signers.Ed25519Signer
 
@@ -28,10 +27,6 @@ import org.bouncycastle.crypto.signers.Ed25519Signer
  * - Maintain sorted/unique ordering requirements
  */
 object DisputeTransition:
-
-  private val JAM_VALID = "jam_valid"
-  private val JAM_INVALID = "jam_invalid"
-  private val JAM_GUARANTEE = "jam_guarantee"
 
   /**
    * Verify Ed25519 signature on a message.
@@ -177,8 +172,8 @@ object DisputeTransition:
           return Some(DisputeErrorCode.BadSignature)
 
         val validator = validatorSet(vote.validatorIndex.toInt)
-        val prefix = if vote.vote then JAM_VALID else JAM_INVALID
-        val message = prefix.getBytes("UTF-8") ++ verdict.target.bytes
+        val prefixBytes = if vote.vote then constants.JAM_VALID_BYTES else constants.JAM_INVALID_BYTES
+        val message = prefixBytes ++ verdict.target.bytes
 
         if !verifyEd25519Signature(validator.ed25519, message, vote.signature) then
           return Some(DisputeErrorCode.BadSignature)
@@ -224,7 +219,7 @@ object DisputeTransition:
       if !validGuarantorKeys.exists(k => java.util.Arrays.equals(k.bytes, culprit.key.bytes)) then
         return Some(DisputeErrorCode.BadGuarantorKey)
 
-      val message = JAM_GUARANTEE.getBytes("UTF-8") ++ culprit.target.bytes
+      val message = constants.JAM_GUARANTEE_BYTES ++ culprit.target.bytes
 
       // Verify culprit signature
       if !verifyEd25519Signature(culprit.key, message, culprit.signature) then
@@ -254,8 +249,8 @@ object DisputeTransition:
       if state.psi.offenders.exists(k => java.util.Arrays.equals(k.bytes, fault.key.bytes)) then
         return Some(DisputeErrorCode.OffenderAlreadyReported)
 
-      val prefix = if fault.vote then JAM_VALID else JAM_INVALID
-      val message = prefix.getBytes("UTF-8") ++ fault.target.bytes
+      val prefixBytes = if fault.vote then constants.JAM_VALID_BYTES else constants.JAM_INVALID_BYTES
+      val message = prefixBytes ++ fault.target.bytes
 
       if !verifyEd25519Signature(fault.key, message, fault.signature) then
         return Some(DisputeErrorCode.BadSignature)

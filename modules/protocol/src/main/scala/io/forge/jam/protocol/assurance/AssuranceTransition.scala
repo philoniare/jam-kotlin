@@ -1,6 +1,6 @@
 package io.forge.jam.protocol.assurance
 
-import io.forge.jam.core.{ChainConfig, JamBytes, Hashing}
+import io.forge.jam.core.{ChainConfig, JamBytes, Hashing, constants}
 import io.forge.jam.core.primitives.{Hash, Ed25519PublicKey, Ed25519Signature}
 import io.forge.jam.core.types.epoch.ValidatorKey
 import io.forge.jam.core.types.extrinsic.AssuranceExtrinsic
@@ -22,8 +22,6 @@ import org.bouncycastle.crypto.signers.Ed25519Signer
  * - Confirm availability when supermajority is reached
  */
 object AssuranceTransition:
-
-  private val JAM_AVAILABLE_PREFIX = "jam_available"
 
   /**
    * Check if a bit is set in a byte array at the given position.
@@ -49,7 +47,7 @@ object AssuranceTransition:
       val dataHash = Hashing.blake2b256(serializedData)
 
       // Create final message by prepending context
-      val signatureMessage = JAM_AVAILABLE_PREFIX.getBytes("UTF-8") ++ dataHash.bytes
+      val signatureMessage = constants.JAM_AVAILABLE_BYTES ++ dataHash.bytes
 
       // Verify using Ed25519
       val publicKey = new Ed25519PublicKeyParameters(validatorKey.ed25519.bytes, 0)
