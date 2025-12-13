@@ -37,7 +37,9 @@ final case class ChainConfig(
     /** Maximum number of dependencies per work report */
     maxDependencies: Int = 8,
     /** Maximum accumulation gas per work report */
-    maxAccumulationGas: Long = 10_000_000L
+    maxAccumulationGas: Long = 10_000_000L,
+    /** Ticket cutoff phase within epoch (tickets rejected when phase >= ticketCutoff) */
+    ticketCutoff: Int = 10
 ):
   /** Votes per verdict (2/3 * validators + 1 for supermajority) */
   val votesPerVerdict: Int = (2 * validatorCount / 3) + 1
@@ -64,7 +66,8 @@ object ChainConfig:
     rotationPeriod = 4,
     numEcPiecesPerSegment = 1026,
     maxBlockGas = 20_000_000L,
-    maxRefineGas = 1_000_000_000L
+    maxRefineGas = 1_000_000_000L,
+    ticketCutoff = 10
   )
 
   /**
@@ -82,5 +85,6 @@ object ChainConfig:
     rotationPeriod = 10,
     numEcPiecesPerSegment = 6,
     maxBlockGas = 3_500_000_000L,
-    maxRefineGas = 5_000_000_000L
+    maxRefineGas = 5_000_000_000L,
+    ticketCutoff = 500
   )

@@ -35,6 +35,16 @@ object epoch:
         val ed25519 = Ed25519PublicKey(arr.slice(offset + BandersnatchPublicKey.Size, offset + Size))
         (EpochValidatorKey(bandersnatch, ed25519), Size)
 
+    given Decoder[EpochValidatorKey] =
+      Decoder.instance { cursor =>
+        for
+          bandersnatchHex <- cursor.get[String]("bandersnatch")
+          ed25519Hex <- cursor.get[String]("ed25519")
+          bandersnatch <- parseHexBytesFixed(bandersnatchHex, BandersnatchPublicKey.Size).map(BandersnatchPublicKey(_))
+          ed25519 <- parseHexBytesFixed(ed25519Hex, Ed25519PublicKey.Size).map(Ed25519PublicKey(_))
+        yield EpochValidatorKey(bandersnatch, ed25519)
+      }
+
   /**
    * Epoch mark containing entropy values and validator keys.
    * Encoding: entropy (32) + ticketsEntropy (32) + validators (validatorCount * 64)
@@ -84,6 +94,17 @@ object epoch:
      */
     def fromBytes(bytes: JamBytes, offset: Int, config: ChainConfig): (EpochMark, Int) =
       decoder(config.validatorCount).decode(bytes, offset)
+
+    given Decoder[EpochMark] =
+      Decoder.instance { cursor =>
+        for
+          entropyHex <- cursor.get[String]("entropy")
+          ticketsEntropyHex <- cursor.get[String]("tickets_entropy")
+          validators <- cursor.get[List[EpochValidatorKey]]("validators")
+          entropy <- parseHexBytesFixed(entropyHex, Hash.Size).map(Hash(_))
+          ticketsEntropy <- parseHexBytesFixed(ticketsEntropyHex, Hash.Size).map(Hash(_))
+        yield EpochMark(entropy, ticketsEntropy, validators)
+      }
 
   /**
    * Full validator key containing all key material.

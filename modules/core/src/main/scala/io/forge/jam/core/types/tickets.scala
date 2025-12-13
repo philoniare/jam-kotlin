@@ -3,7 +3,7 @@ package io.forge.jam.core.types
 import io.forge.jam.core.{JamBytes, codec}
 import io.forge.jam.core.codec.{JamEncoder, JamDecoder}
 import io.forge.jam.core.primitives.Hash
-import io.forge.jam.core.json.JsonHelpers.parseHex
+import io.forge.jam.core.json.JsonHelpers.{parseHex, parseHexBytesFixed}
 import io.circe.Decoder
 import spire.math.UByte
 
@@ -74,3 +74,11 @@ object tickets:
         val id = bytes.slice(offset, offset + Hash.Size)
         val attempt = codec.decodeU8(bytes.toArray, offset + Hash.Size)
         (TicketMark(id, attempt), Size)
+
+    given Decoder[TicketMark] = Decoder.instance { cursor =>
+      for
+        idHex <- cursor.get[String]("id")
+        attempt <- cursor.get[Int]("attempt")
+        id <- parseHexBytesFixed(idHex, Hash.Size).map(JamBytes(_))
+      yield TicketMark(id, UByte(attempt))
+    }

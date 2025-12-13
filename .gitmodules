@@ -4,6 +4,6 @@
 [submodule "jamtestvectors"]
 	path = jamtestvectors
 	url = https://github.com/w3f/jamtestvectors
-[submodule "jam-vrfs/ark-ec-vrfs"]
-	path = jam-vrfs/ark-ec-vrfs
+[submodule "modules/crypto/native/ark-vrf"]
+	path = modules/crypto/native/ark-vrf
 	url = https://github.com/davxy/ark-vrf
