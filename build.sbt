@@ -130,7 +130,7 @@ lazy val pvm = (project in file("modules/pvm"))
     )
 
 lazy val protocol = (project in file("modules/protocol"))
-    .dependsOn(core, crypto)
+    .dependsOn(core, crypto, pvm)
     .settings(
         name := "jam-protocol",
         libraryDependencies ++= Seq(

@@ -4,6 +4,7 @@ import io.forge.jam.core.JamBytes.compareUnsigned
 import io.forge.jam.core.Hashing
 import io.forge.jam.core.primitives.Hash
 import io.forge.jam.core.types.extrinsic.Preimage
+import io.forge.jam.core.types.preimage.PreimageHash
 import io.forge.jam.protocol.preimage.PreimageTypes.*
 
 /**

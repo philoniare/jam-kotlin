@@ -6,6 +6,53 @@ import io.forge.jam.pvm.types.*
 import io.forge.jam.pvm.{InterruptKind, SegfaultInfo, Abi, Opcode, Instruction, MemoryResult}
 import io.forge.jam.pvm.memory.{BasicMemory, DynamicMemory}
 import io.forge.jam.pvm.program.{Program, InstructionDecoder}
+import java.io.{FileWriter, PrintWriter}
+
+/**
+ * Trace writer for PVM execution - writes standardized trace format.
+ */
+object PvmTraceWriter:
+  @volatile private var writer: Option[PrintWriter] = None
+  @volatile private var enabled: Boolean = false
+  @volatile private var targetService: Long = 0
+  @volatile private var currentService: Long = 0
+
+  def enable(filePath: String, serviceId: Long = 0): Unit =
+    synchronized {
+      writer.foreach(_.close())
+      writer = Some(new PrintWriter(new FileWriter(filePath, false)))
+      enabled = true
+      targetService = serviceId
+    }
+
+  def disable(): Unit =
+    synchronized {
+      writer.foreach(_.close())
+      writer = None
+      enabled = false
+    }
+
+  def setCurrentService(serviceId: Long): Unit =
+    currentService = serviceId
+
+  def isEnabled: Boolean = enabled && (targetService == 0 || targetService == currentService)
+
+  def trace(ic: Long, pc: Int, gas: Long, opcode: String, regs: Array[Long]): Unit =
+    if isEnabled then
+      writer.foreach { w =>
+        // Format: ic=<ic> pc=<pc> gas=<gas> op=<opcode> regs=[r0,r1,...,r12]
+        val regsStr = regs.take(13).map(r => f"$r%016x").mkString(",")
+        w.println(s"ic=$ic pc=$pc gas=$gas op=$opcode regs=[$regsStr]")
+        w.flush()
+      }
+
+  def traceHostCall(callIndex: Int, gasBefore: Long, gasAfter: Long, regs: Array[Long]): Unit =
+    if isEnabled then
+      writer.foreach { w =>
+        val regsStr = regs.take(13).map(r => f"$r%016x").mkString(",")
+        w.println(s"HOST call=$callIndex gasBefore=$gasBefore gasAfter=$gasAfter regs=[$regsStr]")
+        w.flush()
+      }
 
 /**
  * Packed target value combining jump validity and handler offset.
@@ -312,6 +359,10 @@ final class InterpretedInstance private (
   // Internal Implementation
   // ============================================================================
 
+  private var _instructionCounter: Long = 0
+  def instructionCounter: Long = _instructionCounter
+  def resetInstructionCounter(): Unit = _instructionCounter = 0
+
   private def runImpl(): InterruptKind =
     basicMemory.markDirty()
 
@@ -330,6 +381,7 @@ final class InterpretedInstance private (
     var continue = true
     while continue do
       cycleCounter += 1
+      _instructionCounter += 1
 
       if offset.signed >= compiledInstructions.size then
         // Out of range - panic
@@ -337,6 +389,11 @@ final class InterpretedInstance private (
         continue = false
       else
         val compiled = compiledInstructions(offset.signed)
+
+        // Trace BEFORE charging gas
+        if PvmTraceWriter.isEnabled then
+          val opName = compiled.instruction.opcode.toString
+          PvmTraceWriter.trace(_instructionCounter, compiled.pc.toInt, _gas, opName, regs)
 
         // Charge gas if enabled
         if gasMetering then
@@ -350,6 +407,7 @@ final class InterpretedInstance private (
           compiledOffset = offset
           _programCounter = compiled.pc
           _programCounterValid = true
+
           InstructionExecutor.execute(compiled.instruction, this, compiled.pc, compiled.nextPc) match
             case None =>
               continue = false
@@ -431,11 +489,20 @@ final class InterpretedInstance private (
     )
 
 object InterpretedInstance:
+  /**
+   * Creates an instance from a module with specific argument data.
+   * This allows reusing a cached module with different input data per execution.
+   */
+  def fromModule(module: InterpretedModule, argumentData: Array[Byte] = Array.empty, forceStepTracing: Boolean = false): InterpretedInstance =
+    val pageSize = module.memoryMap.pageSize.toLong
+    val actualRwDataLen = if module.blob.originalRwDataLen >= 0 then module.blob.originalRwDataLen else module.rwData.length
+    val pageAlignedRwDataLen = ((actualRwDataLen + pageSize - 1) / pageSize * pageSize).toInt
+    val heapEmptyPagesSize = module.heapEmptyPages.toLong * pageSize
+    val initialHeapSize = UInt((pageAlignedRwDataLen + heapEmptyPagesSize).toInt)
 
-  def fromModule(module: InterpretedModule, forceStepTracing: Boolean = false): InterpretedInstance =
     val instance = new InterpretedInstance(
       module = module,
-      basicMemory = BasicMemory.create(module.memoryMap, module.roData, module.rwData),
+      basicMemory = BasicMemory.create(module.memoryMap, module.roData, module.rwData, initialHeapSize, argumentData),
       dynamicMemory = None,
       regs = new Array[Long](Reg.Count),
       _programCounter = ProgramCounter.MaxValue,
@@ -453,7 +520,3 @@ object InterpretedInstance:
     )
     instance.compileOutOfRangeStub()
     instance
-
-  def forTest(code: Array[Byte], bitmask: Array[Byte]): InterpretedInstance =
-    val module = InterpretedModule.createForTest(code, bitmask)
-    fromModule(module)

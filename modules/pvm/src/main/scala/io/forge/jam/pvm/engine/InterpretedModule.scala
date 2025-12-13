@@ -13,6 +13,7 @@ import io.forge.jam.pvm.program.ProgramBlob
  * - Read-write data section template (rwData)
  * - Number of empty heap pages to allocate
  * - Program blob for instruction decoding
+ * - Argument data for input region
  *
  * @param roData Read-only data section, sized to match memory map
  * @param rwData Read-write data section template (copied per instance)
@@ -21,6 +22,7 @@ import io.forge.jam.pvm.program.ProgramBlob
  * @param memoryMap The memory layout configuration
  * @param codeLen Length of the code section
  * @param is64Bit Whether this is a 64-bit program
+ * @param argumentData Optional argument/input data to be placed at InputStartAddress
  */
 final class InterpretedModule private (
   val roData: Array[Byte],
@@ -29,7 +31,8 @@ final class InterpretedModule private (
   val blob: ProgramBlob,
   val memoryMap: MemoryMap,
   val codeLen: UInt,
-  val is64Bit: Boolean
+  val is64Bit: Boolean,
+  val argumentData: Array[Byte] = Array.empty
 ):
 
   /**
@@ -71,14 +74,22 @@ object InterpretedModule:
    *
    * @param blob The parsed program blob
    * @param heapPages Number of heap pages to pre-allocate (default 0)
+   * @param auxDataSize Size of auxiliary data region (default 16MB for GP stack and arguments)
+   * @param argumentData Optional argument/input data to place at InputStartAddress
    * @return Either an error message or the created module
    */
-  def create(blob: ProgramBlob, heapPages: UInt = UInt(0)): Either[String, InterpretedModule] =
+  def create(
+    blob: ProgramBlob,
+    heapPages: UInt = UInt(0),
+    auxDataSize: UInt = UInt(16908288),
+    argumentData: Array[Byte] = Array.empty
+  ): Either[String, InterpretedModule] =
     // Build memory map from program blob
     MemoryMap.builder(Abi.VmMinPageSize)
       .withRoDataSize(UInt(blob.roData.length))
       .withRwDataSize(UInt(blob.rwData.length))
       .withStackSize(UInt(blob.stackSize))
+      .withAuxDataSize(auxDataSize)
       .build() match
         case Left(err) => Left(err)
         case Right(memoryMap) =>
@@ -86,14 +97,17 @@ object InterpretedModule:
           val roData = new Array[Byte](memoryMap.roDataSize.signed)
           System.arraycopy(blob.roData, 0, roData, 0, math.min(blob.roData.length, roData.length))
 
+          // Use heapPages from blob if available, otherwise use parameter
+          val effectiveHeapPages = if blob.heapPages > 0 then UInt(blob.heapPages) else heapPages
           Right(new InterpretedModule(
             roData = roData,
             rwData = blob.rwData.clone(),
-            heapEmptyPages = heapPages,
+            heapEmptyPages = effectiveHeapPages,
             blob = blob,
             memoryMap = memoryMap,
             codeLen = UInt(blob.code.length),
-            is64Bit = blob.is64Bit
+            is64Bit = blob.is64Bit,
+            argumentData = argumentData.clone()
           ))
 
   /**

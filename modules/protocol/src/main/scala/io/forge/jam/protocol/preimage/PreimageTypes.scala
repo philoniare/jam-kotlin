@@ -4,6 +4,7 @@ import io.forge.jam.core.{JamBytes, codec}
 import io.forge.jam.core.codec.{JamEncoder, JamDecoder, encode, decodeAs}
 import io.forge.jam.core.primitives.Hash
 import io.forge.jam.core.types.extrinsic.Preimage
+import io.forge.jam.core.types.preimage.PreimageHash
 import io.forge.jam.core.json.JsonHelpers.parseHex
 import io.circe.Decoder
 import spire.math.UInt
@@ -88,43 +89,6 @@ object PreimageTypes:
           key <- cursor.get[PreimageHistoryKey]("key")
           value <- cursor.get[List[Long]]("value")
         yield PreimageHistory(key, value)
-      }
-
-  /**
-   * Preimage hash with blob data.
-   */
-  final case class PreimageHash(
-    hash: Hash,
-    blob: JamBytes
-  )
-
-  object PreimageHash:
-    given JamEncoder[PreimageHash] with
-      def encode(a: PreimageHash): JamBytes =
-        val builder = JamBytes.newBuilder
-        builder ++= a.hash.encode
-        builder ++= codec.encodeCompactInteger(a.blob.length.toLong)
-        builder ++= a.blob.toArray
-        builder.result()
-
-    given JamDecoder[PreimageHash] with
-      def decode(bytes: JamBytes, offset: Int): (PreimageHash, Int) =
-        val arr = bytes.toArray
-        var pos = offset
-        val (hash, _) = bytes.decodeAs[Hash](pos)
-        pos += Hash.Size
-        val (blobLength, blobLengthBytes) = codec.decodeCompactInteger(arr, pos)
-        pos += blobLengthBytes
-        val blob = JamBytes(arr.slice(pos, pos + blobLength.toInt))
-        pos += blobLength.toInt
-        (PreimageHash(hash, blob), pos - offset)
-
-    given Decoder[PreimageHash] =
-      Decoder.instance { cursor =>
-        for
-          hash <- cursor.get[String]("hash").map(h => Hash(parseHex(h)))
-          blob <- cursor.get[String]("blob").map(b => JamBytes(parseHex(b)))
-        yield PreimageHash(hash, blob)
       }
 
   /**

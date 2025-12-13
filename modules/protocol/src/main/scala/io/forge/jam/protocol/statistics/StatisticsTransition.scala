@@ -71,7 +71,7 @@ object StatisticsTransition:
     val postState = StatState(
       valsCurrStats = currStats.toList,
       valsLastStats = lastStats,
-      slot = preState.slot, // Note: slot in state doesn't change based on Kotlin implementation
+      slot = preState.slot,
       currValidators = preState.currValidators
     )
 

@@ -15,8 +15,14 @@ class TestFileLoader {
             if (testVectorsInCwd.exists()) {
                 testVectorsInCwd
             } else {
-                // Try parent directory (when running from a module subdirectory)
-                cwd.parentFile.resolve("jamtestvectors")
+                // Try parent directory (when running from kotlin-archive)
+                val parent = cwd.parentFile.resolve("jamtestvectors")
+                if (parent.exists()) {
+                    parent
+                } else {
+                    // Fall back to grandparent (jam/jamtestvectors from kotlin-archive subdirectory)
+                    cwd.parentFile.parentFile?.resolve("jamtestvectors") ?: parent
+                }
             }
         }
         /**

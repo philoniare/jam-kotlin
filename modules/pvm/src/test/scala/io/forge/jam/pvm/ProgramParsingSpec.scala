@@ -6,7 +6,7 @@ import io.forge.jam.pvm.program.*
 import spire.math.{UByte, UInt, ULong}
 
 /**
- * Tests for Program Binary Parsing (Task Group 3).
+ * Tests for Program Binary Parsing
  *
  * These tests verify:
  * 1. Varint decoding for small and large values
@@ -76,12 +76,12 @@ class ProgramParsingSpec extends AnyFlatSpec with Matchers:
     // - ro_data
     // - rw_data
     val minimalBlob = Array[Byte](
-      0,  // version = 0 (32-bit)
-      0,  // ro_data_size = 0
-      0,  // rw_data_size = 0
-      0,  // stack_size = 0
-      0,  // code_size = 0
-      0,  // jump_table_entry_count = 0 (no jump table entries, so no entry_size varint)
+      0, // version = 0 (32-bit)
+      0, // ro_data_size = 0
+      0, // rw_data_size = 0
+      0, // stack_size = 0
+      0, // code_size = 0
+      0 // jump_table_entry_count = 0 (no jump table entries, so no entry_size varint)
     )
 
     val result = ProgramBlob.parse(minimalBlob)
@@ -106,28 +106,26 @@ class ProgramParsingSpec extends AnyFlatSpec with Matchers:
 
   it should "parse 64-bit program header" in {
     val blob64 = Array[Byte](
-      1,  // version = 1 (64-bit)
-      0,  // ro_data_size = 0
-      0,  // rw_data_size = 0
-      0,  // stack_size = 0
-      0,  // code_size = 0
-      0,  // jump_table_entry_count = 0
+      1, // version = 1 (64-bit)
+      0, // ro_data_size = 0
+      0, // rw_data_size = 0
+      0, // stack_size = 0
+      0, // code_size = 0
+      0 // jump_table_entry_count = 0
     )
 
     val result = ProgramBlob.parse(blob64)
     result.isDefined shouldBe true
-    result.foreach { blob =>
-      blob.is64Bit shouldBe true
-    }
+    result.foreach(blob => blob.is64Bit shouldBe true)
   }
 
   // Test 3: Jump table extraction
   "JumpTable" should "extract entries correctly" in {
     // Jump table with 2-byte entries
     val jumpTableData = Array[Byte](
-      0x10, 0x00,  // Entry 0: 0x0010
-      0x20, 0x00,  // Entry 1: 0x0020
-      0x30, 0x00   // Entry 2: 0x0030
+      0x10, 0x00, // Entry 0: 0x0010
+      0x20, 0x00, // Entry 1: 0x0020
+      0x30, 0x00 // Entry 2: 0x0030
     )
 
     val jumpTable = JumpTable(jumpTableData, 2)
@@ -165,7 +163,7 @@ class ProgramParsingSpec extends AnyFlatSpec with Matchers:
   // Test 4: Bitmask parsing for basic block boundaries
   "Program.getBitForOffset" should "check bit correctly" in {
     // Bitmask: 0b10101010 0b11001100
-    val bitmask = Array[Byte](0xAA.toByte, 0xCC.toByte)
+    val bitmask = Array[Byte](0xaa.toByte, 0xcc.toByte)
     val codeLen = 16
 
     // Byte 0 = 0b10101010: bits 1,3,5,7 are set
@@ -209,10 +207,12 @@ class ProgramParsingSpec extends AnyFlatSpec with Matchers:
 
     // Code with Jump at offset 0 (opcode 40), then padding, then LoadImm
     val code = Array[Byte](
-      40.toByte,   // offset 0: Jump opcode
-      0, 0,        // offset 1-2: instruction args
-      51.toByte,   // offset 3: LoadImm opcode (valid jump target after Jump)
-      0, 0         // offset 4-5: args
+      40.toByte, // offset 0: Jump opcode
+      0,
+      0, // offset 1-2: instruction args
+      51.toByte, // offset 3: LoadImm opcode (valid jump target after Jump)
+      0,
+      0 // offset 4-5: args
     )
 
     // Bitmask: instructions at offsets 0 and 3
@@ -233,11 +233,15 @@ class ProgramParsingSpec extends AnyFlatSpec with Matchers:
     // Code: Add32, Add32, Jump
     // Block starts at offset 0, ends at Jump
     val code = Array[Byte](
-      190.toByte,  // offset 0: Add32
-      0, 0, 0,     // args
-      190.toByte,  // offset 4: Add32
-      0, 0, 0,     // args
-      40.toByte    // offset 8: Jump (ends block)
+      190.toByte, // offset 0: Add32
+      0,
+      0,
+      0, // args
+      190.toByte, // offset 4: Add32
+      0,
+      0,
+      0, // args
+      40.toByte // offset 8: Jump (ends block)
     )
 
     // Instructions at offsets 0, 4, 8

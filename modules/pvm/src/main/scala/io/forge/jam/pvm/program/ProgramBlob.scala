@@ -27,7 +27,9 @@ final case class ProgramBlob(
   is64Bit: Boolean,
   roData: Array[Byte],
   rwData: Array[Byte],
-  stackSize: Int
+  stackSize: Int,
+  heapPages: Int = 0,
+  originalRwDataLen: Int = -1
 ):
   /** Check if code size is within limits */
   def isCodeSizeValid: Boolean =
@@ -57,7 +59,9 @@ object ProgramBlob:
     roData: Array[Byte] = Array.empty,
     rwData: Array[Byte] = Array.empty,
     stackSize: Int = 0,
-    is64Bit: Boolean = true
+    is64Bit: Boolean = true,
+    heapPages: Int = 0,
+    originalRwDataLen: Int = -1
   ): Option[ProgramBlob] =
     if data.isEmpty then return None
 
@@ -118,7 +122,9 @@ object ProgramBlob:
       is64Bit = is64Bit,
       roData = roData,
       rwData = rwData,
-      stackSize = stackSize
+      stackSize = stackSize,
+      heapPages = heapPages,
+      originalRwDataLen = originalRwDataLen
     ))
 
   /**

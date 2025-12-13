@@ -300,7 +300,8 @@ final class BasicMemory private (
       else
         return false
 
-    // Check aux data region (GP stack portion is writable)
+    // Check aux data region (GP stack portion is writable at runtime)
+    // Input data at InputStartAddress is written at initialization, not runtime
     val gpStackLow = PvmConstants.GpStackLow.signed
     val gpStackBase = PvmConstants.GpStackBase.signed
     if addr >= gpStackLow && addr < gpStackBase then
@@ -358,14 +359,29 @@ object BasicMemory:
     )
 
   /**
-   * Creates a BasicMemory with initial RO/RW data.
+   * Creates a BasicMemory with initial RO/RW data and heap size.
+   *
+   * @param memoryMap The memory map defining the memory layout
+   * @param roData Read-only data section
+   * @param rwData Read-write data section
+   * @param initialHeapSize Initial heap size in bytes (includes page-aligned rwData + heapEmptyPages)
+   * @param argumentData Optional argument/input data to place at InputStartAddress
    */
-  def create(memoryMap: MemoryMap, roData: Array[Byte], rwData: Array[Byte]): BasicMemory =
+  def create(memoryMap: MemoryMap, roData: Array[Byte], rwData: Array[Byte], initialHeapSize: UInt = UInt(0), argumentData: Array[Byte] = Array.empty): BasicMemory =
     val pageMap = initializePageMap(memoryMap, Some(roData.length))
 
     // Copy rwData into buffer
     val rwBuffer = new Array[Byte](memoryMap.rwDataSize.signed)
     System.arraycopy(rwData, 0, rwBuffer, 0, math.min(rwData.length, rwBuffer.length))
+
+    // Create aux buffer and copy argument data to the input region
+    val auxBuffer = new Array[Byte](memoryMap.auxDataSize.signed)
+    if argumentData.nonEmpty then
+      val inputStartAddress = PvmConstants.InputStartAddress.toLong
+      val auxStartAddress = memoryMap.auxDataAddress.toLong
+      val offset = (inputStartAddress - auxStartAddress).toInt
+      if offset >= 0 && offset + argumentData.length <= auxBuffer.length then
+        System.arraycopy(argumentData, 0, auxBuffer, offset, argumentData.length)
 
     new BasicMemory(
       _pageMap = pageMap,
@@ -373,8 +389,8 @@ object BasicMemory:
       roData = roData,
       rwData = rwBuffer,
       stack = new Array[Byte](memoryMap.stackSize.signed),
-      aux = new Array[Byte](memoryMap.auxDataSize.signed),
-      _heapSize = UInt(0),
+      aux = auxBuffer,
+      _heapSize = initialHeapSize,
       isDirty = false
     )
 
