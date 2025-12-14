@@ -254,8 +254,11 @@ final case class FullJamState(
       encodedAuthPools
     )
 
-    // Authorization queues (0x02) - pass through original if available
-    otherByPrefix.get(StateKeys.AUTHORIZATION_QUEUE.toInt & 0xff).foreach(kvs => builder ++= kvs)
+    // Authorization queues (0x02) - always re-encode (modified by Authorization STF)
+    builder += KeyValue(
+      StateKeys.simpleKey(StateKeys.AUTHORIZATION_QUEUE),
+      encodeAuthQueues(authQueues)
+    )
 
     // Recent history (0x03) - always re-encode (modified by History STF)
     builder += KeyValue(
@@ -263,15 +266,12 @@ final case class FullJamState(
       encodeRecentHistory(recentHistory)
     )
 
-    // Safrole gamma state (0x04) - use original if available and unchanged, else re-encode
+    // Safrole gamma state (0x04) - always re-encode (modified by Safrole STF at epoch boundaries)
     val safroleKey = StateKeys.simpleKey(StateKeys.SAFROLE_STATE)
-    originalKeyvals.get(safroleKey) match
-      case Some(kv) => builder += kv
-      case None =>
-        builder += KeyValue(
-          safroleKey,
-          encodeSafroleGammaState(safroleGammaK, safroleGammaZ, safroleGammaS, safroleGammaA, config)
-        )
+    builder += KeyValue(
+      safroleKey,
+      encodeSafroleGammaState(safroleGammaK, safroleGammaZ, safroleGammaS, safroleGammaA, config)
+    )
 
     // Judgements (0x05) - pass through original if available
     otherByPrefix.get(StateKeys.JUDGEMENTS.toInt & 0xff).foreach(kvs => builder ++= kvs)
@@ -282,35 +282,23 @@ final case class FullJamState(
       encodeEntropyPool(entropyPool)
     )
 
-    // Validator queue (0x07) - use original if available
-    val validatorQueueKey = StateKeys.simpleKey(StateKeys.VALIDATOR_QUEUE)
-    originalKeyvals.get(validatorQueueKey) match
-      case Some(kv) => builder += kv
-      case None =>
-        builder += KeyValue(
-          validatorQueueKey,
-          encodeValidatorList(validatorQueue)
-        )
+    // Validator queue (0x07) - always re-encode (rotated by Safrole STF at epoch boundaries)
+    builder += KeyValue(
+      StateKeys.simpleKey(StateKeys.VALIDATOR_QUEUE),
+      encodeValidatorList(validatorQueue)
+    )
 
-    // Current validators (0x08) - use original if available
-    val currentValidatorsKey = StateKeys.simpleKey(StateKeys.CURRENT_VALIDATORS)
-    originalKeyvals.get(currentValidatorsKey) match
-      case Some(kv) => builder += kv
-      case None =>
-        builder += KeyValue(
-          currentValidatorsKey,
-          encodeValidatorList(currentValidators)
-        )
+    // Current validators (0x08) - always re-encode (rotated by Safrole STF at epoch boundaries)
+    builder += KeyValue(
+      StateKeys.simpleKey(StateKeys.CURRENT_VALIDATORS),
+      encodeValidatorList(currentValidators)
+    )
 
-    // Previous validators (0x09) - use original if available
-    val previousValidatorsKey = StateKeys.simpleKey(StateKeys.PREVIOUS_VALIDATORS)
-    originalKeyvals.get(previousValidatorsKey) match
-      case Some(kv) => builder += kv
-      case None =>
-        builder += KeyValue(
-          previousValidatorsKey,
-          encodeValidatorList(previousValidators)
-        )
+    // Previous validators (0x09) - always re-encode (rotated by Safrole STF at epoch boundaries)
+    builder += KeyValue(
+      StateKeys.simpleKey(StateKeys.PREVIOUS_VALIDATORS),
+      encodeValidatorList(previousValidators)
+    )
 
     // Reports (0x0A) - always re-encode (modified by Reports STF)
     val paddedReports = reports.padTo(config.coresCount, None)
@@ -337,25 +325,35 @@ final case class FullJamState(
     // Accumulation queue (0x0E) - pass through original if available
     otherByPrefix.get(StateKeys.ACCUMULATION_QUEUE.toInt & 0xff).foreach(kvs => builder ++= kvs)
 
-    // Accumulation history (0x0F) - pass through original if available
-    otherByPrefix.get(StateKeys.ACCUMULATION_HISTORY.toInt & 0xff).foreach(kvs => builder ++= kvs)
+    // Accumulation history (0x0F) - always re-encode (modified by Accumulation STF)
+    builder += KeyValue(
+      StateKeys.simpleKey(StateKeys.ACCUMULATION_HISTORY),
+      encodeAccumulationHistory(accumulationHistory)
+    )
 
     // Last accumulation outputs (0x10) - pass through original if available
     otherByPrefix.get(StateKeys.LAST_ACCUMULATION_OUTPUTS.toInt & 0xff).foreach(kvs => builder ++= kvs)
 
-    // Service accounts (0xFF) - use original keyvals if available for each service
+    // Service accounts (0xFF) - always encode current state (not original)
+    // because account info (bytesUsed, items) can change during accumulation
     for item <- serviceAccounts do
       val serviceKey = encodeServiceAccountKey(item.id)
-      originalKeyvals.get(serviceKey) match
-        case Some(kv) => builder += kv
-        case None =>
-          builder += KeyValue(
-            serviceKey,
-            encodeServiceInfo(item.data.service)
-          )
+      builder += KeyValue(
+        serviceKey,
+        encodeServiceInfo(item.data.service)
+      )
 
-    // Add remaining otherKeyvals (prefix 0x00 service data keys)
-    builder ++= otherKeyvals.filter(kv => (kv.key.toArray(0).toInt & 0xff) == 0)
+    // Service storage data (prefix 0x00) - use ONLY rawServiceDataByStateKey as source of truth
+    // Keys deleted during accumulation (via WRITE with valueLen=0) are removed from this map
+    // so we should NOT preserve original keys - they may have been intentionally deleted
+    val storageDataByKey = rawServiceDataByStateKey.filter {
+      case (key, _) =>
+        (key.toArray(0).toInt & 0xff) == 0
+    }
+
+    // Add storage keyvals from accumulation state (only 0x00 prefix)
+    for (key, value) <- storageDataByKey.toList.sortBy(_._1.toHex) do
+      builder += KeyValue(key, value)
 
     builder.toList
 
@@ -602,8 +600,8 @@ final case class FullJamState(
       builder ++= codec.encodeCompactInteger(entry.record.accumulateCount)
       builder ++= codec.encodeCompactInteger(entry.record.accumulateGasUsed)
       // transfers: count + gas (both compact)
-      builder ++= codec.encodeCompactInteger(0L) // transfers count
-      builder ++= codec.encodeCompactInteger(0L) // transfers gas
+      builder ++= codec.encodeCompactInteger(entry.record.transferCount)
+      builder ++= codec.encodeCompactInteger(entry.record.transferGasUsed)
 
     builder.result()
 
@@ -680,18 +678,32 @@ object FullJamState:
     // Decode service accounts from keyvals
     val serviceAccounts = decodeServiceAccounts(keyvals)
 
+    // rawServiceDataByStateKey should only contain 0x00 prefix storage data
+    // This is used by accumulation to track storage writes
     val rawServiceDataByStateKey: Map[JamBytes, JamBytes] = keyvals
+      .filter(kv => (kv.key.toArray(0).toInt & 0xff) == 0)
       .map(kv => kv.key -> kv.value)
       .toMap
+    println(s"[DEBUG fromKeyvals] rawServiceDataByStateKey.size=${rawServiceDataByStateKey.size}")
+    rawServiceDataByStateKey.keys.foreach(k => println(s"[DEBUG fromKeyvals] storageKey=${k.toHex.take(32)}..."))
 
     // Decode recent history from keyvals
+    val historyKv = keyvals.find(kv =>
+      (kv.key.toArray(0).toInt & 0xff) == (StateKeys.RECENT_HISTORY.toInt & 0xff)
+    )
+    historyKv.foreach(kv => println(s"[DEBUG fromKeyvals] 0x03 keyval len=${kv.value.length}"))
     val recentHistory = decodeRecentHistory(keyvals)
+    println(s"[DEBUG fromKeyvals] recentHistory.history.size=${recentHistory.history.size}")
 
     // Decode activity statistics from keyvals
     val (activityStatsCurrent, activityStatsLast, _) =
       decodeActivityStatistics(keyvals, config.validatorCount, config.coresCount)
     // Initialize empty core statistics (computed fresh each block)
     val coreStatistics = List.fill(config.coresCount)(CoreStatisticsRecord())
+
+    // Decode accumulation history from keyvals (0x0F)
+    val accumulationHistory = decodeAccumulationHistory(keyvals, config.epochLength)
+    println(s"[DEBUG fromKeyvals] accumulationHistory total hashes=${accumulationHistory.map(_.size).sum}")
 
     FullJamState(
       timeslot = safroleState.tau,
@@ -713,6 +725,7 @@ object FullJamState:
       activityStatsCurrent = activityStatsCurrent,
       activityStatsLast = activityStatsLast,
       coreStatistics = coreStatistics,
+      accumulationHistory = accumulationHistory,
       otherKeyvals = otherKvs,
       originalKeyvals = originalByKey,
       rawServiceDataByStateKey = rawServiceDataByStateKey
@@ -846,6 +859,34 @@ object FullJamState:
             pools += hashes.toList
 
         pools.toList
+
+  /**
+   * Decode accumulation history from keyvals (0x0F).
+   * Format: For each slot: compact count + N × 32-byte hashes
+   */
+  private def decodeAccumulationHistory(keyvals: List[KeyValue], epochLength: Int): List[List[JamBytes]] =
+    val historyKv = keyvals.find(kv =>
+      (kv.key.toArray(0).toInt & 0xff) == (StateKeys.ACCUMULATION_HISTORY.toInt & 0xff)
+    )
+    historyKv match
+      case None => List.fill(epochLength)(List.empty)
+      case Some(kv) =>
+        val bytes = kv.value.toArray
+        var pos = 0
+        val slots = scala.collection.mutable.ListBuffer[List[JamBytes]]()
+        for _ <- 0 until epochLength do
+          if pos < bytes.length then
+            val (count, countLen) = codec.decodeCompactInteger(bytes, pos)
+            pos += countLen
+            val hashes = scala.collection.mutable.ListBuffer[JamBytes]()
+            for _ <- 0 until count.toInt do
+              val hash = JamBytes(bytes.slice(pos, pos + Hash.Size))
+              hashes += hash
+              pos += Hash.Size
+            slots += hashes.toList
+          else
+            slots += List.empty
+        slots.toList
 
   /**
    * Decode authorization queues from keyvals (0x02).

@@ -142,7 +142,9 @@ final case class ServiceActivityRecord(
   extrinsicSize: Long = 0,
   exports: Long = 0,
   accumulateCount: Long = 0,
-  accumulateGasUsed: Long = 0
+  accumulateGasUsed: Long = 0,
+  transferCount: Long = 0,
+  transferGasUsed: Long = 0
 )
 
 object ServiceActivityRecord:
@@ -159,6 +161,8 @@ object ServiceActivityRecord:
       builder ++= codec.encodeCompactInteger(a.exports)
       builder ++= codec.encodeCompactInteger(a.accumulateCount)
       builder ++= codec.encodeCompactInteger(a.accumulateGasUsed)
+      builder ++= codec.encodeCompactInteger(a.transferCount)
+      builder ++= codec.encodeCompactInteger(a.transferGasUsed)
       builder.result()
 
   given JamDecoder[ServiceActivityRecord] with
@@ -186,10 +190,15 @@ object ServiceActivityRecord:
       pos += accumulateCountBytes
       val (accumulateGasUsed, accumulateGasUsedBytes) = codec.decodeCompactInteger(arr, pos)
       pos += accumulateGasUsedBytes
+      val (transferCount, transferCountBytes) = codec.decodeCompactInteger(arr, pos)
+      pos += transferCountBytes
+      val (transferGasUsed, transferGasUsedBytes) = codec.decodeCompactInteger(arr, pos)
+      pos += transferGasUsedBytes
 
       (ServiceActivityRecord(
         providedCount.toInt, providedSize, refinementCount, refinementGasUsed,
-        imports, extrinsicCount, extrinsicSize, exports, accumulateCount, accumulateGasUsed
+        imports, extrinsicCount, extrinsicSize, exports, accumulateCount, accumulateGasUsed,
+        transferCount, transferGasUsed
       ), pos - offset)
 
   given Decoder[ServiceActivityRecord] = Decoder.instance { cursor =>
@@ -204,9 +213,12 @@ object ServiceActivityRecord:
       exports <- cursor.getOrElse[Long]("exports")(0)
       accumulateCount <- cursor.getOrElse[Long]("accumulate_count")(0)
       accumulateGasUsed <- cursor.getOrElse[Long]("accumulate_gas_used")(0)
+      transferCount <- cursor.getOrElse[Long]("on_transfers_count")(0)
+      transferGasUsed <- cursor.getOrElse[Long]("on_transfers_gas_used")(0)
     yield ServiceActivityRecord(
       providedCount, providedSize, refinementCount, refinementGasUsed,
-      imports, extrinsicCount, extrinsicSize, exports, accumulateCount, accumulateGasUsed
+      imports, extrinsicCount, extrinsicSize, exports, accumulateCount, accumulateGasUsed,
+      transferCount, transferGasUsed
     )
   }
 
@@ -386,7 +398,7 @@ object AccumulationServiceData:
     for
       service <- cursor.get[ServiceInfo]("service")
       storage <- cursor.getOrElse[List[StorageMapEntry]]("storage")(List.empty)
-      preimages <- cursor.getOrElse[List[PreimageHash]]("preimages_blob")(List.empty)
+      preimages <- cursor.getOrElse[List[PreimageHash]]("preimages")(List.empty)
       preimagesStatus <- cursor.getOrElse[List[PreimagesStatusMapEntry]]("preimages_status")(List.empty)
     yield AccumulationServiceData(service, storage, preimages, preimagesStatus)
   }
@@ -724,10 +736,12 @@ object AccumulationInput:
  * Output from the accumulation STF.
  * @param ok The accumulation root hash
  * @param accumulationStats Per-service accumulation statistics: serviceId -> (gasUsed, workItemCount)
+ * @param transferStats Per-service transfer statistics: serviceId -> (count, gasUsed)
  */
 final case class AccumulationOutput(
   ok: JamBytes,
-  accumulationStats: Map[Long, (Long, Int)] = Map.empty
+  accumulationStats: Map[Long, (Long, Int)] = Map.empty,
+  transferStats: Map[Long, (Long, Long)] = Map.empty
 )
 
 object AccumulationOutput:

@@ -91,7 +91,9 @@ object ReportTypes:
     imports: Long = 0,
     exports: Long = 0,
     accumulateCount: Long = 0,
-    accumulateGasUsed: Long = 0
+    accumulateGasUsed: Long = 0,
+    transferCount: Long = 0,
+    transferGasUsed: Long = 0
   )
 
   object ServiceActivityRecord:
@@ -106,6 +108,8 @@ object ReportTypes:
         builder ++= codec.encodeCompactInteger(a.exports)
         builder ++= codec.encodeCompactInteger(a.accumulateCount)
         builder ++= codec.encodeCompactInteger(a.accumulateGasUsed)
+        builder ++= codec.encodeCompactInteger(a.transferCount)
+        builder ++= codec.encodeCompactInteger(a.transferGasUsed)
         builder.result()
 
     given JamDecoder[ServiceActivityRecord] with
@@ -120,8 +124,11 @@ object ReportTypes:
         val (exports, d6) = codec.decodeCompactInteger(arr, pos); pos += d6
         val (accumulateCount, d7) = codec.decodeCompactInteger(arr, pos); pos += d7
         val (accumulateGasUsed, d8) = codec.decodeCompactInteger(arr, pos); pos += d8
+        val (transferCount, d9) = codec.decodeCompactInteger(arr, pos); pos += d9
+        val (transferGasUsed, d10) = codec.decodeCompactInteger(arr, pos); pos += d10
         (ServiceActivityRecord(refinementCount, refinementGasUsed, extrinsicCount,
-          extrinsicSize, imports, exports, accumulateCount, accumulateGasUsed), pos - offset)
+          extrinsicSize, imports, exports, accumulateCount, accumulateGasUsed,
+          transferCount, transferGasUsed), pos - offset)
 
     given Decoder[ServiceActivityRecord] =
       Decoder.instance { cursor =>
@@ -132,8 +139,13 @@ object ReportTypes:
           extrinsicSize <- cursor.getOrElse[Long]("extrinsic_size")(0)
           imports <- cursor.getOrElse[Long]("imports")(0)
           exports <- cursor.getOrElse[Long]("exports")(0)
+          accumulateCount <- cursor.getOrElse[Long]("accumulate_count")(0)
+          accumulateGasUsed <- cursor.getOrElse[Long]("accumulate_gas_used")(0)
+          transferCount <- cursor.getOrElse[Long]("transfer_count")(0)
+          transferGasUsed <- cursor.getOrElse[Long]("transfer_gas_used")(0)
         yield ServiceActivityRecord(refinementCount, refinementGasUsed, extrinsicCount,
-          extrinsicSize, imports, exports)
+          extrinsicSize, imports, exports, accumulateCount, accumulateGasUsed,
+          transferCount, transferGasUsed)
       }
 
   /**

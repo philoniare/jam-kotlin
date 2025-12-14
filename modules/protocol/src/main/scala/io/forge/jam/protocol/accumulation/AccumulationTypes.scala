@@ -66,7 +66,7 @@ object AccumulationOperand:
     override def encode(): Array[Byte] =
       val op = operand
 
-      val variant = codec.encodeCompactInteger(0)
+      // val variant = codec.encodeCompactInteger(0) // Add back on v0.7.1
       val gasLimitBytes = codec.encodeCompactInteger(op.gasLimit)
       val resultBytes = op.result match
         case ExecutionResult.Ok(output) =>
@@ -76,7 +76,8 @@ object AccumulationOperand:
           Array[Byte](2) // Tag 2 for Panic (UInt8)
 
       val authTraceLen = codec.encodeCompactInteger(op.authTrace.length.toLong)
-      variant ++ op.packageHash.toArray ++ op.segmentRoot.toArray ++ op.authorizerHash.toArray ++
+      // variant ++
+      op.packageHash.toArray ++ op.segmentRoot.toArray ++ op.authorizerHash.toArray ++
         op.payloadHash.toArray ++ gasLimitBytes ++ resultBytes ++ authTraceLen ++ op.authTrace.toArray
 
   /**
@@ -223,14 +224,19 @@ object PartialState:
 enum ExitReason:
   /** Normal completion - use normal state x */
   case HALT
+
   /** Panic - use checkpoint state y */
   case PANIC
+
   /** Gas exhausted - use checkpoint state y */
   case OUT_OF_GAS
+
   /** Memory access error - use checkpoint state y */
   case PAGE_FAULT
+
   /** Awaiting host call response */
   case HOST_CALL
+
   /** Code compilation failed - use checkpoint state y */
   case INVALID_CODE
 

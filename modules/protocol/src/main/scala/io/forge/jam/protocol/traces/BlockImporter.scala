@@ -2,7 +2,9 @@ package io.forge.jam.protocol.traces
 
 import io.forge.jam.core.{ChainConfig, JamBytes, Hashing}
 import io.forge.jam.core.primitives.Hash
+import io.forge.jam.core.codec.encode
 import io.forge.jam.vrfs.BandersnatchWrapper
+import io.forge.jam.crypto.{BandersnatchVrf, SigningContext}
 import io.forge.jam.core.types.block.Block
 import io.forge.jam.core.types.extrinsic.{AssuranceExtrinsic, GuaranteeExtrinsic, Preimage}
 import io.forge.jam.core.types.workpackage.{WorkReport, AvailabilityAssignment}
@@ -118,6 +120,85 @@ class BlockImporter(
           s"Safrole STF error: ${safroleOutput.err.get}"
         )
 
+      // Step 2.5: Validate block author against sealing sequence (post-Safrole state)
+      // Uses IETF VRF verification with the block seal
+      val slotIndex = (block.header.slot.value.toInt % config.epochLength)
+      val authorIndex = block.header.authorIndex.value.toInt
+      val blockAuthorKey = safrolePostState.kappa(authorIndex).bandersnatch
+
+      // Get entropy eta3 for VRF input (use post-state entropy)
+      val entropy = if safrolePostState.eta.length > 3 then safrolePostState.eta(3).bytes else new Array[Byte](32)
+
+      // Encode header for aux data (unsigned header = full header minus 96-byte seal at the end)
+      val fullHeaderBytes = block.header.encode.toArray
+      val encodedHeader = fullHeaderBytes.dropRight(96) // Remove the 96-byte seal
+
+      safrolePostState.gammaS match
+        case TicketsOrKeys.Keys(keys) =>
+          // Fallback keys mode: verify key matches AND verify seal signature
+          val expectedKey = keys(slotIndex)
+          if !java.util.Arrays.equals(expectedKey.bytes, blockAuthorKey.bytes) then
+            return ImportResult.Failure(
+              ImportError.InvalidHeader,
+              s"block header verification failure: UnexpectedAuthor"
+            )
+
+          // Verify the seal using IETF VRF
+          val vrfInput = SigningContext.fallbackSealInputData(entropy)
+          val vrfResult = BandersnatchVrf.ietfVrfVerify(
+            blockAuthorKey.bytes,
+            vrfInput,
+            encodedHeader,
+            block.header.seal.toArray
+          )
+          if vrfResult.isEmpty then
+            return ImportResult.Failure(
+              ImportError.InvalidHeader,
+              s"block header verification failure: InvalidBlockSeal"
+            )
+
+        case TicketsOrKeys.Tickets(tickets) =>
+          // Tickets mode: verify VRF and check ticket.id == vrfOutput
+          val ticket = tickets(slotIndex)
+          val vrfInput = SigningContext.safroleTicketInputData(entropy, ticket.attempt.toByte)
+
+          val vrfResult = BandersnatchVrf.ietfVrfVerify(
+            blockAuthorKey.bytes,
+            vrfInput,
+            encodedHeader,
+            block.header.seal.toArray
+          )
+
+          vrfResult match
+            case None =>
+              return ImportResult.Failure(
+                ImportError.InvalidHeader,
+                s"block header verification failure: InvalidBlockSeal"
+              )
+            case Some(vrfOutput) =>
+              // Check that ticket ID matches VRF output
+              if !java.util.Arrays.equals(ticket.id.toArray, vrfOutput) then
+                return ImportResult.Failure(
+                  ImportError.InvalidHeader,
+                  s"block header verification failure: InvalidAuthorTicket"
+                )
+
+      // Step 2.6: Validate epoch mark matches Safrole output
+      val safroleEpochMark = safroleOutput.ok.flatMap(_.epochMark)
+      if safroleEpochMark != block.header.epochMark then
+        return ImportResult.Failure(
+          ImportError.InvalidHeader,
+          s"block header verification failure: InvalidEpochMark"
+        )
+
+      // Step 2.7: Validate tickets mark matches Safrole output
+      val safroleTicketsMark = safroleOutput.ok.flatMap(_.ticketsMark)
+      if safroleTicketsMark != block.header.ticketsMark then
+        return ImportResult.Failure(
+          ImportError.InvalidHeader,
+          s"block header verification failure: InvalidTicketsMark"
+        )
+
       // Step 3: Run Disputes STF
       val disputeInput = InputExtractor.extractDisputeInput(block)
       val disputePreState = DisputeState(
@@ -151,6 +232,9 @@ class BlockImporter(
 
       // Get available reports from assurances
       val availableReports = assuranceOutput.ok.map(_.reported).getOrElse(List.empty)
+      println(
+        s"[DEBUG BlockImporter] assuranceOutput.reported=${availableReports.size} guarantees=${block.extrinsic.guarantees.size}"
+      )
 
       // Step 4: Run Reports STF
       val updatedRecentHistory = updateRecentHistoryPartial(
@@ -205,6 +289,15 @@ class BlockImporter(
       val preimageInput = InputExtractor.extractPreimageInput(block, block.header.slot.value.toLong)
       val preimagePreState = fullPreState.toPreimageState()
       val (preimagePostState, preimageOutput) = PreimageTransition.stf(preimageInput, preimagePreState)
+
+      if preimageOutput.err.isDefined then
+        return ImportResult.Failure(
+          ImportError.PreimageError,
+          s"preimages error: ${preimageOutput.err.get match
+              case PreimageErrorCode.PreimageUnneeded => "preimage not required"
+              case PreimageErrorCode.PreimagesNotSortedUnique => "preimages not sorted unique"
+            }"
+        )
 
       // Step 9: Run Statistics STF
       val statInput = InputExtractor.extractStatInput(block, fullPreState)
@@ -261,8 +354,19 @@ class BlockImporter(
         if changed then
           changedPrefixes += f"0x$prefix%02x"
 
+      // Debug: Print ALL keyval details for debugging
+      println(s"[DEBUG BlockImporter KEYVALS] slot=${block.header.slot.value} total=${postKeyvals.size}")
+      for kv <- postKeyvals.sortBy(_.key.toHex) do
+        val prefix = kv.key.toArray(0).toInt & 0xff
+        val valueHash = Hashing.blake2b256(kv.value.toArray).toHex.take(16)
+        println(
+          f"[DEBUG KV] slot=${block.header.slot.value} key=${kv.key.toHex.take(16)}... prefix=0x$prefix%02x len=${kv.value.length}%5d valueHash=$valueHash"
+        )
+
       // Step 14: Compute state root via Merkle trie
-      val stateRoot = StateMerklization.stateMerklize(postKeyvals)
+      // Pass debug block index 13 for slot 12 (epoch boundary)
+      val debugBlock = if block.header.slot.value.toInt == 12 then 13 else -1
+      val stateRoot = StateMerklization.stateMerklize(postKeyvals, debugBlock)
 
       val rawPostState = RawState(stateRoot, postKeyvals)
 
@@ -536,7 +640,10 @@ class BlockImporter(
       otherKeyvals = preState.otherKeyvals,
 
       // Preserve original keyvals for unchanged components
-      originalKeyvals = preState.originalKeyvals
+      originalKeyvals = preState.originalKeyvals,
+
+      // Updated raw service data from accumulation (for storage writes)
+      rawServiceDataByStateKey = accumulationPost.rawServiceDataByStateKey.toMap
     )
 
   /**

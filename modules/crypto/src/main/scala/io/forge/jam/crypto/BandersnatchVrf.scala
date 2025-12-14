@@ -2,7 +2,7 @@ package io.forge.jam.crypto
 
 import io.forge.jam.core.JamBytes
 import io.forge.jam.core.primitives.{BandersnatchPublicKey, Hash}
-import io.forge.jam.vrfs.{BandersnatchWrapper => JniBandersnatchWrapper}
+import io.forge.jam.vrfs.BandersnatchWrapper as JniBandersnatchWrapper
 import spire.math.UByte
 
 import java.nio.file.{Files, Paths}
@@ -193,3 +193,55 @@ object BandersnatchVrf:
       JniBandersnatchWrapper.isLibraryLoaded()
     catch
       case _: Exception => false
+
+  /**
+   * Verify an IETF VRF signature and return the VRF output.
+   *
+   * @param publicKey The Bandersnatch public key (32 bytes)
+   * @param vrfInput The VRF input data (signing context + entropy + optional attempt)
+   * @param auxData Auxiliary data bound to the signature (e.g., encoded header)
+   * @param signature The 96-byte IETF VRF signature (seal)
+   * @return Some(vrfOutput) if verification succeeds, None otherwise
+   */
+  def ietfVrfVerify(
+    publicKey: Array[Byte],
+    vrfInput: Array[Byte],
+    auxData: Array[Byte],
+    signature: Array[Byte]
+  ): Option[Array[Byte]] =
+    try
+      JniBandersnatchWrapper.ensureLibraryLoaded()
+      val result = JniBandersnatchWrapper.ietfVrfVerify(publicKey, vrfInput, auxData, signature)
+      if result == null || result.length != 32 || result.forall(_ == 0) then
+        None
+      else
+        Some(result)
+    catch
+      case _: Exception =>
+        None
+
+/**
+ * Signing context constants for VRF input data construction.
+ */
+object SigningContext:
+  val TicketSeal: Array[Byte] = "jam_ticket_seal".getBytes("UTF-8")
+  val FallbackSeal: Array[Byte] = "jam_fallback_seal".getBytes("UTF-8")
+  val Entropy: Array[Byte] = "jam_entropy".getBytes("UTF-8")
+
+  /**
+   * Build VRF input for ticket seal
+   */
+  def safroleTicketInputData(entropy: Array[Byte], attempt: Byte): Array[Byte] =
+    TicketSeal ++ entropy ++ Array(attempt)
+
+  /**
+   * Build VRF input for fallback seal
+   */
+  def fallbackSealInputData(entropy: Array[Byte]): Array[Byte] =
+    FallbackSeal ++ entropy
+
+  /**
+   * Build VRF input for entropy accumulation
+   */
+  def entropyInputData(entropy: Array[Byte]): Array[Byte] =
+    Entropy ++ entropy

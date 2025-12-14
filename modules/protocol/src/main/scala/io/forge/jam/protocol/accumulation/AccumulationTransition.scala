@@ -242,7 +242,13 @@ object AccumulationTransition:
       rawServiceAccountsByStateKey = newPartialState.rawServiceAccountsByStateKey
     )
 
-    (finalState, AccumulationOutput(outputHash, accumulationStats))
+    // 14. Compute commitment root from yields
+    val outputHash = computeCommitmentRoot(commitments)
+
+    // 15. Get transfer stats from outerResult
+    val transferStats = outerResult.transferStatsMap
+
+    (finalState, AccumulationOutput(outputHash, accumulationStats, transferStats))
 
   /**
    * Merging privilege updates.
@@ -306,7 +312,8 @@ object AccumulationTransition:
     postState: PartialState,
     gasUsedMap: Map[Long, Long],
     commitments: Set[Commitment],
-    privilegeSnapshots: Map[Long, PrivilegeSnapshot] = Map.empty
+    privilegeSnapshots: Map[Long, PrivilegeSnapshot] = Map.empty,
+    transferStatsMap: Map[Long, (Long, Long)] = Map.empty  // serviceId -> (count, gasUsed)
   )
 
   /**
@@ -407,14 +414,22 @@ object AccumulationTransition:
 
     // Merge privilege snapshots - first snapshot for each service takes precedence
     val mergedSnapshots = parallelResult.privilegeSnapshots ++
-      outerResult.privilegeSnapshots.filterKeys(!parallelResult.privilegeSnapshots.contains(_))
+      outerResult.privilegeSnapshots.view.filterKeys(!parallelResult.privilegeSnapshots.contains(_)).toMap
+
+    // Merge transfer stats
+    val mergedTransferStats = (parallelResult.transferStatsMap.keys ++ outerResult.transferStatsMap.keys).toSet.map { serviceId =>
+      val (c1, g1) = parallelResult.transferStatsMap.getOrElse(serviceId, (0L, 0L))
+      val (c2, g2) = outerResult.transferStatsMap.getOrElse(serviceId, (0L, 0L))
+      serviceId -> (c1 + c2, g1 + g2)
+    }.toMap
 
     OuterAccumulationResult(
       reportsAccumulated = i + outerResult.reportsAccumulated,
       postState = outerResult.postState,
       gasUsedMap = mergedGasUsed,
       commitments = parallelResult.commitments ++ outerResult.commitments,
-      privilegeSnapshots = mergedSnapshots
+      privilegeSnapshots = mergedSnapshots,
+      transferStatsMap = mergedTransferStats
     )
 
   /**
@@ -425,11 +440,14 @@ object AccumulationTransition:
     gasUsedMap: Map[Long, Long],
     commitments: Set[Commitment],
     deferredTransfers: List[DeferredTransfer] = List.empty,
-    privilegeSnapshots: Map[Long, PrivilegeSnapshot] = Map.empty
+    privilegeSnapshots: Map[Long, PrivilegeSnapshot] = Map.empty,
+    transferStatsMap: Map[Long, (Long, Long)] = Map.empty  // serviceId -> (count, gasUsed)
   )
 
   /**
    * Execute PVM accumulation for all reports.
+   * In v0.7.0, deferred transfers are processed separately via on_transfer (PC=10),
+   * not mixed with work items in accumulate (PC=5).
    */
   private def executeAccumulation(
     partialState: PartialState,
@@ -446,11 +464,14 @@ object AccumulationTransition:
     val newDeferredTransfers = mutable.ListBuffer.empty[DeferredTransfer]
     val allProvisions = mutable.Set.empty[(Long, JamBytes)]
     val initialState = partialState.deepCopy()
+    val transferStatsMap = mutable.Map.empty[Long, (Long, Long)]  // serviceId -> (count, gasUsed)
 
-    // Group work items by service
+    // Group work items by service (NO transfers here - v0.7.0 separates them)
     val serviceOperands = mutable.Map.empty[Long, mutable.ListBuffer[AccumulationOperand]]
 
+    println(s"[DEBUG executeAccumulation] Processing ${reports.size} reports, alwaysAccers=${alwaysAccers.size}, deferredTransfers=${deferredTransfers.size}")
     for report <- reports do
+      println(s"[DEBUG executeAccumulation] Report has ${report.results.size} results")
       for result <- report.results do
         val operand = OperandTuple(
           packageHash = JamBytes(report.packageSpec.hash.bytes.toArray),
@@ -465,17 +486,12 @@ object AccumulationTransition:
         serviceOperands.getOrElseUpdate(result.serviceId.value.toLong, mutable.ListBuffer.empty) +=
           AccumulationOperand.WorkItem(operand)
 
-    // Add deferred transfers as operands
-    for transfer <- deferredTransfers do
-      serviceOperands.getOrElseUpdate(transfer.destination, mutable.ListBuffer.empty) +=
-        AccumulationOperand.Transfer(transfer)
-
-    // Collect all services to accumulate
+    // Collect all services to accumulate (work items + always-accers only, NOT transfer destinations)
     val servicesToAccumulate = mutable.Set.empty[Long]
     servicesToAccumulate ++= serviceOperands.keys
     servicesToAccumulate ++= alwaysAccers.keys
 
-    if servicesToAccumulate.isEmpty then
+    if servicesToAccumulate.isEmpty && deferredTransfers.isEmpty then
       return AccumulationExecResult(partialState, Map.empty, Set.empty, List.empty)
 
     // Track privilege snapshots
@@ -491,8 +507,7 @@ object AccumulationTransition:
       val operands = serviceOperands.getOrElse(serviceId, mutable.ListBuffer.empty).toList
       val alwaysAccGas = alwaysAccers.getOrElse(serviceId, 0L)
       val workItemGas = operands.collect { case AccumulationOperand.WorkItem(op) => op.gasLimit }.sum
-      val transferGas = operands.collect { case AccumulationOperand.Transfer(t) => t.gasLimit }.sum
-      val totalGasLimit = workItemGas + alwaysAccGas + transferGas
+      val totalGasLimit = workItemGas + alwaysAccGas  // No transfer gas here - handled separately
 
       val serviceInitialState = initialState.deepCopy()
 
@@ -514,6 +529,7 @@ object AccumulationTransition:
       val prevGas = gasUsedMap.getOrElse(serviceId, 0L)
       val newGas = prevGas + execResult.gasUsed
       gasUsedMap(serviceId) = newGas
+      println(s"[DEBUG executeAccumulation] serviceId=$serviceId execResult.gasUsed=${execResult.gasUsed} newGas=$newGas")
 
       // Capture privilege snapshot
       privilegeSnapshots(serviceId) = PrivilegeSnapshot(
@@ -543,12 +559,41 @@ object AccumulationTransition:
     else
       finalState
 
+    // Execute on_transfer for incoming deferred transfers (v0.7.0 - separate entry point PC=10)
+    println(s"[DEBUG executeAccumulation] deferredTransfers.size=${deferredTransfers.size} newDeferredTransfers.size=${newDeferredTransfers.size}")
+    val stateAfterTransfers = if deferredTransfers.nonEmpty then
+      // Group transfers by destination service
+      val transfersByService = deferredTransfers.groupBy(_.destination)
+      var currentState = stateAfterPreimages
+
+      for (serviceId, transfers) <- transfersByService.toList.sortBy(_._1) do
+        val transferResult = executor.executeOnTransfer(
+          accounts = currentState.accounts,
+          timeslot = timeslot,
+          serviceId = serviceId,
+          transfers = transfers,
+          entropy = entropy,
+          rawServiceDataByStateKey = currentState.rawServiceDataByStateKey
+        )
+        // Track transfer statistics for this service
+        val prevStats = transferStatsMap.getOrElse(serviceId, (0L, 0L))
+        transferStatsMap(serviceId) = (prevStats._1 + transfers.size, prevStats._2 + transferResult.gasUsed)
+
+      currentState
+    else
+      stateAfterPreimages
+
+    println(s"[DEBUG executeAccumulation FINAL] rawServiceDataByStateKey.size=${stateAfterTransfers.rawServiceDataByStateKey.size}")
+    stateAfterTransfers.rawServiceDataByStateKey.foreach { case (k, v) =>
+      println(s"[DEBUG executeAccumulation FINAL] key=${k.toHex.take(32)}... valueLen=${v.length}")
+    }
     AccumulationExecResult(
-      stateAfterPreimages,
+      stateAfterTransfers,
       gasUsedMap.toMap,
       commitments.toSet,
       newDeferredTransfers.toList,
-      privilegeSnapshots.toMap
+      privilegeSnapshots.toMap,
+      transferStatsMap.toMap
     )
 
   /**
@@ -592,6 +637,17 @@ object AccumulationTransition:
     if postState.alwaysAccers.toMap != initialState.alwaysAccers.toMap then
       changes.alwaysAccersChange = Some(postState.alwaysAccers.toMap)
 
+    // Check for rawServiceData changes (added or updated keys)
+    for (key, value) <- postState.rawServiceDataByStateKey do
+      val initValue = initialState.rawServiceDataByStateKey.get(key)
+      if initValue.isEmpty || initValue.get != value then
+        changes.rawServiceDataUpdates(key) = value
+
+    // Check for removed rawServiceData keys
+    for (key, _) <- initialState.rawServiceDataByStateKey do
+      if !postState.rawServiceDataByStateKey.contains(key) then
+        changes.rawServiceDataRemovals += key
+
     changes
 
   /**
@@ -632,25 +688,41 @@ object AccumulationTransition:
   /**
    * Build fresh service statistics for this slot's activity.
    * Statistics are NOT cumulative - they represent only this slot's accumulation.
-   * Only services that actually accumulated (gasUsed > 0 or workItems > 0) are included.
+   * Only services that actually accumulated (gasUsed > 0 or workItems > 0) or received transfers are included.
    */
   private def updateStatistics(
     existing: List[ServiceStatisticsEntry],
     gasUsedPerService: Map[Long, Long],
-    workItemsPerService: Map[Long, Int]
+    workItemsPerService: Map[Long, Int],
+    transferStatsPerService: Map[Long, (Long, Long)]
   ): List[ServiceStatisticsEntry] =
+    // Debug output
+    println(s"[DEBUG updateStatistics] gasUsedPerService: $gasUsedPerService")
+    println(s"[DEBUG updateStatistics] workItemsPerService: $workItemsPerService")
+    println(s"[DEBUG updateStatistics] transferStatsPerService: $transferStatsPerService")
+
     // Build fresh statistics from only this slot's activity
     val statsMap = mutable.Map.empty[Long, ServiceStatisticsEntry]
 
-    for (serviceId, gasUsed) <- gasUsedPerService do
+    // Collect all services that had activity (accumulation or transfers)
+    val allServiceIds = gasUsedPerService.keys ++ transferStatsPerService.keys
+
+    for serviceId <- allServiceIds do
+      val accGasUsed = gasUsedPerService.getOrElse(serviceId, 0L)
       val workItems = workItemsPerService.getOrElse(serviceId, 0)
+      val (transferCount, transferGasUsed) = transferStatsPerService.getOrElse(serviceId, (0L, 0L))
+
+      println(s"[DEBUG updateStatistics] serviceId=$serviceId accGasUsed=$accGasUsed workItems=$workItems")
+
       // Only include services that actually did something
-      if gasUsed > 0 || workItems > 0 then
+      if accGasUsed > 0 || workItems > 0 || transferCount > 0 then
         statsMap(serviceId) = ServiceStatisticsEntry(
           id = serviceId,
           record = ServiceActivityRecord(
             accumulateCount = workItems,
-            accumulateGasUsed = gasUsed
+            accumulateGasUsed = accGasUsed,
+            transferCount = transferCount,
+            transferGasUsed = transferGasUsed
           )
         )
 
@@ -752,6 +824,9 @@ class AccountChanges:
   var registrarChange: Option[Long] = None
   var assignersChange: Option[List[Long]] = None
   var alwaysAccersChange: Option[Map[Long, Long]] = None
+  // Storage data changes (for WRITE host call updates)
+  val rawServiceDataUpdates: mutable.Map[JamBytes, JamBytes] = mutable.Map.empty
+  val rawServiceDataRemovals: mutable.Set[JamBytes] = mutable.Set.empty
 
   def checkAndMerge(other: AccountChanges): Unit =
     // Merge account updates
@@ -774,6 +849,12 @@ class AccountChanges:
     if other.alwaysAccersChange.isDefined && alwaysAccersChange.isEmpty then
       alwaysAccersChange = other.alwaysAccersChange
 
+    // Merge rawServiceData updates (first write wins for conflicts)
+    for (key, value) <- other.rawServiceDataUpdates do
+      if !rawServiceDataUpdates.contains(key) then
+        rawServiceDataUpdates(key) = value
+    rawServiceDataRemovals ++= other.rawServiceDataRemovals
+
   def applyTo(state: PartialState): Unit =
     // Apply account removals first (before updates)
     for id <- removedAccounts do
@@ -795,3 +876,9 @@ class AccountChanges:
       state.alwaysAccers.clear()
       state.alwaysAccers ++= alwaysAccers
     }
+
+    // Apply rawServiceData changes
+    for key <- rawServiceDataRemovals do
+      state.rawServiceDataByStateKey.remove(key)
+    for (key, value) <- rawServiceDataUpdates do
+      state.rawServiceDataByStateKey(key) = value
