@@ -4,7 +4,15 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.AppendedClues.convertToClueful
 import io.forge.jam.core.{ChainConfig, JamBytes}
-import io.forge.jam.core.primitives.{Hash, BandersnatchPublicKey, Ed25519PublicKey, BlsPublicKey, ValidatorIndex, Ed25519Signature, Timeslot}
+import io.forge.jam.core.primitives.{
+  Hash,
+  BandersnatchPublicKey,
+  Ed25519PublicKey,
+  BlsPublicKey,
+  ValidatorIndex,
+  Ed25519Signature,
+  Timeslot
+}
 import io.forge.jam.core.types.extrinsic.{Dispute, Verdict}
 import io.forge.jam.core.types.dispute.{Culprit, Fault}
 import io.forge.jam.core.types.work.Vote
@@ -25,11 +33,28 @@ class DisputeTest extends AnyFunSuite with Matchers:
   // Full config: 1023 validators, 341 cores
   val FullConfig = ChainConfig.FULL
 
-  // Helper to create a validator key filled with a specific byte value
+  private val validEd25519Keys: Seq[Array[Byte]] = Seq(
+    hexToBytes("0100000000000000000000000000000000000000000000000000000000000000"),
+    hexToBytes("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a"),
+    hexToBytes("26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05"),
+    hexToBytes("26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85"),
+    hexToBytes("ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"),
+    hexToBytes("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa")
+  ).map(ensureLength32)
+
+  private def ensureLength32(arr: Array[Byte]): Array[Byte] =
+    if arr.length >= 32 then arr.take(32)
+    else Array.fill(32 - arr.length)(0.toByte) ++ arr
+
+  private def hexToBytes(hex: String): Array[Byte] =
+    hex.grouped(2).map(Integer.parseInt(_, 16).toByte).toArray
+
   private def validatorKeyFilled(value: Int): ValidatorKey =
+    val ed25519Key = if value < validEd25519Keys.size then validEd25519Keys(value)
+    else validEd25519Keys(value % validEd25519Keys.size)
     ValidatorKey(
       BandersnatchPublicKey(Array.fill(32)(value.toByte)),
-      Ed25519PublicKey(Array.fill(32)(value.toByte)),
+      Ed25519PublicKey(ed25519Key),
       BlsPublicKey(Array.fill(144)(value.toByte)),
       JamBytes(Array.fill(128)(value.toByte))
     )
@@ -224,15 +249,17 @@ class DisputeTest extends AnyFunSuite with Matchers:
   ): Unit =
     (expected.ok, expected.err) match
       case (Some(expectedMarks), _) =>
-        actual.ok shouldBe defined withClue s"Expected OK output but got error in test case: $testCaseName. Actual error: ${actual.err}"
+        actual
+          .ok shouldBe defined withClue s"Expected OK output but got error in test case: $testCaseName. Actual error: ${actual.err}"
         actual.err shouldBe None withClue s"Expected OK output but got both OK and error in test case: $testCaseName"
 
         expectedMarks.offenders.size shouldBe actual.ok.get.offenders.size withClue
           s"Offenders size mismatch in test case: $testCaseName"
 
-        expectedMarks.offenders.zip(actual.ok.get.offenders).zipWithIndex.foreach { case ((exp, act), index) =>
-          java.util.Arrays.equals(exp.bytes, act.bytes) shouldBe true withClue
-            s"Offender mismatch at index $index in test case: $testCaseName"
+        expectedMarks.offenders.zip(actual.ok.get.offenders).zipWithIndex.foreach {
+          case ((exp, act), index) =>
+            java.util.Arrays.equals(exp.bytes, act.bytes) shouldBe true withClue
+              s"Offender mismatch at index $index in test case: $testCaseName"
         }
 
       case (_, Some(expectedErr)) =>
@@ -254,56 +281,65 @@ class DisputeTest extends AnyFunSuite with Matchers:
     // Check psi
     expected.psi.good.size shouldBe actual.psi.good.size withClue s"Psi good size mismatch in test case: $testCaseName"
     expected.psi.bad.size shouldBe actual.psi.bad.size withClue s"Psi bad size mismatch in test case: $testCaseName"
-    expected.psi.wonky.size shouldBe actual.psi.wonky.size withClue s"Psi wonky size mismatch in test case: $testCaseName"
-    expected.psi.offenders.size shouldBe actual.psi.offenders.size withClue s"Psi offenders size mismatch in test case: $testCaseName"
+    expected.psi.wonky.size shouldBe actual.psi.wonky
+      .size withClue s"Psi wonky size mismatch in test case: $testCaseName"
+    expected.psi.offenders.size shouldBe actual.psi.offenders
+      .size withClue s"Psi offenders size mismatch in test case: $testCaseName"
 
-    expected.psi.good.zip(actual.psi.good).zipWithIndex.foreach { case ((exp, act), idx) =>
-      java.util.Arrays.equals(exp.bytes, act.bytes) shouldBe true withClue
-        s"Psi good mismatch at index $idx in test case: $testCaseName"
+    expected.psi.good.zip(actual.psi.good).zipWithIndex.foreach {
+      case ((exp, act), idx) =>
+        java.util.Arrays.equals(exp.bytes, act.bytes) shouldBe true withClue
+          s"Psi good mismatch at index $idx in test case: $testCaseName"
     }
 
-    expected.psi.bad.zip(actual.psi.bad).zipWithIndex.foreach { case ((exp, act), idx) =>
-      java.util.Arrays.equals(exp.bytes, act.bytes) shouldBe true withClue
-        s"Psi bad mismatch at index $idx in test case: $testCaseName"
+    expected.psi.bad.zip(actual.psi.bad).zipWithIndex.foreach {
+      case ((exp, act), idx) =>
+        java.util.Arrays.equals(exp.bytes, act.bytes) shouldBe true withClue
+          s"Psi bad mismatch at index $idx in test case: $testCaseName"
     }
 
-    expected.psi.wonky.zip(actual.psi.wonky).zipWithIndex.foreach { case ((exp, act), idx) =>
-      java.util.Arrays.equals(exp.bytes, act.bytes) shouldBe true withClue
-        s"Psi wonky mismatch at index $idx in test case: $testCaseName"
+    expected.psi.wonky.zip(actual.psi.wonky).zipWithIndex.foreach {
+      case ((exp, act), idx) =>
+        java.util.Arrays.equals(exp.bytes, act.bytes) shouldBe true withClue
+          s"Psi wonky mismatch at index $idx in test case: $testCaseName"
     }
 
-    expected.psi.offenders.zip(actual.psi.offenders).zipWithIndex.foreach { case ((exp, act), idx) =>
-      java.util.Arrays.equals(exp.bytes, act.bytes) shouldBe true withClue
-        s"Psi offenders mismatch at index $idx in test case: $testCaseName"
+    expected.psi.offenders.zip(actual.psi.offenders).zipWithIndex.foreach {
+      case ((exp, act), idx) =>
+        java.util.Arrays.equals(exp.bytes, act.bytes) shouldBe true withClue
+          s"Psi offenders mismatch at index $idx in test case: $testCaseName"
     }
 
     // Check rho
     expected.rho.size shouldBe actual.rho.size withClue s"Rho size mismatch in test case: $testCaseName"
-    expected.rho.zip(actual.rho).zipWithIndex.foreach { case ((exp, act), idx) =>
-      (exp, act) match
-        case (None, None) => // Both null is fine
-        case (None, Some(_)) =>
-          fail(s"Expected null rho at index $idx but got non-null in test case: $testCaseName")
-        case (Some(_), None) =>
-          fail(s"Expected non-null rho at index $idx but got null in test case: $testCaseName")
-        case (Some(e), Some(a)) =>
-          e.timeout shouldBe a.timeout withClue s"Rho timeout mismatch at index $idx in test case: $testCaseName"
+    expected.rho.zip(actual.rho).zipWithIndex.foreach {
+      case ((exp, act), idx) =>
+        (exp, act) match
+          case (None, None) => // Both null is fine
+          case (None, Some(_)) =>
+            fail(s"Expected null rho at index $idx but got non-null in test case: $testCaseName")
+          case (Some(_), None) =>
+            fail(s"Expected non-null rho at index $idx but got null in test case: $testCaseName")
+          case (Some(e), Some(a)) =>
+            e.timeout shouldBe a.timeout withClue s"Rho timeout mismatch at index $idx in test case: $testCaseName"
     }
 
     // Check kappa
     expected.kappa.size shouldBe actual.kappa.size withClue s"Kappa size mismatch in test case: $testCaseName"
-    expected.kappa.zip(actual.kappa).zipWithIndex.foreach { case ((exp, act), idx) =>
-      java.util.Arrays.equals(exp.bandersnatch.bytes, act.bandersnatch.bytes) shouldBe true withClue
-        s"Kappa bandersnatch mismatch at index $idx in test case: $testCaseName"
-      java.util.Arrays.equals(exp.ed25519.bytes, act.ed25519.bytes) shouldBe true withClue
-        s"Kappa ed25519 mismatch at index $idx in test case: $testCaseName"
+    expected.kappa.zip(actual.kappa).zipWithIndex.foreach {
+      case ((exp, act), idx) =>
+        java.util.Arrays.equals(exp.bandersnatch.bytes, act.bandersnatch.bytes) shouldBe true withClue
+          s"Kappa bandersnatch mismatch at index $idx in test case: $testCaseName"
+        java.util.Arrays.equals(exp.ed25519.bytes, act.ed25519.bytes) shouldBe true withClue
+          s"Kappa ed25519 mismatch at index $idx in test case: $testCaseName"
     }
 
     // Check lambda
     expected.lambda.size shouldBe actual.lambda.size withClue s"Lambda size mismatch in test case: $testCaseName"
-    expected.lambda.zip(actual.lambda).zipWithIndex.foreach { case ((exp, act), idx) =>
-      java.util.Arrays.equals(exp.bandersnatch.bytes, act.bandersnatch.bytes) shouldBe true withClue
-        s"Lambda bandersnatch mismatch at index $idx in test case: $testCaseName"
-      java.util.Arrays.equals(exp.ed25519.bytes, act.ed25519.bytes) shouldBe true withClue
-        s"Lambda ed25519 mismatch at index $idx in test case: $testCaseName"
+    expected.lambda.zip(actual.lambda).zipWithIndex.foreach {
+      case ((exp, act), idx) =>
+        java.util.Arrays.equals(exp.bandersnatch.bytes, act.bandersnatch.bytes) shouldBe true withClue
+          s"Lambda bandersnatch mismatch at index $idx in test case: $testCaseName"
+        java.util.Arrays.equals(exp.ed25519.bytes, act.ed25519.bytes) shouldBe true withClue
+          s"Lambda ed25519 mismatch at index $idx in test case: $testCaseName"
     }

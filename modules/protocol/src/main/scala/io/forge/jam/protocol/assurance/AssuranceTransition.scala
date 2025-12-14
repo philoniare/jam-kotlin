@@ -6,8 +6,7 @@ import io.forge.jam.core.types.epoch.ValidatorKey
 import io.forge.jam.core.types.extrinsic.AssuranceExtrinsic
 import io.forge.jam.core.types.workpackage.WorkReport
 import io.forge.jam.protocol.assurance.AssuranceTypes.*
-import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
-import org.bouncycastle.crypto.signers.Ed25519Signer
+import io.forge.jam.crypto.Ed25519
 
 /**
  * Assurances State Transition Function.
@@ -41,22 +40,15 @@ object AssuranceTransition:
     assurance: AssuranceExtrinsic,
     validatorKey: ValidatorKey
   ): Boolean =
-    try
-      // First create combined data and hash it
-      val serializedData = assurance.anchor.bytes ++ assurance.bitfield.toArray
-      val dataHash = Hashing.blake2b256(serializedData)
+    // First create combined data and hash it
+    val serializedData = assurance.anchor.bytes ++ assurance.bitfield.toArray
+    val dataHash = Hashing.blake2b256(serializedData)
 
-      // Create final message by prepending context
-      val signatureMessage = constants.JAM_AVAILABLE_BYTES ++ dataHash.bytes
+    // Create final message by prepending context
+    val signatureMessage = constants.JAM_AVAILABLE_BYTES ++ dataHash.bytes
 
-      // Verify using Ed25519
-      val publicKey = new Ed25519PublicKeyParameters(validatorKey.ed25519.bytes, 0)
-      val signer = new Ed25519Signer()
-      signer.init(false, publicKey)
-      signer.update(signatureMessage, 0, signatureMessage.length)
-      signer.verifySignature(assurance.signature.bytes)
-    catch
-      case _: Exception => false
+    // Verify using centralized Ed25519 module
+    Ed25519.verify(validatorKey.ed25519, signatureMessage, assurance.signature)
 
   /**
    * Check if a report has timed out.

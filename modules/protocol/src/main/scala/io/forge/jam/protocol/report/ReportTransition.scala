@@ -10,10 +10,7 @@ import io.forge.jam.core.types.epoch.ValidatorKey
 import io.forge.jam.core.types.service.ServiceAccount
 import io.forge.jam.core.types.history.HistoricalBetaContainer
 import io.forge.jam.protocol.report.ReportTypes.*
-import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
-import org.bouncycastle.crypto.signers.Ed25519Signer
-
-import scala.util.Try
+import io.forge.jam.crypto.Ed25519
 
 /**
  * Reports State Transition Function.
@@ -367,15 +364,9 @@ object ReportTransition:
     guarantee: GuaranteeExtrinsic,
     signature: io.forge.jam.core.primitives.Ed25519Signature
   ): Boolean =
-    Try {
-      val reportHash = Hashing.blake2b256(guarantee.report.encode)
-      val message = constants.JAM_GUARANTEE_BYTES ++ reportHash.bytes
-      val publicKey = new Ed25519PublicKeyParameters(validatorKey.bytes, 0)
-      val signer = new Ed25519Signer()
-      signer.init(false, publicKey)
-      signer.update(message, 0, message.length)
-      signer.verifySignature(signature.bytes)
-    }.getOrElse(false)
+    val reportHash = Hashing.blake2b256(guarantee.report.encode)
+    val message = constants.JAM_GUARANTEE_BYTES ++ reportHash.bytes
+    Ed25519.verify(validatorKey, message, signature)
 
   /**
    * Update availability assignments with new reports.

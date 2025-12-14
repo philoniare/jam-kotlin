@@ -16,8 +16,9 @@ val libSuffix = if (osName.contains("mac")) "dylib"
                 else if (osName.contains("win")) "dll"
                 else "dylib"
 
-// Task key for building native library (defined before use)
+// Task keys for building native libraries (defined before use)
 lazy val buildNativeLib = taskKey[Unit]("Build native Bandersnatch VRF library")
+lazy val buildEd25519ZebraLib = taskKey[Unit]("Build native Ed25519-Zebra library")
 
 lazy val root = (project in file("."))
     .aggregate(core, crypto, pvm, protocol)
@@ -97,8 +98,47 @@ lazy val crypto = (project in file("modules/crypto"))
                 println(s"Native library already exists: ${targetLib.absolutePath}")
             }
         },
-        // Run buildNativeLib before compile
-        Compile / compile := (Compile / compile).dependsOn(buildNativeLib).value,
+        // Ed25519-Zebra native library build task
+        buildEd25519ZebraLib := {
+            val baseDir = (ThisBuild / baseDirectory).value
+            val rustProjectDir = baseDir / "modules" / "crypto" / "native" / "ed25519-zebra-wrapper"
+            val targetDir = baseDir / "modules" / "crypto" / "native" / "build" / osDirName
+            val libName = s"libed25519_zebra_wrapper.$libSuffix"
+
+            val targetLib = targetDir / libName
+            val sourceLib = rustProjectDir / "target" / "release" / libName
+
+            if (!targetLib.exists()) {
+                println(s"Building Ed25519-Zebra native library for $osDirName...")
+                targetDir.mkdirs()
+
+                val cargoPath = try {
+                    if (osName.contains("win")) "where cargo".!!.trim
+                    else "which cargo".!!.trim
+                } catch {
+                    case _: Exception => "cargo"
+                }
+
+                val buildResult = Process(Seq(cargoPath, "build", "--release"), rustProjectDir).!
+                if (buildResult != 0) {
+                    sys.error("Failed to build Ed25519-Zebra native library with cargo")
+                }
+
+                if (sourceLib.exists()) {
+                    IO.copyFile(sourceLib, targetLib)
+                    if (!osName.contains("win")) {
+                        s"chmod +x ${targetLib.absolutePath}".!
+                    }
+                    println(s"Ed25519-Zebra native library built: ${targetLib.absolutePath}")
+                } else {
+                    sys.error(s"Ed25519-Zebra native library not found at: ${sourceLib.absolutePath}")
+                }
+            } else {
+                println(s"Ed25519-Zebra native library already exists: ${targetLib.absolutePath}")
+            }
+        },
+        // Run both native lib builds before compile
+        Compile / compile := (Compile / compile).dependsOn(buildNativeLib, buildEd25519ZebraLib).value,
         Test / fork := true,
         Test / baseDirectory := (ThisBuild / baseDirectory).value,
         Test / javaOptions ++= Seq(

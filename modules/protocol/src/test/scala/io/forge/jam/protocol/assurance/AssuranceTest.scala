@@ -5,7 +5,18 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.AppendedClues.convertToClueful
 import io.forge.jam.core.{ChainConfig, JamBytes}
 import io.forge.jam.core.codec.encode
-import io.forge.jam.core.primitives.{Hash, BandersnatchPublicKey, Ed25519PublicKey, BlsPublicKey, ValidatorIndex, ServiceId, Ed25519Signature, Timeslot, CoreIndex, Gas}
+import io.forge.jam.core.primitives.{
+  Hash,
+  BandersnatchPublicKey,
+  Ed25519PublicKey,
+  BlsPublicKey,
+  ValidatorIndex,
+  ServiceId,
+  Ed25519Signature,
+  Timeslot,
+  CoreIndex,
+  Gas
+}
 import io.forge.jam.core.types.epoch.ValidatorKey
 import io.forge.jam.core.types.extrinsic.AssuranceExtrinsic
 import io.forge.jam.core.types.work.PackageSpec
@@ -26,16 +37,37 @@ class AssuranceTest extends AnyFunSuite with Matchers:
   val TinyConfig = ChainConfig.TINY
   val FullConfig = ChainConfig.FULL
 
-  // Helper to create a validator key filled with a specific byte value
+  private val validEd25519Keys: Seq[Array[Byte]] = Seq(
+    hexToBytes("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a"),
+    hexToBytes("26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05"),
+    hexToBytes("26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85"),
+    hexToBytes("ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"),
+    hexToBytes("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa"),
+    hexToBytes("0100000000000000000000000000000000000000000000000000000000000000")
+  ).map(ensureLength32)
+
+  private def ensureLength32(arr: Array[Byte]): Array[Byte] =
+    if arr.length >= 32 then arr.take(32)
+    else Array.fill(32 - arr.length)(0.toByte) ++ arr
+
+  private def hexToBytes(hex: String): Array[Byte] =
+    hex.grouped(2).map(Integer.parseInt(_, 16).toByte).toArray
+
+  private def invalidButCanonicalSignature: Ed25519Signature =
+    val r = hexToBytes("26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05")
+    val s = Array.fill(32)(0x01.toByte)
+    Ed25519Signature(r ++ s)
+
   private def validatorKeyFilled(value: Int): ValidatorKey =
+    val ed25519Key = if value < validEd25519Keys.size then validEd25519Keys(value)
+    else validEd25519Keys(value % validEd25519Keys.size)
     ValidatorKey(
       BandersnatchPublicKey(Array.fill(32)(value.toByte)),
-      Ed25519PublicKey(Array.fill(32)(value.toByte)),
+      Ed25519PublicKey(ed25519Key),
       BlsPublicKey(Array.fill(144)(value.toByte)),
       JamBytes(Array.fill(128)(value.toByte))
     )
 
-  // Helper to create a simple work report
   private def simpleWorkReport(coreIndex: Int = 0): WorkReport =
     WorkReport(
       PackageSpec(Hash.zero, UInt(100), Hash.zero, Hash.zero, UShort(1)),
@@ -48,7 +80,6 @@ class AssuranceTest extends AnyFunSuite with Matchers:
       List.empty
     )
 
-  // Helper to create initial state with assignments
   private def initialState(validatorCount: Int, coreCount: Int, timeout: Long = 10L): AssuranceState =
     val assignments = (0 until coreCount).map { coreIndex =>
       Some(AvailabilityAssignment(simpleWorkReport(coreIndex), timeout))
@@ -59,15 +90,12 @@ class AssuranceTest extends AnyFunSuite with Matchers:
     )
 
   test("assurance bitfield processing") {
-    // Test that bitfield processing correctly identifies which cores a validator assures
     val state = initialState(validatorCount = 4, coreCount = 4, timeout = 20L)
-
-    // Create assurance with bitfield assuring cores 0 and 2 (binary: 0101 = 0x05)
     val assurance = AssuranceExtrinsic(
       Hash.zero,
       JamBytes(Array(0x05.toByte)), // cores 0 and 2
       ValidatorIndex(0),
-      Ed25519Signature(Array.fill(64)(0.toByte))
+      invalidButCanonicalSignature
     )
 
     val input = AssuranceInput(
@@ -77,9 +105,6 @@ class AssuranceTest extends AnyFunSuite with Matchers:
     )
 
     val config = TinyConfig.copy(validatorCount = 4, coresCount = 4)
-
-    // Since signature won't verify, expect bad signature error
-    // But this test validates the bitfield parsing logic works
     val (_, output) = AssuranceTransition.stf(input, state, config)
     output.err shouldBe Some(AssuranceErrorCode.BadSignature)
   }
@@ -132,7 +157,7 @@ class AssuranceTest extends AnyFunSuite with Matchers:
       Hash.zero,
       JamBytes(Array(0x03.toByte)), // both cores
       ValidatorIndex(0),
-      Ed25519Signature(Array.fill(64)(0.toByte)) // invalid signature
+      invalidButCanonicalSignature
     )
 
     val input = AssuranceInput(
@@ -211,18 +236,21 @@ class AssuranceTest extends AnyFunSuite with Matchers:
   ): Unit =
     (expected.ok, expected.err) match
       case (Some(expectedMarks), _) =>
-        actual.ok shouldBe defined withClue s"Expected OK output but got error in test case: $testCaseName. Actual: $actual"
+        actual
+          .ok shouldBe defined withClue s"Expected OK output but got error in test case: $testCaseName. Actual: $actual"
         actual.err shouldBe None withClue s"Expected OK output but got both OK and error in test case: $testCaseName"
 
         expectedMarks.reported.size shouldBe actual.ok.get.reported.size withClue
           s"Reported work reports size mismatch in test case: $testCaseName"
 
-        expectedMarks.reported.zip(actual.ok.get.reported).zipWithIndex.foreach { case ((exp, act), index) =>
-          exp shouldBe act withClue s"Work report mismatch at index $index in test case: $testCaseName"
+        expectedMarks.reported.zip(actual.ok.get.reported).zipWithIndex.foreach {
+          case ((exp, act), index) =>
+            exp shouldBe act withClue s"Work report mismatch at index $index in test case: $testCaseName"
         }
 
       case (_, Some(expectedErr)) =>
-        actual.err shouldBe defined withClue s"Expected error output but got OK in test case: $testCaseName. Actual: $actual"
+        actual
+          .err shouldBe defined withClue s"Expected error output but got OK in test case: $testCaseName. Actual: $actual"
         actual.ok shouldBe None withClue s"Expected error output but got both OK and error in test case: $testCaseName"
         expectedErr shouldBe actual.err.get withClue s"Error code mismatch in test case: $testCaseName"
 
@@ -238,30 +266,32 @@ class AssuranceTest extends AnyFunSuite with Matchers:
     expected.availAssignments.size shouldBe actual.availAssignments.size withClue
       s"Availability assignments size mismatch in test case: $testCaseName"
 
-    expected.availAssignments.zip(actual.availAssignments).zipWithIndex.foreach { case ((exp, act), index) =>
-      (exp, act) match
-        case (None, None) => // Both null is fine
-        case (None, Some(_)) =>
-          fail(s"Expected null assignment at index $index but got non-null in test case: $testCaseName")
-        case (Some(_), None) =>
-          fail(s"Expected non-null assignment at index $index but got null in test case: $testCaseName")
-        case (Some(e), Some(a)) =>
-          e.report shouldBe a.report withClue
-            s"Work report mismatch at index $index in test case: $testCaseName"
-          e.timeout shouldBe a.timeout withClue
-            s"Timeout mismatch at index $index in test case: $testCaseName"
+    expected.availAssignments.zip(actual.availAssignments).zipWithIndex.foreach {
+      case ((exp, act), index) =>
+        (exp, act) match
+          case (None, None) => // Both null is fine
+          case (None, Some(_)) =>
+            fail(s"Expected null assignment at index $index but got non-null in test case: $testCaseName")
+          case (Some(_), None) =>
+            fail(s"Expected non-null assignment at index $index but got null in test case: $testCaseName")
+          case (Some(e), Some(a)) =>
+            e.report shouldBe a.report withClue
+              s"Work report mismatch at index $index in test case: $testCaseName"
+            e.timeout shouldBe a.timeout withClue
+              s"Timeout mismatch at index $index in test case: $testCaseName"
     }
 
     expected.currValidators.size shouldBe actual.currValidators.size withClue
       s"Current validators size mismatch in test case: $testCaseName"
 
-    expected.currValidators.zip(actual.currValidators).zipWithIndex.foreach { case ((exp, act), index) =>
-      exp.bandersnatch shouldBe act.bandersnatch withClue
-        s"Bandersnatch key mismatch at validator $index in test case: $testCaseName"
-      exp.ed25519 shouldBe act.ed25519 withClue
-        s"Ed25519 key mismatch at validator $index in test case: $testCaseName"
-      exp.bls shouldBe act.bls withClue
-        s"BLS key mismatch at validator $index in test case: $testCaseName"
-      exp.metadata shouldBe act.metadata withClue
-        s"Metadata mismatch at validator $index in test case: $testCaseName"
+    expected.currValidators.zip(actual.currValidators).zipWithIndex.foreach {
+      case ((exp, act), index) =>
+        exp.bandersnatch shouldBe act.bandersnatch withClue
+          s"Bandersnatch key mismatch at validator $index in test case: $testCaseName"
+        exp.ed25519 shouldBe act.ed25519 withClue
+          s"Ed25519 key mismatch at validator $index in test case: $testCaseName"
+        exp.bls shouldBe act.bls withClue
+          s"BLS key mismatch at validator $index in test case: $testCaseName"
+        exp.metadata shouldBe act.metadata withClue
+          s"Metadata mismatch at validator $index in test case: $testCaseName"
     }

@@ -9,8 +9,7 @@ import io.forge.jam.core.types.work.Vote
 import io.forge.jam.core.types.epoch.ValidatorKey
 import io.forge.jam.protocol.dispute.DisputeTypes.*
 import io.forge.jam.core.types.workpackage.{WorkReport, AvailabilityAssignment}
-import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
-import org.bouncycastle.crypto.signers.Ed25519Signer
+import io.forge.jam.crypto.Ed25519
 
 /**
  * Disputes State Transition Function.
@@ -27,23 +26,6 @@ import org.bouncycastle.crypto.signers.Ed25519Signer
  * - Maintain sorted/unique ordering requirements
  */
 object DisputeTransition:
-
-  /**
-   * Verify Ed25519 signature on a message.
-   */
-  private def verifyEd25519Signature(
-    publicKey: Ed25519PublicKey,
-    message: Array[Byte],
-    signature: Ed25519Signature
-  ): Boolean =
-    try
-      val pubKeyParams = new Ed25519PublicKeyParameters(publicKey.bytes, 0)
-      val signer = new Ed25519Signer()
-      signer.init(false, pubKeyParams)
-      signer.update(message, 0, message.length)
-      signer.verifySignature(signature.bytes)
-    catch
-      case _: Exception => false
 
   /**
    * Validate that culprits are sorted and unique by key.
@@ -175,7 +157,7 @@ object DisputeTransition:
         val prefixBytes = if vote.vote then constants.JAM_VALID_BYTES else constants.JAM_INVALID_BYTES
         val message = prefixBytes ++ verdict.target.bytes
 
-        if !verifyEd25519Signature(validator.ed25519, message, vote.signature) then
+        if !Ed25519.verify(validator.ed25519, message, vote.signature) then
           return Some(DisputeErrorCode.BadSignature)
 
       // Validate target has not already been judged
@@ -222,7 +204,7 @@ object DisputeTransition:
       val message = constants.JAM_GUARANTEE_BYTES ++ culprit.target.bytes
 
       // Verify culprit signature
-      if !verifyEd25519Signature(culprit.key, message, culprit.signature) then
+      if !Ed25519.verify(culprit.key, message, culprit.signature) then
         return Some(DisputeErrorCode.BadSignature)
 
       // Check if already an offender
@@ -252,7 +234,7 @@ object DisputeTransition:
       val prefixBytes = if fault.vote then constants.JAM_VALID_BYTES else constants.JAM_INVALID_BYTES
       val message = prefixBytes ++ fault.target.bytes
 
-      if !verifyEd25519Signature(fault.key, message, fault.signature) then
+      if !Ed25519.verify(fault.key, message, fault.signature) then
         return Some(DisputeErrorCode.BadSignature)
 
     None

@@ -1,0 +1,13 @@
+[package]
+name = "ed25519-zebra-wrapper"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ed25519-zebra = "4.0.3"
+jni = "0.21.1"
+hex = "0.4.3"
+curve25519-dalek = "4.1"
+
+[lib]
+crate-type = ["cdylib"]
