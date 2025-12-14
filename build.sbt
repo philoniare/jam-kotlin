@@ -21,7 +21,7 @@ lazy val buildNativeLib = taskKey[Unit]("Build native Bandersnatch VRF library")
 lazy val buildEd25519ZebraLib = taskKey[Unit]("Build native Ed25519-Zebra library")
 
 lazy val root = (project in file("."))
-    .aggregate(core, crypto, pvm, protocol)
+    .aggregate(core, crypto, pvm, protocol, conformance)
     .settings(
         name := "jam",
         publish / skip := true
@@ -180,6 +180,33 @@ lazy val protocol = (project in file("modules/protocol"))
             "io.circe" %% "circe-core" % "0.14.6",
             "io.circe" %% "circe-generic" % "0.14.6",
             "io.circe" %% "circe-parser" % "0.14.6",
+            "org.scalatest" %% "scalatest" % "3.2.17" % Test
+        ),
+        scalacOptions ++= Seq(
+            "-deprecation",
+            "-feature",
+            "-unchecked",
+            "-language:implicitConversions",
+            "-language:higherKinds"
+        ),
+        Test / fork := true,
+        Test / baseDirectory := (ThisBuild / baseDirectory).value,
+        Test / javaOptions ++= Seq(
+            s"-Djava.library.path=${(ThisBuild / baseDirectory).value}/modules/crypto/native/build/$osDirName:${(ThisBuild / baseDirectory).value}/modules/crypto/src/main/resources",
+            s"-Djam.base.dir=${(ThisBuild / baseDirectory).value}"
+        )
+    )
+
+lazy val conformance = (project in file("modules/conformance"))
+    .dependsOn(core, crypto, protocol)
+    .settings(
+        name := "jam-conformance",
+        libraryDependencies ++= Seq(
+            "org.typelevel" %% "spire" % "0.18.0",
+            // cats-effect for functional async IO
+            "org.typelevel" %% "cats-effect" % "3.5.4",
+            // fs2-io for Unix domain socket support
+            "co.fs2" %% "fs2-io" % "3.10.2",
             "org.scalatest" %% "scalatest" % "3.2.17" % Test
         ),
         scalacOptions ++= Seq(

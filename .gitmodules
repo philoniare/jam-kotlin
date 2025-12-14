@@ -7,3 +7,7 @@
 [submodule "modules/crypto/native/ark-vrf"]
 	path = modules/crypto/native/ark-vrf
 	url = https://github.com/davxy/ark-vrf
+[submodule "jam-conformance"]
+	path = jam-conformance
+	url = git@github.com:davxy/jam-conformance.git
+	fetchRecurseSubmodules = false
