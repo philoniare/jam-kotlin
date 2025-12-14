@@ -50,3 +50,4 @@ bin/
 .editorconfig
 *.md
 *.yml
+.bsp/

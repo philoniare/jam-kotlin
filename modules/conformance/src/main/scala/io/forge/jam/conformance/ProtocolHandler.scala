@@ -21,7 +21,8 @@ class ProtocolHandler(
   logger: FileLogger,
   config: ChainConfig = ChainConfig.TINY
 ):
-  private val blockImporter = new BlockImporter(config)
+  // BlockImporter will be created after handshake when we know the negotiated features
+  private var blockImporter: BlockImporter = _
 
   // Session features after negotiation
   private var sessionFeatures: Int = 0
@@ -144,11 +145,15 @@ class ProtocolHandler(
     val hasAncestry = (sessionFeatures & Features.ANCESTRY) != 0
     val hasForks = (sessionFeatures & Features.FORKS) != 0
 
+    // Create BlockImporter with the correct skipAncestryValidation flag
+    val skipAncestryValidation = !hasAncestry
+    blockImporter = new BlockImporter(config, skipAncestryValidation)
+
     val response = ProtocolMessage.PeerInfoMsg(PeerInfo.forTarget(targetFeatures))
     sendMessage(socket, response) *>
       IO { handshakeComplete = true } *>
       logger.logInfo(
-        s"Handshake complete, negotiated features=0x${sessionFeatures.toHexString} (ancestry=$hasAncestry, forks=$hasForks)"
+        s"Handshake complete, negotiated features=0x${sessionFeatures.toHexString} (ancestry=$hasAncestry, forks=$hasForks, skipAncestryValidation=$skipAncestryValidation)"
       )
 
   /**

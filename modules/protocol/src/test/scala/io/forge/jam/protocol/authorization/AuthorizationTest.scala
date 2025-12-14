@@ -75,7 +75,7 @@ class AuthorizationTest extends AnyFunSuite with Matchers:
     postState.authPools(1).size shouldBe 3
   }
 
-  test("zero-hash padding behavior") {
+  test("pool can shrink below max size after consumption") {
     // Create a pool with only one item
     val pool = List(hashFilled(1))
     val queue = (0 until 80).map(i => hashFilled(100 + i)).toList
@@ -93,8 +93,9 @@ class AuthorizationTest extends AnyFunSuite with Matchers:
 
     val postState = AuthorizationTransition.stf(input, preState, singleCoreConfig)
 
-    // Pool should have a zero hash since it became empty
-    postState.authPools(0) should contain(Hash.zero)
+    postState.authPools(0) should not contain hashFilled(1) // consumed item removed
+    postState.authPools(0) should contain(queue(10)) // new item from queue added
+    postState.authPools(0).size shouldBe 1 // pool has 1 item (not padded)
   }
 
   test("pool size enforcement") {
@@ -196,13 +197,15 @@ class AuthorizationTest extends AnyFunSuite with Matchers:
     expected.size shouldBe actual.size withClue
       s"Auth pools size mismatch in test case: $testCaseName"
 
-    expected.zip(actual).zipWithIndex.foreach { case ((expectedPool, actualPool), index) =>
-      expectedPool.size shouldBe actualPool.size withClue
-        s"Auth pool $index size mismatch in test case: $testCaseName"
-      expectedPool.zip(actualPool).zipWithIndex.foreach { case ((exp, act), hashIdx) =>
-        exp shouldBe act withClue
-          s"Auth pool $index hash $hashIdx mismatch in test case: $testCaseName\nExpected: ${exp.toHex}\nActual: ${act.toHex}"
-      }
+    expected.zip(actual).zipWithIndex.foreach {
+      case ((expectedPool, actualPool), index) =>
+        expectedPool.size shouldBe actualPool.size withClue
+          s"Auth pool $index size mismatch in test case: $testCaseName"
+        expectedPool.zip(actualPool).zipWithIndex.foreach {
+          case ((exp, act), hashIdx) =>
+            exp shouldBe act withClue
+              s"Auth pool $index hash $hashIdx mismatch in test case: $testCaseName\nExpected: ${exp.toHex}\nActual: ${act.toHex}"
+        }
     }
 
   private def assertAuthQueuesEqual(
@@ -213,11 +216,13 @@ class AuthorizationTest extends AnyFunSuite with Matchers:
     expected.size shouldBe actual.size withClue
       s"Auth queues size mismatch in test case: $testCaseName"
 
-    expected.zip(actual).zipWithIndex.foreach { case ((expectedQueue, actualQueue), index) =>
-      expectedQueue.size shouldBe actualQueue.size withClue
-        s"Auth queue $index size mismatch in test case: $testCaseName"
-      expectedQueue.zip(actualQueue).zipWithIndex.foreach { case ((exp, act), hashIdx) =>
-        exp shouldBe act withClue
-          s"Auth queue $index hash $hashIdx mismatch in test case: $testCaseName"
-      }
+    expected.zip(actual).zipWithIndex.foreach {
+      case ((expectedQueue, actualQueue), index) =>
+        expectedQueue.size shouldBe actualQueue.size withClue
+          s"Auth queue $index size mismatch in test case: $testCaseName"
+        expectedQueue.zip(actualQueue).zipWithIndex.foreach {
+          case ((exp, act), hashIdx) =>
+            exp shouldBe act withClue
+              s"Auth queue $index hash $hashIdx mismatch in test case: $testCaseName"
+        }
     }

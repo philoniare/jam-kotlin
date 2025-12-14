@@ -2,6 +2,7 @@ package io.forge.jam.protocol.traces
 
 import io.forge.jam.core.{ChainConfig, JamBytes, Hashing}
 import io.forge.jam.core.primitives.Hash
+import io.forge.jam.vrfs.BandersnatchWrapper
 import io.forge.jam.core.types.block.Block
 import io.forge.jam.core.types.extrinsic.{AssuranceExtrinsic, GuaranteeExtrinsic, Preimage}
 import io.forge.jam.core.types.workpackage.{WorkReport, AvailabilityAssignment}
@@ -84,8 +85,14 @@ enum ImportError:
  * 6. Authorizations - Update authorization pools
  * 7. Preimages - Handle preimage provisioning
  * 8. Statistics - Update chain statistics
+ *
+ * @param config The chain configuration
+ * @param skipAncestryValidation When true, skip anchor recency validation in Reports STF.
  */
-class BlockImporter(config: ChainConfig = ChainConfig.TINY):
+class BlockImporter(
+  config: ChainConfig = ChainConfig.TINY,
+  skipAncestryValidation: Boolean = false
+):
 
   /**
    * Imports a block and applies all state transitions.
@@ -155,7 +162,8 @@ class BlockImporter(config: ChainConfig = ChainConfig.TINY):
         slot = block.header.slot.value.toLong
       )
       val reportPreState = buildReportState(fullPreState, safrolePostState, assurancePostState, updatedRecentHistory)
-      val (reportPostState, reportOutput) = ReportTransition.stf(reportInput, reportPreState, config)
+      val (reportPostState, reportOutput) =
+        ReportTransition.stf(reportInput, reportPreState, config, skipAncestryValidation)
 
       if reportOutput.err.isDefined then
         return ImportResult.Failure(
@@ -205,7 +213,7 @@ class BlockImporter(config: ChainConfig = ChainConfig.TINY):
 
       // Step 10: Compute final core statistics (combines guarantees, available reports, assurances)
       val finalCoreStats = computeFinalCoreStatistics(
-        guaranteeStats = reportPostState.coresStatistics,
+        guarantees = block.extrinsic.guarantees, // Use raw guarantees, not Reports STF output
         availableReports = availableReports,
         assurances = block.extrinsic.assurances,
         maxCores = config.coresCount
@@ -215,7 +223,7 @@ class BlockImporter(config: ChainConfig = ChainConfig.TINY):
       val finalServiceStats = computeFinalServiceStatistics(
         guarantees = block.extrinsic.guarantees,
         preimages = block.extrinsic.preimages,
-        accumulationStats = Map.empty // TODO: Get from accumulation output
+        accumulationStats = accumulationOutput.accumulationStats
       )
 
       // Step 12: Merge all post-states into unified FullJamState
@@ -239,6 +247,20 @@ class BlockImporter(config: ChainConfig = ChainConfig.TINY):
       // Step 13: Encode merged state back to keyvals
       val postKeyvals = StateEncoder.encodeFullState(mergedState, config)
 
+      // Debug: Minimal logging - just show which prefixes changed
+      val preKeyvalsByPrefix = preState.keyvals.groupBy(kv => kv.key.toArray(0).toInt & 0xff)
+      val postKeyvalsByPrefix = postKeyvals.groupBy(kv => kv.key.toArray(0).toInt & 0xff)
+      val changedPrefixes = scala.collection.mutable.ListBuffer[String]()
+      for prefix <- (preKeyvalsByPrefix.keys ++ postKeyvalsByPrefix.keys).toSet.toList.sorted do
+        val preKvs = preKeyvalsByPrefix.getOrElse(prefix, Nil)
+        val postKvs = postKeyvalsByPrefix.getOrElse(prefix, Nil)
+        val preLen = preKvs.headOption.map(_.value.length).getOrElse(0)
+        val postLen = postKvs.headOption.map(_.value.length).getOrElse(0)
+        val changed = preLen != postLen || preKvs.size != postKvs.size ||
+          preKvs.zip(postKvs).exists((a, b) => !a.value.toArray.sameElements(b.value.toArray))
+        if changed then
+          changedPrefixes += f"0x$prefix%02x"
+
       // Step 14: Compute state root via Merkle trie
       val stateRoot = StateMerklization.stateMerklize(postKeyvals)
 
@@ -252,22 +274,46 @@ class BlockImporter(config: ChainConfig = ChainConfig.TINY):
 
   /**
    * Compute final core statistics by combining:
-   * 1. Guarantee-based stats (bundleSize, gasUsed, extrinsicCount, etc.) from Reports STF
+   * 1. Guarantee-based stats (bundleSize, gasUsed, extrinsicCount, etc.) from block's guarantees
    * 2. dataSize from available reports
    * 3. assuranceCount/popularity from assurance extrinsics
    */
   private def computeFinalCoreStatistics(
-    guaranteeStats: List[CoreStatisticsRecord],
+    guarantees: List[GuaranteeExtrinsic],
     availableReports: List[WorkReport],
     assurances: List[AssuranceExtrinsic],
     maxCores: Int
   ): List[CoreStatisticsRecord] =
-    // Start with guarantee-based stats (or fresh zeros if empty)
-    val coreStats = if guaranteeStats.size >= maxCores then
-      guaranteeStats.toArray
-    else
-      val arr = guaranteeStats.toArray
-      Array.fill(maxCores)(CoreStatisticsRecord()) // Fill with zeros
+    val coreStats = Array.fill(maxCores)(CoreStatisticsRecord())
+
+    // For each guarantee, add packageSize and per-digest stats to the core
+    for guarantee <- guarantees do
+      val report = guarantee.report
+      val coreIdx = report.coreIndex.toInt
+      if coreIdx >= 0 && coreIdx < maxCores then
+        var imports = 0L
+        var extrinsicCount = 0L
+        var extrinsicSize = 0L
+        var exports = 0L
+        var gasUsed = 0L
+
+        for result <- report.results do
+          val load = result.refineLoad
+          imports += load.imports.toLong
+          extrinsicCount += load.extrinsicCount.toLong
+          extrinsicSize += load.extrinsicSize.toLong
+          exports += load.exports.toLong
+          gasUsed += load.gasUsed.toLong
+
+        val current = coreStats(coreIdx)
+        coreStats(coreIdx) = current.copy(
+          imports = current.imports + imports,
+          extrinsicCount = current.extrinsicCount + extrinsicCount,
+          extrinsicSize = current.extrinsicSize + extrinsicSize,
+          exports = current.exports + exports,
+          bundleSize = current.bundleSize + report.packageSpec.length.toLong, // packageSize
+          gasUsed = current.gasUsed + gasUsed
+        )
 
     // Add dataSize from available reports
     // dataSize = package.length + segmentsSize
@@ -277,8 +323,7 @@ class BlockImporter(config: ChainConfig = ChainConfig.TINY):
       val coreIndex = report.coreIndex.toInt
       if coreIndex >= 0 && coreIndex < coreStats.length then
         val packageLength = report.packageSpec.length.toLong
-        // segmentCount comes from work results exports
-        val segmentCount = report.results.map(_.refineLoad.exports.toLong).sum
+        val segmentCount = report.packageSpec.exportsCount.toLong
         val segmentsSize = segmentSize * ((segmentCount * 65 + 63) / 64)
         val dataSize = packageLength + segmentsSize
 
@@ -348,6 +393,14 @@ class BlockImporter(config: ChainConfig = ChainConfig.TINY):
           extrinsicCount = current.extrinsicCount + refineLoad.extrinsicCount.toLong,
           extrinsicSize = current.extrinsicSize + refineLoad.extrinsicSize.toLong
         )
+
+    // Update from accumulation stats (accumulateCount, accumulateGasUsed)
+    for (serviceId, (gasUsed, count)) <- accumulationStats do
+      val current = statsMap.getOrElse(serviceId, ReportTypes.ServiceActivityRecord())
+      statsMap(serviceId) = current.copy(
+        accumulateCount = current.accumulateCount + count.toLong,
+        accumulateGasUsed = current.accumulateGasUsed + gasUsed
+      )
 
     // Return sorted list by service ID
     statsMap.toList.sortBy(_._1).map {
@@ -480,7 +533,10 @@ class BlockImporter(config: ChainConfig = ChainConfig.TINY):
       postOffenders = safrolePost.postOffenders,
 
       // Raw keyvals for pass-through
-      otherKeyvals = preState.otherKeyvals
+      otherKeyvals = preState.otherKeyvals,
+
+      // Preserve original keyvals for unchanged components
+      originalKeyvals = preState.originalKeyvals
     )
 
   /**
@@ -557,13 +613,20 @@ object InputExtractor:
     val tickets = block.extrinsic.tickets
 
     // The header.entropySource is a 96-byte Bandersnatch IETF VRF signature.
-    // For now, we extract the first 32 bytes as a simple approximation.
-    // In production, this would use native crypto to extract the VRF output.
     val entropyBytes = header.entropySource.toArray
-    val vrfOutput = if entropyBytes.length >= 32 then
-      Hash(entropyBytes.take(32))
-    else
-      Hash(entropyBytes.padTo(32, 0.toByte))
+    val vrfOutput =
+      try
+        BandersnatchWrapper.ensureLibraryLoaded()
+        val output = BandersnatchWrapper.getIetfVrfOutput(entropyBytes)
+        if output != null && output.length == 32 then
+          Hash(output)
+        else
+          // Fallback: use first 32 bytes if native extraction fails
+          Hash(entropyBytes.take(32))
+      catch
+        case _: Exception =>
+          // Fallback: use first 32 bytes if native library unavailable
+          Hash(entropyBytes.take(32))
 
     SafroleInput(
       slot = header.slot.value.toLong,
@@ -609,13 +672,12 @@ object InputExtractor:
     import io.forge.jam.core.codec.encode
     val headerHash = Hashing.blake2b256(block.header.encode.toArray)
 
-    // Build work packages from guarantees
     val workPackages = block.extrinsic.guarantees.map { guarantee =>
       ReportedWorkPackage(
         hash = guarantee.report.packageSpec.hash,
-        exportsRoot = guarantee.report.packageSpec.exportsRoot
+        exportsRoot = guarantee.report.packageSpec.exportsRoot // Segment root is the exports root
       )
-    }
+    }.sortBy(wp => JamBytes(wp.hash.bytes))
 
     HistoricalInput(
       headerHash = headerHash,

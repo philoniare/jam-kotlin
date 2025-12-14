@@ -14,12 +14,24 @@ import io.forge.jam.protocol.accumulation.{
   AccumulationServiceData,
   AccumulationReadyRecord,
   Privileges,
-  AlwaysAccItem
+  AlwaysAccItem,
+  StorageMapEntry,
+  PreimagesStatusMapEntry
 }
+import io.forge.jam.core.types.service.ServiceInfo
 import io.forge.jam.protocol.history.HistoryTypes.HistoricalState
 import io.forge.jam.protocol.authorization.AuthorizationTypes.AuthState
 import io.forge.jam.protocol.preimage.PreimageTypes.{PreimageState, PreimageAccount, AccountInfo}
-import io.forge.jam.protocol.statistics.StatisticsTypes.{StatState, StatCount}
+import io.forge.jam.protocol.statistics.StatisticsTypes.{
+  StatState,
+  StatCount,
+  ActivityStatistics,
+  CoreStatistics,
+  ServiceStatistics,
+  ServiceStatisticsEntry as StatServiceEntry,
+  CountAndGas,
+  PreimagesAndSize
+}
 import io.forge.jam.protocol.report.ReportTypes.{CoreStatisticsRecord, ServiceStatisticsEntry}
 
 import scala.collection.mutable
@@ -91,8 +103,14 @@ final case class FullJamState(
   // Post-dispute offenders
   postOffenders: List[Ed25519PublicKey] = List.empty,
 
-  // Raw keyvals for all other state components (for pass-through)
-  otherKeyvals: List[KeyValue] = List.empty
+  // Raw keyvals for all state components (for pass-through when unchanged)
+  otherKeyvals: List[KeyValue] = List.empty,
+
+  // Original keyvals by full key (for preserving exact bytes when unchanged)
+  originalKeyvals: Map[JamBytes, KeyValue] = Map.empty,
+
+  // Raw service data by state key (for preimages, storage, etc.)
+  rawServiceDataByStateKey: Map[JamBytes, JamBytes] = Map.empty
 ):
 
   /**
@@ -167,7 +185,8 @@ final case class FullJamState(
           )
         )
       ),
-      accounts = serviceAccounts
+      accounts = serviceAccounts,
+      rawServiceDataByStateKey = mutable.Map.from(rawServiceDataByStateKey)
     )
 
   /**
@@ -225,46 +244,163 @@ final case class FullJamState(
   def toKeyvals(config: ChainConfig = ChainConfig.TINY): List[KeyValue] =
     val builder = scala.collection.mutable.ListBuffer[KeyValue]()
 
-    // Timeslot (0x0B)
+    // Build a map of original keyvals from otherKeyvals by prefix for pass-through
+    val otherByPrefix = otherKeyvals.groupBy(kv => kv.key.toArray(0).toInt & 0xff)
+
+    // Core authorization pools (0x01) - always re-encode (modified by Authorization STF)
+    val encodedAuthPools = encodeAuthPools(authPools)
     builder += KeyValue(
-      StateKeys.simpleKey(StateKeys.TIMESLOT),
-      encodeTimeslot(timeslot)
+      StateKeys.simpleKey(StateKeys.CORE_AUTHORIZATION_POOL),
+      encodedAuthPools
     )
 
-    // Entropy pool (0x06)
+    // Authorization queues (0x02) - pass through original if available
+    otherByPrefix.get(StateKeys.AUTHORIZATION_QUEUE.toInt & 0xff).foreach(kvs => builder ++= kvs)
+
+    // Recent history (0x03) - always re-encode (modified by History STF)
+    builder += KeyValue(
+      StateKeys.simpleKey(StateKeys.RECENT_HISTORY),
+      encodeRecentHistory(recentHistory)
+    )
+
+    // Safrole gamma state (0x04) - use original if available and unchanged, else re-encode
+    val safroleKey = StateKeys.simpleKey(StateKeys.SAFROLE_STATE)
+    originalKeyvals.get(safroleKey) match
+      case Some(kv) => builder += kv
+      case None =>
+        builder += KeyValue(
+          safroleKey,
+          encodeSafroleGammaState(safroleGammaK, safroleGammaZ, safroleGammaS, safroleGammaA, config)
+        )
+
+    // Judgements (0x05) - pass through original if available
+    otherByPrefix.get(StateKeys.JUDGEMENTS.toInt & 0xff).foreach(kvs => builder ++= kvs)
+
+    // Entropy pool (0x06) - always re-encode (modified by Safrole STF)
     builder += KeyValue(
       StateKeys.simpleKey(StateKeys.ENTROPY_POOL),
       encodeEntropyPool(entropyPool)
     )
 
-    // Current validators (0x08)
+    // Validator queue (0x07) - use original if available
+    val validatorQueueKey = StateKeys.simpleKey(StateKeys.VALIDATOR_QUEUE)
+    originalKeyvals.get(validatorQueueKey) match
+      case Some(kv) => builder += kv
+      case None =>
+        builder += KeyValue(
+          validatorQueueKey,
+          encodeValidatorList(validatorQueue)
+        )
+
+    // Current validators (0x08) - use original if available
+    val currentValidatorsKey = StateKeys.simpleKey(StateKeys.CURRENT_VALIDATORS)
+    originalKeyvals.get(currentValidatorsKey) match
+      case Some(kv) => builder += kv
+      case None =>
+        builder += KeyValue(
+          currentValidatorsKey,
+          encodeValidatorList(currentValidators)
+        )
+
+    // Previous validators (0x09) - use original if available
+    val previousValidatorsKey = StateKeys.simpleKey(StateKeys.PREVIOUS_VALIDATORS)
+    originalKeyvals.get(previousValidatorsKey) match
+      case Some(kv) => builder += kv
+      case None =>
+        builder += KeyValue(
+          previousValidatorsKey,
+          encodeValidatorList(previousValidators)
+        )
+
+    // Reports (0x0A) - always re-encode (modified by Reports STF)
+    val paddedReports = reports.padTo(config.coresCount, None)
     builder += KeyValue(
-      StateKeys.simpleKey(StateKeys.CURRENT_VALIDATORS),
-      encodeValidatorList(currentValidators)
+      StateKeys.simpleKey(StateKeys.REPORTS),
+      encodeReports(paddedReports)
     )
 
-    // Previous validators (0x09)
+    // Timeslot (0x0B) - always re-encode (modified by Safrole STF)
     builder += KeyValue(
-      StateKeys.simpleKey(StateKeys.PREVIOUS_VALIDATORS),
-      encodeValidatorList(previousValidators)
+      StateKeys.simpleKey(StateKeys.TIMESLOT),
+      encodeTimeslot(timeslot)
     )
 
-    // Validator queue (0x07)
+    // Privileged services (0x0C) - pass through original if available
+    otherByPrefix.get(StateKeys.PRIVILEGED_SERVICES.toInt & 0xff).foreach(kvs => builder ++= kvs)
+
+    // Activity statistics (0x0D) - always re-encode with new format
     builder += KeyValue(
-      StateKeys.simpleKey(StateKeys.VALIDATOR_QUEUE),
-      encodeValidatorList(validatorQueue)
+      StateKeys.simpleKey(StateKeys.ACTIVITY_STATISTICS),
+      encodeActivityStatistics(config)
     )
 
-    // Safrole gamma state (0x04)
-    builder += KeyValue(
-      StateKeys.simpleKey(StateKeys.SAFROLE_STATE),
-      encodeSafroleGammaState(safroleGammaK, safroleGammaZ, safroleGammaS, safroleGammaA, config)
-    )
+    // Accumulation queue (0x0E) - pass through original if available
+    otherByPrefix.get(StateKeys.ACCUMULATION_QUEUE.toInt & 0xff).foreach(kvs => builder ++= kvs)
 
-    // Add other keyvals as-is
-    builder ++= otherKeyvals
+    // Accumulation history (0x0F) - pass through original if available
+    otherByPrefix.get(StateKeys.ACCUMULATION_HISTORY.toInt & 0xff).foreach(kvs => builder ++= kvs)
+
+    // Last accumulation outputs (0x10) - pass through original if available
+    otherByPrefix.get(StateKeys.LAST_ACCUMULATION_OUTPUTS.toInt & 0xff).foreach(kvs => builder ++= kvs)
+
+    // Service accounts (0xFF) - use original keyvals if available for each service
+    for item <- serviceAccounts do
+      val serviceKey = encodeServiceAccountKey(item.id)
+      originalKeyvals.get(serviceKey) match
+        case Some(kv) => builder += kv
+        case None =>
+          builder += KeyValue(
+            serviceKey,
+            encodeServiceInfo(item.data.service)
+          )
+
+    // Add remaining otherKeyvals (prefix 0x00 service data keys)
+    builder ++= otherKeyvals.filter(kv => (kv.key.toArray(0).toInt & 0xff) == 0)
 
     builder.toList
+
+  /**
+   * Encode authorization pools.
+   * Format: For each core, compact length prefix + N x 32-byte hashes
+   */
+  private def encodeAuthPools(pools: List[List[Hash]]): JamBytes =
+    val builder = JamBytes.newBuilder
+    for pool <- pools do
+      builder ++= codec.encodeCompactInteger(pool.size.toLong)
+      for hash <- pool do
+        builder ++= hash.bytes
+    builder.result()
+
+  /**
+   * Encode service account key.
+   * Format: prefix 255, service ID interleaved at positions 1, 3, 5, 7
+   */
+  private def encodeServiceAccountKey(serviceId: Long): JamBytes =
+    val key = new Array[Byte](31)
+    key(0) = StateKeys.SERVICE_ACCOUNT
+    key(1) = (serviceId & 0xff).toByte
+    key(3) = ((serviceId >> 8) & 0xff).toByte
+    key(5) = ((serviceId >> 16) & 0xff).toByte
+    key(7) = ((serviceId >> 24) & 0xff).toByte
+    JamBytes(key)
+
+  /**
+   * Encode ServiceInfo without version prefix (88 bytes).
+   */
+  private def encodeServiceInfo(info: ServiceInfo): JamBytes =
+    import spire.math.{UInt, ULong}
+    val builder = JamBytes.newBuilder
+    builder ++= info.codeHash.bytes
+    builder ++= codec.encodeU64LE(ULong(info.balance))
+    builder ++= codec.encodeU64LE(ULong(info.minItemGas))
+    builder ++= codec.encodeU64LE(ULong(info.minMemoGas))
+    builder ++= codec.encodeU64LE(ULong(info.bytesUsed))
+    builder ++= codec.encodeU64LE(ULong(info.depositOffset))
+    builder ++= codec.encodeU32LE(UInt(info.items))
+    builder ++= codec.encodeU32LE(UInt(info.creationSlot.toInt))
+    builder ++= codec.encodeU32LE(UInt(info.lastAccumulationSlot.toInt))
+    builder ++= codec.encodeU32LE(UInt(info.parentService.toInt))
+    builder.result()
 
   // Encoding helpers
 
@@ -309,6 +445,201 @@ final case class FullJamState(
 
     builder.result()
 
+  /**
+   * Encode authorization queues.
+   * Format: For each core, 80 x 32-byte hashes
+   */
+  private def encodeAuthQueues(queues: List[List[Hash]]): JamBytes =
+    val builder = JamBytes.newBuilder
+    for queue <- queues do
+      // Each queue has exactly 80 hashes
+      for hash <- queue.take(80) do
+        builder ++= hash.bytes
+      // Pad with zeros if less than 80
+      for _ <- queue.size until 80 do
+        builder ++= Hash.zero.bytes
+    builder.result()
+
+  /**
+   * Encode recent history (beta).
+   */
+  private def encodeRecentHistory(history: HistoricalBetaContainer): JamBytes =
+    import io.forge.jam.core.codec.encode
+    history.encode
+
+  /**
+   * Encode privileged services (chi).
+   * Fields: bless, assign (list), designate, alwaysAcc (list)
+   * NOTE: register field removed for v0.7.0 compatibility (fuzz-proto tests)
+   */
+  private def encodePrivilegedServices(privileges: Privileges): JamBytes =
+    import io.forge.jam.core.codec.encode
+    import spire.math.UInt
+    val builder = JamBytes.newBuilder
+    // Encode bless service ID
+    builder ++= codec.encodeU32LE(UInt(privileges.bless.toInt))
+    // Encode assign list (fixed-size array, no length prefix - size determined by coresCount)
+    for serviceId <- privileges.assign do
+      builder ++= codec.encodeU32LE(UInt(serviceId.toInt))
+    // Encode designate service ID
+    builder ++= codec.encodeU32LE(UInt(privileges.designate.toInt))
+    // NOTE: register field removed for v0.7.0 compatibility (fuzz-proto tests)
+    // Will be re-added when upgrading to v0.7.1 test vectors
+    builder ++= codec.encodeCompactInteger(privileges.alwaysAcc.size.toLong)
+    for item <- privileges.alwaysAcc do
+      builder ++= codec.encodeU32LE(UInt(item.id.toInt))
+      builder ++= codec.encodeU64LE(spire.math.ULong(item.gas))
+    builder.result()
+
+  /**
+   * Encode judgements (psi).
+   */
+  private def encodeJudgements(psi: Psi): JamBytes =
+    import spire.math.UInt
+    val builder = JamBytes.newBuilder
+    // Encode good verdicts (compact list of hashes)
+    builder ++= codec.encodeCompactInteger(psi.good.size.toLong)
+    for hash <- psi.good do
+      builder ++= hash.bytes
+    // Encode bad verdicts (compact list of hashes)
+    builder ++= codec.encodeCompactInteger(psi.bad.size.toLong)
+    for hash <- psi.bad do
+      builder ++= hash.bytes
+    // Encode wonky verdicts (compact list of hashes)
+    builder ++= codec.encodeCompactInteger(psi.wonky.size.toLong)
+    for hash <- psi.wonky do
+      builder ++= hash.bytes
+    // Encode offenders (compact list of ed25519 pubkeys)
+    builder ++= codec.encodeCompactInteger(psi.offenders.size.toLong)
+    for offender <- psi.offenders do
+      builder ++= offender.bytes
+    builder.result()
+
+  /**
+   * Encode reports (rho) - availability assignments.
+   */
+  private def encodeReports(reports: List[Option[AvailabilityAssignment]]): JamBytes =
+    import io.forge.jam.core.codec.encode
+    val builder = JamBytes.newBuilder
+    for reportOpt <- reports do
+      reportOpt match
+        case None =>
+          builder += 0.toByte // None marker
+        case Some(assignment) =>
+          builder += 1.toByte // Some marker
+          builder ++= assignment.encode
+    builder.result()
+
+  /**
+   * Encode activity statistics (alpha) in v0.7.0+ format.
+   * Format: accumulator (validator stats), previous (validator stats), core stats, service stats
+   */
+  private def encodeActivityStatistics(config: ChainConfig): JamBytes =
+    import io.forge.jam.core.codec.encode
+    import io.forge.jam.core.codec.encodeFixedList
+    import spire.math.{UInt, ULong}
+    val builder = JamBytes.newBuilder
+
+    // Pad to validator count
+    val paddedCurrent = activityStatsCurrent.padTo(config.validatorCount, StatCount.zero)
+    val paddedLast = activityStatsLast.padTo(config.validatorCount, StatCount.zero)
+
+    // Accumulator (current validator stats) - fixed-size array, no length prefix
+    for stat <- paddedCurrent do
+      builder ++= codec.encodeU32LE(UInt(stat.blocks.toInt))
+      builder ++= codec.encodeU32LE(UInt(stat.tickets.toInt))
+      builder ++= codec.encodeU32LE(UInt(stat.preImages.toInt))
+      builder ++= codec.encodeU32LE(UInt(stat.preImagesSize.toInt))
+      builder ++= codec.encodeU32LE(UInt(stat.guarantees.toInt))
+      builder ++= codec.encodeU32LE(UInt(stat.assurances.toInt))
+
+    val afterAccumulator = builder.result()
+
+    // Previous (last validator stats) - fixed-size array, no length prefix
+    for stat <- paddedLast do
+      builder ++= codec.encodeU32LE(UInt(stat.blocks.toInt))
+      builder ++= codec.encodeU32LE(UInt(stat.tickets.toInt))
+      builder ++= codec.encodeU32LE(UInt(stat.preImages.toInt))
+      builder ++= codec.encodeU32LE(UInt(stat.preImagesSize.toInt))
+      builder ++= codec.encodeU32LE(UInt(stat.guarantees.toInt))
+      builder ++= codec.encodeU32LE(UInt(stat.assurances.toInt))
+
+    val afterPrevious = builder.result()
+
+    // Core stats - fixed-size array (coresCount), each field compact-encoded
+    val paddedCoreStats = coreStatistics.padTo(config.coresCount, CoreStatisticsRecord.zero)
+    for (stat, idx) <- paddedCoreStats.zipWithIndex do
+      builder ++= codec.encodeCompactInteger(stat.daLoad) // dataSize (package.length + segmentsSize)
+      builder ++= codec.encodeCompactInteger(stat.popularity) // assuranceCount
+      builder ++= codec.encodeCompactInteger(stat.imports)
+      builder ++= codec.encodeCompactInteger(stat.extrinsicCount)
+      builder ++= codec.encodeCompactInteger(stat.extrinsicSize)
+      builder ++= codec.encodeCompactInteger(stat.exports)
+      builder ++= codec.encodeCompactInteger(stat.bundleSize) // packageSize
+      builder ++= codec.encodeCompactInteger(stat.gasUsed)
+
+    val afterCore = builder.result()
+
+    // Service stats - sorted map with compact length prefix
+    val sortedServiceStats = serviceStatistics.sortBy(_.id)
+    builder ++= codec.encodeCompactInteger(sortedServiceStats.size.toLong)
+
+    for entry <- sortedServiceStats do
+      builder ++= codec.encodeU32LE(UInt(entry.id.toInt))
+      // Encode ServiceStatistics in v0.7.0 format
+      // preimages: count + size (both compact)
+      builder ++= codec.encodeCompactInteger(0L) // preimages count
+      builder ++= codec.encodeCompactInteger(0L) // preimages size
+      // refines: count + gas (both compact)
+      builder ++= codec.encodeCompactInteger(entry.record.refinementCount)
+      builder ++= codec.encodeCompactInteger(entry.record.refinementGasUsed)
+      // imports, extrinsics, exports (all compact)
+      builder ++= codec.encodeCompactInteger(entry.record.imports)
+      builder ++= codec.encodeCompactInteger(entry.record.extrinsicCount)
+      builder ++= codec.encodeCompactInteger(entry.record.extrinsicSize)
+      builder ++= codec.encodeCompactInteger(entry.record.exports)
+      // accumulates: count + gas (both compact)
+      builder ++= codec.encodeCompactInteger(entry.record.accumulateCount)
+      builder ++= codec.encodeCompactInteger(entry.record.accumulateGasUsed)
+      // transfers: count + gas (both compact)
+      builder ++= codec.encodeCompactInteger(0L) // transfers count
+      builder ++= codec.encodeCompactInteger(0L) // transfers gas
+
+    builder.result()
+
+  /**
+   * Encode accumulation queue.
+   */
+  private def encodeAccumulationQueue(queue: List[List[AccumulationReadyRecord]]): JamBytes =
+    import io.forge.jam.core.codec.encode
+    val builder = JamBytes.newBuilder
+    for slot <- queue do
+      builder ++= codec.encodeCompactInteger(slot.size.toLong)
+      for record <- slot do
+        builder ++= record.encode
+    builder.result()
+
+  /**
+   * Encode accumulation history.
+   */
+  private def encodeAccumulationHistory(history: List[List[JamBytes]]): JamBytes =
+    val builder = JamBytes.newBuilder
+    for slot <- history do
+      builder ++= codec.encodeCompactInteger(slot.size.toLong)
+      for hash <- slot do
+        builder ++= hash
+    builder.result()
+
+  /**
+   * Encode offenders list.
+   */
+  private def encodeOffenders(offenders: List[Ed25519PublicKey]): JamBytes =
+    val builder = JamBytes.newBuilder
+    builder ++= codec.encodeCompactInteger(offenders.size.toLong)
+    for offender <- offenders do
+      builder ++= offender.bytes
+    builder.result()
+
 object FullJamState:
 
   // Bandersnatch ring commitment size (144 bytes)
@@ -320,6 +651,9 @@ object FullJamState:
   def fromKeyvals(keyvals: List[KeyValue], config: ChainConfig = ChainConfig.TINY): FullJamState =
     val safroleState = StateCodec.decodeSafroleState(keyvals, config)
 
+    // Build a map of ALL original keyvals by full key for preserving exact bytes
+    val originalByKey = keyvals.map(kv => kv.key -> kv).toMap
+
     // Separate Safrole-related keyvals from others
     val safroleRelatedPrefixes = Set(
       StateKeys.TIMESLOT.toInt & 0xff,
@@ -327,23 +661,37 @@ object FullJamState:
       StateKeys.CURRENT_VALIDATORS.toInt & 0xff,
       StateKeys.PREVIOUS_VALIDATORS.toInt & 0xff,
       StateKeys.VALIDATOR_QUEUE.toInt & 0xff,
-      StateKeys.SAFROLE_STATE.toInt & 0xff
+      StateKeys.SAFROLE_STATE.toInt & 0xff,
+      StateKeys.CORE_AUTHORIZATION_POOL.toInt & 0xff,
+      StateKeys.SERVICE_ACCOUNT.toInt & 0xff
     )
 
     val otherKvs = keyvals.filterNot(kv => safroleRelatedPrefixes.contains(kv.key.toArray(0).toInt & 0xff))
 
-    // Initialize empty reports list (one per core)
-    val emptyReports = List.fill(config.coresCount)(Option.empty[AvailabilityAssignment])
+    // Decode reports from keyvals (0x0A)
+    val reports = decodeReports(keyvals, config.coresCount)
 
-    // Initialize empty auth pools and queues (one per core)
-    val emptyAuthPools = List.fill(config.coresCount)(List.empty[Hash])
-    val emptyAuthQueues = List.fill(config.coresCount)(List.fill(80)(Hash.zero))
+    // Decode auth pools from keyvals
+    val authPools = decodeAuthPools(keyvals, config.coresCount)
 
-    // Initialize empty validator statistics
-    val emptyStatCount = List.fill(config.validatorCount)(StatCount.zero)
+    // Decode auth queues from keyvals (0x02)
+    val authQueues = decodeAuthQueues(keyvals, config.coresCount, config.authQueueSize)
 
-    // Initialize empty core statistics
-    val emptyCoreStats = List.fill(config.coresCount)(CoreStatisticsRecord())
+    // Decode service accounts from keyvals
+    val serviceAccounts = decodeServiceAccounts(keyvals)
+
+    val rawServiceDataByStateKey: Map[JamBytes, JamBytes] = keyvals
+      .map(kv => kv.key -> kv.value)
+      .toMap
+
+    // Decode recent history from keyvals
+    val recentHistory = decodeRecentHistory(keyvals)
+
+    // Decode activity statistics from keyvals
+    val (activityStatsCurrent, activityStatsLast, _) =
+      decodeActivityStatistics(keyvals, config.validatorCount, config.coresCount)
+    // Initialize empty core statistics (computed fresh each block)
+    val coreStatistics = List.fill(config.coresCount)(CoreStatisticsRecord())
 
     FullJamState(
       timeslot = safroleState.tau,
@@ -357,14 +705,298 @@ object FullJamState:
       safroleGammaA = safroleState.gammaA,
       postOffenders = safroleState.postOffenders,
       judgements = Psi.empty, // Judgements initialized empty, updated by Disputes STF
-      reports = emptyReports,
-      authPools = emptyAuthPools,
-      authQueues = emptyAuthQueues,
-      activityStatsCurrent = emptyStatCount,
-      activityStatsLast = emptyStatCount,
-      coreStatistics = emptyCoreStats,
-      otherKeyvals = otherKvs
+      reports = reports,
+      authPools = authPools,
+      authQueues = authQueues,
+      recentHistory = recentHistory,
+      serviceAccounts = serviceAccounts,
+      activityStatsCurrent = activityStatsCurrent,
+      activityStatsLast = activityStatsLast,
+      coreStatistics = coreStatistics,
+      otherKeyvals = otherKvs,
+      originalKeyvals = originalByKey,
+      rawServiceDataByStateKey = rawServiceDataByStateKey
     )
+
+  /**
+   * Decode activity statistics from keyvals (0x0D).
+   * Format: accumulator (validator stats), previous (validator stats), core stats, service stats
+   * Returns (current validator stats, last validator stats, core stats)
+   */
+  private def decodeActivityStatistics(
+    keyvals: List[KeyValue],
+    validatorCount: Int,
+    coresCount: Int
+  ): (List[StatCount], List[StatCount], List[CoreStatisticsRecord]) =
+    val statsKv = keyvals.find(kv =>
+      (kv.key.toArray(0).toInt & 0xff) == (StateKeys.ACTIVITY_STATISTICS.toInt & 0xff)
+    )
+
+    statsKv match
+      case None =>
+        // No stats in state, return empty
+        (
+          List.fill(validatorCount)(StatCount.zero),
+          List.fill(validatorCount)(StatCount.zero),
+          List.fill(coresCount)(CoreStatisticsRecord())
+        )
+
+      case Some(kv) =>
+        val bytes = kv.value.toArray
+        var pos = 0
+
+        // Decode accumulator (current validator stats) - fixed-size array
+        val currentStats = scala.collection.mutable.ListBuffer[StatCount]()
+        for _ <- 0 until validatorCount do
+          val blocks = codec.decodeU32LE(bytes, pos).toLong; pos += 4
+          val tickets = codec.decodeU32LE(bytes, pos).toLong; pos += 4
+          val preImages = codec.decodeU32LE(bytes, pos).toLong; pos += 4
+          val preImagesSize = codec.decodeU32LE(bytes, pos).toLong; pos += 4
+          val guarantees = codec.decodeU32LE(bytes, pos).toLong; pos += 4
+          val assurances = codec.decodeU32LE(bytes, pos).toLong; pos += 4
+          currentStats += StatCount(blocks, tickets, preImages, preImagesSize, guarantees, assurances)
+
+        // Decode previous (last validator stats) - fixed-size array
+        val lastStats = scala.collection.mutable.ListBuffer[StatCount]()
+        for _ <- 0 until validatorCount do
+          val blocks = codec.decodeU32LE(bytes, pos).toLong; pos += 4
+          val tickets = codec.decodeU32LE(bytes, pos).toLong; pos += 4
+          val preImages = codec.decodeU32LE(bytes, pos).toLong; pos += 4
+          val preImagesSize = codec.decodeU32LE(bytes, pos).toLong; pos += 4
+          val guarantees = codec.decodeU32LE(bytes, pos).toLong; pos += 4
+          val assurances = codec.decodeU32LE(bytes, pos).toLong; pos += 4
+          lastStats += StatCount(blocks, tickets, preImages, preImagesSize, guarantees, assurances)
+
+        // Decode core stats - fixed-size array, each field compact-encoded
+        val coreStats = scala.collection.mutable.ListBuffer[CoreStatisticsRecord]()
+        for _ <- 0 until coresCount do
+          val (daLoad, daLoadLen) = codec.decodeCompactInteger(bytes, pos); pos += daLoadLen
+          val (popularity, popularityLen) = codec.decodeCompactInteger(bytes, pos); pos += popularityLen
+          val (imports, importsLen) = codec.decodeCompactInteger(bytes, pos); pos += importsLen
+          val (extrinsicCount, extrinsicCountLen) = codec.decodeCompactInteger(bytes, pos); pos += extrinsicCountLen
+          val (extrinsicSize, extrinsicSizeLen) = codec.decodeCompactInteger(bytes, pos); pos += extrinsicSizeLen
+          val (exports, exportsLen) = codec.decodeCompactInteger(bytes, pos); pos += exportsLen
+          val (bundleSize, bundleSizeLen) = codec.decodeCompactInteger(bytes, pos); pos += bundleSizeLen
+          val (gasUsed, gasUsedLen) = codec.decodeCompactInteger(bytes, pos); pos += gasUsedLen
+          coreStats += CoreStatisticsRecord(
+            daLoad = daLoad,
+            popularity = popularity,
+            imports = imports,
+            extrinsicCount = extrinsicCount,
+            extrinsicSize = extrinsicSize,
+            exports = exports,
+            bundleSize = bundleSize,
+            gasUsed = gasUsed
+          )
+
+        // Skip service stats for now (we'll compute fresh each block)
+        (currentStats.toList, lastStats.toList, coreStats.toList)
+
+  /**
+   * Decode recent history from keyvals.
+   */
+  private def decodeRecentHistory(keyvals: List[KeyValue]): HistoricalBetaContainer =
+    import io.forge.jam.core.codec.decodeAs
+    val historyKv = keyvals.find(kv =>
+      (kv.key.toArray(0).toInt & 0xff) == (StateKeys.RECENT_HISTORY.toInt & 0xff)
+    )
+
+    historyKv match
+      case None =>
+        HistoricalBetaContainer()
+      case Some(kv) =>
+        val (container, _) = kv.value.decodeAs[HistoricalBetaContainer](0)
+        container
+
+  /**
+   * Decode authorization pools from keyvals.
+   * Format: For each core, compact length prefix + N x 32-byte hashes
+   */
+  private def decodeAuthPools(keyvals: List[KeyValue], coresCount: Int): List[List[Hash]] =
+    // Find the auth pools keyval
+    val authPoolsKv = keyvals.find(kv =>
+      (kv.key.toArray(0).toInt & 0xff) == (StateKeys.CORE_AUTHORIZATION_POOL.toInt & 0xff)
+    )
+
+    authPoolsKv match
+      case None =>
+        // No auth pools in state, return empty
+        List.fill(coresCount)(List.empty[Hash])
+
+      case Some(kv) =>
+        val bytes = kv.value.toArray
+        var offset = 0
+        val pools = scala.collection.mutable.ListBuffer[List[Hash]]()
+
+        for _ <- 0 until coresCount do
+          if offset >= bytes.length then
+            pools += List.empty[Hash]
+          else
+            // Read compact length for this core's pool
+            val (poolLen, lenBytes) = codec.decodeCompactInteger(bytes, offset)
+            offset += lenBytes
+
+            // Read poolLen hashes
+            val hashes = scala.collection.mutable.ListBuffer[Hash]()
+            for _ <- 0 until poolLen.toInt do
+              if offset + 32 <= bytes.length then
+                hashes += Hash(bytes.slice(offset, offset + 32))
+                offset += 32
+
+            pools += hashes.toList
+
+        pools.toList
+
+  /**
+   * Decode authorization queues from keyvals (0x02).
+   * Format: Fixed-size array: coresCount * authQueueSize * 32 bytes
+   */
+  private def decodeAuthQueues(keyvals: List[KeyValue], coresCount: Int, authQueueSize: Int): List[List[Hash]] =
+    // Find the auth queues keyval
+    val authQueuesKv = keyvals.find(kv =>
+      (kv.key.toArray(0).toInt & 0xff) == (StateKeys.AUTHORIZATION_QUEUE.toInt & 0xff)
+    )
+
+    authQueuesKv match
+      case None =>
+        // No auth queues in state, return empty (all zeros)
+        List.fill(coresCount)(List.fill(authQueueSize)(Hash.zero))
+
+      case Some(kv) =>
+        val bytes = kv.value.toArray
+        val queues = scala.collection.mutable.ListBuffer[List[Hash]]()
+
+        for coreIndex <- 0 until coresCount do
+          val hashes = scala.collection.mutable.ListBuffer[Hash]()
+          for queueIndex <- 0 until authQueueSize do
+            val offset = (coreIndex * authQueueSize + queueIndex) * 32
+            if offset + 32 <= bytes.length then
+              hashes += Hash(bytes.slice(offset, offset + 32))
+            else
+              hashes += Hash.zero
+
+          queues += hashes.toList
+
+        queues.toList
+
+  /**
+   * Decode service accounts from keyvals.
+   * Key format: prefix 255, service ID at positions 1, 3, 5, 7
+   */
+  private def decodeServiceAccounts(keyvals: List[KeyValue]): List[AccumulationServiceItem] =
+    // Find all service account keyvals (prefix 255)
+    val serviceKvs = keyvals.filter(kv =>
+      (kv.key.toArray(0).toInt & 0xff) == (StateKeys.SERVICE_ACCOUNT.toInt & 0xff)
+    )
+
+    serviceKvs.map { kv =>
+      val keyBytes = kv.key.toArray
+      // Extract service index from positions 1, 3, 5, 7
+      val serviceId = (keyBytes(1).toInt & 0xff) |
+        ((keyBytes(3).toInt & 0xff) << 8) |
+        ((keyBytes(5).toInt & 0xff) << 16) |
+        ((keyBytes(7).toInt & 0xff) << 24)
+
+      val valueBytes = kv.value.toArray
+      // Decode ServiceInfo (88 bytes without version prefix)
+      val serviceInfo = decodeServiceInfoNoVersion(valueBytes)
+
+      AccumulationServiceItem(
+        id = serviceId.toLong,
+        data = AccumulationServiceData(
+          service = serviceInfo,
+          storage = List.empty,
+          preimages = List.empty,
+          preimagesStatus = List.empty
+        )
+      )
+    }.sortBy(_.id)
+
+  /**
+   * Decode ServiceInfo without version prefix (88 bytes).
+   * Format:
+   *   codeHash: 32 bytes
+   *   balance: 8 bytes LE
+   *   minItemGas: 8 bytes LE
+   *   minMemoGas: 8 bytes LE
+   *   bytesUsed: 8 bytes LE
+   *   depositOffset: 8 bytes LE
+   *   items: 4 bytes LE
+   *   creationSlot: 4 bytes LE
+   *   lastAccumulationSlot: 4 bytes LE
+   *   parentService: 4 bytes LE
+   */
+  private def decodeServiceInfoNoVersion(bytes: Array[Byte]): ServiceInfo =
+    var pos = 0
+    val codeHash = Hash(bytes.slice(pos, pos + 32))
+    pos += 32
+    val balance = codec.decodeU64LE(bytes, pos).signed
+    pos += 8
+    val minItemGas = codec.decodeU64LE(bytes, pos).signed
+    pos += 8
+    val minMemoGas = codec.decodeU64LE(bytes, pos).signed
+    pos += 8
+    val bytesUsed = codec.decodeU64LE(bytes, pos).signed
+    pos += 8
+    val depositOffset = codec.decodeU64LE(bytes, pos).signed
+    pos += 8
+    val items = codec.decodeU32LE(bytes, pos).signed
+    pos += 4
+    val creationSlot = codec.decodeU32LE(bytes, pos).toLong
+    pos += 4
+    val lastAccumulationSlot = codec.decodeU32LE(bytes, pos).toLong
+    pos += 4
+    val parentService = codec.decodeU32LE(bytes, pos).toLong
+
+    ServiceInfo(
+      // version = 0,
+      codeHash = codeHash,
+      balance = balance,
+      minItemGas = minItemGas,
+      minMemoGas = minMemoGas,
+      bytesUsed = bytesUsed,
+      depositOffset = depositOffset,
+      items = items,
+      creationSlot = creationSlot,
+      lastAccumulationSlot = lastAccumulationSlot,
+      parentService = parentService
+    )
+
+  /**
+   * Decode reports (rho) from keyvals (0x0A).
+   * Format: coresCount * Option[AvailabilityAssignment]
+   */
+  private def decodeReports(keyvals: List[KeyValue], coresCount: Int): List[Option[AvailabilityAssignment]] =
+    import io.forge.jam.core.codec.decodeAs
+    val reportsKv = keyvals.find(kv =>
+      (kv.key.toArray(0).toInt & 0xff) == (StateKeys.REPORTS.toInt & 0xff)
+    )
+
+    reportsKv match
+      case None =>
+        // No reports in state, return all None
+        List.fill(coresCount)(None)
+
+      case Some(kv) =>
+        val bytes = kv.value
+        var pos = 0
+        val reports = scala.collection.mutable.ListBuffer[Option[AvailabilityAssignment]]()
+
+        for _ <- 0 until coresCount do
+          if pos >= bytes.length then
+            reports += None
+          else
+            val marker = bytes.toArray(pos) & 0xff
+            pos += 1
+            if marker == 0 then
+              reports += None
+            else
+              // marker == 1, decode AvailabilityAssignment
+              val (assignment, consumed) = bytes.decodeAs[AvailabilityAssignment](pos)
+              pos += consumed
+              reports += Some(assignment)
+
+        reports.toList
 
   /**
    * Create an empty/default FullJamState.

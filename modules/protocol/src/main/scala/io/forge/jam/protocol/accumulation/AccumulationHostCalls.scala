@@ -144,7 +144,9 @@ class AccumulationHostCalls(
 
         // Check if output address is writable - PANIC if not
         if !isMemoryWritable(instance, outputAddr, actualLength) then
-          throw new RuntimeException(s"Fetch PANIC: Output memory not writable at 0x${outputAddr.toHexString} len $actualLength")
+          throw new RuntimeException(
+            s"Fetch PANIC: Output memory not writable at 0x${outputAddr.toHexString} len $actualLength"
+          )
 
         val writeResult = writeMemory(instance, outputAddr, slice)
         if !writeResult then
@@ -183,7 +185,7 @@ class AccumulationHostCalls(
 
     // If not in memory, check raw state data with discriminator 0xFFFFFFFE (preimage blob)
     if preimage.isEmpty then
-      val blobStateKey = StateKey.computeServiceDataStateKey(targetServiceId, 0xFFFFFFFEL, hashBytes)
+      val blobStateKey = StateKey.computeServiceDataStateKey(targetServiceId, 0xfffffffeL, hashBytes)
       preimage = context.x.rawServiceDataByStateKey.get(blobStateKey)
 
     // Calculate actual offset and length based on preimage data (or 0 if not found)
@@ -193,7 +195,9 @@ class AccumulationHostCalls(
 
     // Check if output address is writable - PANIC if not
     if !isMemoryWritable(instance, outputAddr, actualLength) then
-      throw new RuntimeException(s"Lookup PANIC: Output memory not writable at 0x${outputAddr.toHexString} len $actualLength")
+      throw new RuntimeException(
+        s"Lookup PANIC: Output memory not writable at 0x${outputAddr.toHexString} len $actualLength"
+      )
 
     // Now handle the different cases
     if account.isEmpty then
@@ -299,7 +303,8 @@ class AccumulationHostCalls(
     val keyWasPresent = oldValue.isDefined
 
     // Calculate new footprint to check threshold
-    val newValue = if valueLen == 0 then None else
+    val newValue = if valueLen == 0 then None
+    else
       val valueBuffer = new Array[Byte](valueLen)
       if !readMemory(instance, valueAddr, valueBuffer) then
         throw new RuntimeException(s"Write PANIC: Failed to read value from memory at $valueAddr len $valueLen")
@@ -378,17 +383,17 @@ class AccumulationHostCalls(
     val thresholdBalance = calculateThreshold(info)
 
     // Encode all 11 fields (96 bytes total)
-    val data = info.codeHash.bytes.toArray ++       // 32 bytes
-      encodeLong(info.balance) ++                    // 8 bytes
-      encodeLong(thresholdBalance) ++                // 8 bytes
-      encodeLong(info.minItemGas) ++                 // 8 bytes (minAccumulateGas)
-      encodeLong(info.minMemoGas) ++                 // 8 bytes
-      encodeLong(info.bytesUsed) ++                  // 8 bytes (totalByteLength)
-      encodeInt(info.items) ++                       // 4 bytes (itemsCount)
-      encodeLong(info.depositOffset) ++              // 8 bytes (gratisStorage)
-      encodeInt(info.creationSlot.toInt) ++          // 4 bytes (createdAt)
-      encodeInt(info.lastAccumulationSlot.toInt) ++  // 4 bytes (lastAccAt)
-      encodeInt(info.parentService.toInt)            // 4 bytes
+    val data = info.codeHash.bytes.toArray ++ // 32 bytes
+      encodeLong(info.balance) ++ // 8 bytes
+      encodeLong(thresholdBalance) ++ // 8 bytes
+      encodeLong(info.minItemGas) ++ // 8 bytes (minAccumulateGas)
+      encodeLong(info.minMemoGas) ++ // 8 bytes
+      encodeLong(info.bytesUsed) ++ // 8 bytes (totalByteLength)
+      encodeInt(info.items) ++ // 4 bytes (itemsCount)
+      encodeLong(info.depositOffset) ++ // 8 bytes (gratisStorage)
+      encodeInt(info.creationSlot.toInt) ++ // 4 bytes (createdAt)
+      encodeInt(info.lastAccumulationSlot.toInt) ++ // 4 bytes (lastAccAt)
+      encodeInt(info.parentService.toInt) // 4 bytes
 
     // Apply offset and length slicing
     val first = math.min(offset, data.length)
@@ -444,10 +449,11 @@ class AccumulationHostCalls(
         j += 1
 
     // Validate service indices
-    val maxUInt = 0xFFFFFFFFL
+    val maxUInt = 0xffffffffL
     if newManager < 0 || newManager > maxUInt ||
-       newDelegator < 0 || newDelegator > maxUInt ||
-       newRegistrar < 0 || newRegistrar > maxUInt then
+      newDelegator < 0 || newDelegator > maxUInt ||
+      newRegistrar < 0 || newRegistrar > maxUInt
+    then
       setReg(instance, 7, HostCallResult.WHO)
       return
 
@@ -485,12 +491,13 @@ class AccumulationHostCalls(
 
     // Check if caller is current assigner for this core
     if targetCoreIndex >= context.x.assigners.size ||
-       context.x.assigners(targetCoreIndex) != context.serviceIndex then
+      context.x.assigners(targetCoreIndex) != context.serviceIndex
+    then
       setReg(instance, 7, HostCallResult.HUH)
       return
 
     // Check assigner is valid service index (fits in UInt32)
-    val maxUInt = 0xFFFFFFFFL
+    val maxUInt = 0xffffffffL
     if ULong(newAssigner) > ULong(maxUInt) then
       setReg(instance, 7, HostCallResult.WHO)
       return
@@ -562,7 +569,9 @@ class AccumulationHostCalls(
     // Read new code hash from memory
     val codeHashBuffer = new Array[Byte](32)
     if !readMemory(instance, codeHashAddr, codeHashBuffer) then
-      throw new RuntimeException(s"Upgrade PANIC: Failed to read code hash from memory at address $codeHashAddr (0x${codeHashAddr.toHexString})")
+      throw new RuntimeException(
+        s"Upgrade PANIC: Failed to read code hash from memory at address $codeHashAddr (0x${codeHashAddr.toHexString})"
+      )
 
     val updatedInfo = account.get.info.copy(
       codeHash = Hash(codeHashBuffer),
@@ -621,7 +630,8 @@ class AccumulationHostCalls(
     // Determine new service ID
     val minPublicServiceIndex = context.minPublicServiceIndex
     val newServiceId: Long =
-      if context.serviceIndex == context.x.registrar && requestedServiceId >= 0 && requestedServiceId < minPublicServiceIndex then
+      if context.serviceIndex == context.x.registrar && requestedServiceId >= 0 && requestedServiceId < minPublicServiceIndex
+      then
         // Registrar can request specific service ID below minPublicServiceIndex
         if context.x.accounts.contains(requestedServiceId) then
           setReg(instance, 7, HostCallResult.FULL)
@@ -634,7 +644,7 @@ class AccumulationHostCalls(
     // Create new account with calculated threshold balance
     val newAccount = ServiceAccount(
       info = ServiceInfo(
-        version = 0,
+        // version = 0,
         codeHash = codeHash,
         balance = thresholdBalance,
         minItemGas = minAccumulateGas,
@@ -656,7 +666,8 @@ class AccumulationHostCalls(
 
     context.x.accounts(newServiceId) = newAccount
 
-    val preimageInfoStateKey = StateKey.computePreimageInfoStateKey(newServiceId, codeHashLength, JamBytes(codeHashBuffer))
+    val preimageInfoStateKey =
+      StateKey.computePreimageInfoStateKey(newServiceId, codeHashLength, JamBytes(codeHashBuffer))
     context.x.rawServiceDataByStateKey(preimageInfoStateKey) = StateKey.encodePreimageInfoValue(List.empty)
 
     // Deduct balance from creator
@@ -670,8 +681,8 @@ class AccumulationHostCalls(
     // Update nextAccountIndex for next NEW call (ONLY if not using registrar privilege)
     if context.serviceIndex != context.x.registrar || requestedServiceId >= minPublicServiceIndex then
       val s = minPublicServiceIndex
-      val left = (context.nextAccountIndex - s + 42).toInt & 0xFFFFFFFF
-      val right = (0xFFFFFFFFL - s.toInt - 255).toInt & 0xFFFFFFFF
+      val left = (context.nextAccountIndex - s + 42).toInt & 0xffffffff
+      val right = (0xffffffffL - s.toInt - 255).toInt & 0xffffffff
       val nextCandidate = s + (left.toLong % right.toLong)
       context.nextAccountIndex = findAvailableServiceIndex(nextCandidate, s)
 
@@ -715,8 +726,9 @@ class AccumulationHostCalls(
       return
 
     // 5. Find preimage request by hash (ignoring length - the test data doesn't include length in preimageStatus)
-    val preimageEntry = acc.preimageRequests.find { case (key, _) =>
-      JamBytes(key.hash.bytes.toArray) == preimageHash
+    val preimageEntry = acc.preimageRequests.find {
+      case (key, _) =>
+        JamBytes(key.hash.bytes.toArray) == preimageHash
     }
     val preimageRequest = preimageEntry.map(_._2)
     if preimageRequest.isEmpty then
@@ -749,7 +761,7 @@ class AccumulationHostCalls(
    * 0.7.1: Gas is g = 10 + gasLimit (charged regardless of success/failure).
    */
   private def handleTransfer(instance: PvmInstance): Unit =
-    val destination = (getReg(instance, 7) & ULong(0xFFFFFFFFL)).toLong
+    val destination = (getReg(instance, 7) & ULong(0xffffffffL)).toLong
     val amount = getReg(instance, 8).toLong
     val gasLimit = getReg(instance, 9).toLong
     val memoAddr = getReg(instance, 10).toInt
@@ -903,7 +915,7 @@ class AccumulationHostCalls(
    */
   private def handleSolicit(instance: PvmInstance): Unit =
     val hashAddr = getReg(instance, 7).toInt
-    val length = (getReg(instance, 8) & ULong(0xFFFFFFFFL)).toInt
+    val length = (getReg(instance, 8) & ULong(0xffffffffL)).toInt
 
     val account = context.x.accounts.get(context.serviceIndex)
     if account.isEmpty then
@@ -937,7 +949,7 @@ class AccumulationHostCalls(
       return
 
     // Calculate new footprint for threshold balance check
-    val lengthUnsigned = (length.toLong & 0xFFFFFFFFL)
+    val lengthUnsigned = (length.toLong & 0xffffffffL)
     val info = acc.info
     val (newItems, newBytes): (Int, Long) = if notRequestedYet then
       (info.items + 2, info.bytesUsed + 81 + lengthUnsigned)
@@ -1038,7 +1050,8 @@ class AccumulationHostCalls(
       // Also remove the preimage blob if it exists
       val preimageHash = Hash(hashBuffer)
       acc.preimages.remove(preimageHash)
-      val preimageStateKey = StateKey.computeServiceDataStateKey(context.serviceIndex, 0xFFFFFFFEL, JamBytes(preimageHash.bytes))
+      val preimageStateKey =
+        StateKey.computeServiceDataStateKey(context.serviceIndex, 0xfffffffeL, JamBytes(preimageHash.bytes))
       context.x.rawServiceDataByStateKey.remove(preimageStateKey)
       // Update footprint: decrease items by 2 and bytes by 81 + length
       val newItems = math.max(0, info.items - 2)
@@ -1071,7 +1084,9 @@ class AccumulationHostCalls(
     // Read blob from memory - PANIC on failure
     val blobBuffer = new Array[Byte](blobLen)
     if !readMemory(instance, blobAddr, blobBuffer) then
-      throw new RuntimeException(s"Provide PANIC: Failed to read blob from memory at 0x${blobAddr.toHexString} len $blobLen")
+      throw new RuntimeException(
+        s"Provide PANIC: Failed to read blob from memory at 0x${blobAddr.toHexString} len $blobLen"
+      )
 
     val blob = JamBytes(blobBuffer)
 
@@ -1138,39 +1153,39 @@ class AccumulationHostCalls(
     // Config-dependent values
     val isTiny = config.validatorCount == 6
 
-    buffer.write(encodeLong(config.additionalMinBalancePerStateItem))  // additionalMinBalancePerStateItem (UInt64)
-    buffer.write(encodeLong(config.additionalMinBalancePerStateByte))  // additionalMinBalancePerStateByte (UInt64)
-    buffer.write(encodeLong(config.serviceMinBalance))                 // serviceMinBalance (UInt64)
-    buffer.write(encodeShort(config.coresCount))                       // totalNumberOfCores (UInt16)
-    buffer.write(encodeIntLE(config.preimageExpungePeriod))            // preimagePurgePeriod (UInt32)
-    buffer.write(encodeIntLE(config.epochLength))                      // epochLength (UInt32)
-    buffer.write(encodeLong(config.maxAccumulationGas))                // workReportAccumulationGas (UInt64)
-    buffer.write(encodeLong(50_000_000L))                              // workPackageIsAuthorizedGas (UInt64) - same for both configs
-    buffer.write(encodeLong(config.maxRefineGas))                      // workPackageRefineGas (UInt64)
-    buffer.write(encodeLong(if isTiny then config.maxBlockGas else 3_500_000_000L))  // totalAccumulationGas (UInt64)
-    buffer.write(encodeShort(config.maxBlockHistory))                  // recentHistorySize (UInt16)
-    buffer.write(encodeShort(16))                                      // maxWorkItems (UInt16) - same for both configs
-    buffer.write(encodeShort(config.maxDependencies))                  // maxDepsInWorkReport (UInt16)
-    buffer.write(encodeShort(config.maxTicketsPerExtrinsic))           // maxTicketsPerExtrinsic (UInt16)
-    buffer.write(encodeIntLE(if isTiny then 24 else 14400))            // maxLookupAnchorAge (UInt32)
-    buffer.write(encodeShort(config.ticketsPerValidator))              // ticketEntriesPerValidator (UInt16)
-    buffer.write(encodeShort(8))                                       // maxAuthorizationsPoolItems (UInt16) - same for both configs
-    buffer.write(encodeShort(config.slotDuration))                     // slotPeriodSeconds (UInt16)
-    buffer.write(encodeShort(config.authQueueSize))                    // maxAuthorizationsQueueItems (UInt16)
-    buffer.write(encodeShort(config.rotationPeriod))                   // coreAssignmentRotationPeriod (UInt16)
-    buffer.write(encodeShort(128))                                     // maxWorkPackageExtrinsics (UInt16) - same for both configs
-    buffer.write(encodeShort(5))                                       // preimageReplacementPeriod (UInt16) - same for both configs
-    buffer.write(encodeShort(config.validatorCount))                   // totalNumberOfValidators (UInt16)
-    buffer.write(encodeIntLE(if isTiny then 64000 else 64_000_000))    // maxIsAuthorizedCodeSize (UInt32)
-    buffer.write(encodeIntLE(if isTiny then 13_794_305 else 12_000_000))  // maxEncodedWorkPackageSize (UInt32)
+    buffer.write(encodeLong(config.additionalMinBalancePerStateItem)) // additionalMinBalancePerStateItem (UInt64)
+    buffer.write(encodeLong(config.additionalMinBalancePerStateByte)) // additionalMinBalancePerStateByte (UInt64)
+    buffer.write(encodeLong(config.serviceMinBalance)) // serviceMinBalance (UInt64)
+    buffer.write(encodeShort(config.coresCount)) // totalNumberOfCores (UInt16)
+    buffer.write(encodeIntLE(config.preimageExpungePeriod)) // preimagePurgePeriod (UInt32)
+    buffer.write(encodeIntLE(config.epochLength)) // epochLength (UInt32)
+    buffer.write(encodeLong(config.maxAccumulationGas)) // workReportAccumulationGas (UInt64)
+    buffer.write(encodeLong(50_000_000L)) // workPackageIsAuthorizedGas (UInt64) - same for both configs
+    buffer.write(encodeLong(config.maxRefineGas)) // workPackageRefineGas (UInt64)
+    buffer.write(encodeLong(if isTiny then config.maxBlockGas else 3_500_000_000L)) // totalAccumulationGas (UInt64)
+    buffer.write(encodeShort(config.maxBlockHistory)) // recentHistorySize (UInt16)
+    buffer.write(encodeShort(16)) // maxWorkItems (UInt16) - same for both configs
+    buffer.write(encodeShort(config.maxDependencies)) // maxDepsInWorkReport (UInt16)
+    buffer.write(encodeShort(config.maxTicketsPerExtrinsic)) // maxTicketsPerExtrinsic (UInt16)
+    buffer.write(encodeIntLE(if isTiny then 24 else 14400)) // maxLookupAnchorAge (UInt32)
+    buffer.write(encodeShort(config.ticketsPerValidator)) // ticketEntriesPerValidator (UInt16)
+    buffer.write(encodeShort(8)) // maxAuthorizationsPoolItems (UInt16) - same for both configs
+    buffer.write(encodeShort(config.slotDuration)) // slotPeriodSeconds (UInt16)
+    buffer.write(encodeShort(config.authQueueSize)) // maxAuthorizationsQueueItems (UInt16)
+    buffer.write(encodeShort(config.rotationPeriod)) // coreAssignmentRotationPeriod (UInt16)
+    buffer.write(encodeShort(128)) // maxWorkPackageExtrinsics (UInt16) - same for both configs
+    buffer.write(encodeShort(5)) // preimageReplacementPeriod (UInt16) - same for both configs
+    buffer.write(encodeShort(config.validatorCount)) // totalNumberOfValidators (UInt16)
+    buffer.write(encodeIntLE(if isTiny then 64000 else 64_000_000)) // maxIsAuthorizedCodeSize (UInt32)
+    buffer.write(encodeIntLE(if isTiny then 13_794_305 else 12_000_000)) // maxEncodedWorkPackageSize (UInt32)
     buffer.write(encodeIntLE(if isTiny then 4_000_000 else 5_000_000)) // maxServiceCodeSize (UInt32)
-    buffer.write(encodeIntLE(if isTiny then 4 else 12))                // erasureCodedPieceSize (UInt32)
-    buffer.write(encodeIntLE(3072))                                    // maxWorkPackageImports (UInt32)
-    buffer.write(encodeIntLE(config.numEcPiecesPerSegment))            // erasureCodedSegmentSize (UInt32)
-    buffer.write(encodeIntLE(48 * 1024))                               // maxWorkReportBlobSize (UInt32) 48KB
-    buffer.write(encodeIntLE(128))                                     // transferMemoSize (UInt32)
-    buffer.write(encodeIntLE(3072))                                    // maxWorkPackageExports (UInt32)
-    buffer.write(encodeIntLE(config.ticketCutoff))                     // ticketSubmissionEndSlot (UInt32)
+    buffer.write(encodeIntLE(if isTiny then 4 else 12)) // erasureCodedPieceSize (UInt32)
+    buffer.write(encodeIntLE(3072)) // maxWorkPackageImports (UInt32)
+    buffer.write(encodeIntLE(config.numEcPiecesPerSegment)) // erasureCodedSegmentSize (UInt32)
+    buffer.write(encodeIntLE(48 * 1024)) // maxWorkReportBlobSize (UInt32) 48KB
+    buffer.write(encodeIntLE(128)) // transferMemoSize (UInt32)
+    buffer.write(encodeIntLE(3072)) // maxWorkPackageExports (UInt32)
+    buffer.write(encodeIntLE(config.ticketCutoff)) // ticketSubmissionEndSlot (UInt32)
 
     buffer.toByteArray
 
@@ -1199,10 +1214,10 @@ class AccumulationHostCalls(
   private def encodeServiceIdAsCodeHash(serviceId: Long): JamBytes =
     val bytes = new Array[Byte](32)
     // Little-endian encoding of service ID in first 4 bytes
-    bytes(0) = (serviceId & 0xFF).toByte
-    bytes(1) = ((serviceId >> 8) & 0xFF).toByte
-    bytes(2) = ((serviceId >> 16) & 0xFF).toByte
-    bytes(3) = ((serviceId >> 24) & 0xFF).toByte
+    bytes(0) = (serviceId & 0xff).toByte
+    bytes(1) = ((serviceId >> 8) & 0xff).toByte
+    bytes(2) = ((serviceId >> 16) & 0xff).toByte
+    bytes(3) = ((serviceId >> 24) & 0xff).toByte
     JamBytes(bytes)
 
   /**
@@ -1211,7 +1226,7 @@ class AccumulationHostCalls(
   private def findAvailableServiceIndex(candidate: Long, minPublicServiceIndex: Long): Long =
     var i = candidate
     val s = minPublicServiceIndex
-    val right = (0xFFFFFFFFL - s - 255).toLong
+    val right = (0xffffffffL - s - 255).toLong
 
     // Loop until we find an unused service index
     while context.x.accounts.contains(i) do
@@ -1221,7 +1236,7 @@ class AccumulationHostCalls(
 
   /** Encode a value as little-endian bytes */
   private inline def encodeLE(value: Long, size: Int): Array[Byte] =
-    Array.tabulate(size)(i => ((value >> (i * 8)) & 0xFF).toByte)
+    Array.tabulate(size)(i => ((value >> (i * 8)) & 0xff).toByte)
 
   private inline def encodeShort(value: Int): Array[Byte] = encodeLE(value, 2)
   private inline def encodeInt(value: Int): Array[Byte] = encodeLE(value, 4)
@@ -1233,7 +1248,7 @@ class AccumulationHostCalls(
     var result = 0L
     var i = 0
     while i < size do
-      result |= (bytes(offset + i).toLong & 0xFF) << (i * 8)
+      result |= (bytes(offset + i).toLong & 0xff) << (i * 8)
       i += 1
     result
 

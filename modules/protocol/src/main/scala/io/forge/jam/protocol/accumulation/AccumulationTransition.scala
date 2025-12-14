@@ -240,10 +240,7 @@ object AccumulationTransition:
       rawServiceAccountsByStateKey = newPartialState.rawServiceAccountsByStateKey
     )
 
-    // 14. Compute commitment root from yields
-    val outputHash = computeCommitmentRoot(commitments)
-
-    (finalState, AccumulationOutput(outputHash))
+    (finalState, AccumulationOutput(outputHash, accumulationStats))
 
   /**
    * Merging privilege updates.

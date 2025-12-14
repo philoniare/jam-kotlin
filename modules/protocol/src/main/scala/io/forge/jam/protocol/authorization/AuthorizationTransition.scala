@@ -24,41 +24,33 @@ object AuthorizationTransition:
     // Group authorizations by core index
     val authsByCoreIndex = input.auths.groupBy(_.core.toInt)
 
-    // Update pools for each core
-    val updatedPools = preState.authPools.zipWithIndex.map { case (pool, coreIndex) =>
-      val coreQueue = preState.authQueues(coreIndex)
-      if coreQueue.isEmpty then
-        pool
-      else
-        // Create mutable pool for modifications
-        val mutablePool = scala.collection.mutable.ListBuffer.from(pool)
+    // Update pools for each core according to the Gray Paper formula
+    val updatedPools = preState.authPools.zipWithIndex.map {
+      case (pool, coreIndex) =>
+        val coreQueue = preState.authQueues(coreIndex)
 
-        // Handle authorizations for this core - remove consumed ones
+        // Step 1: F(c) - Remove consumed authorizers from the pool
+        val mutablePool = scala.collection.mutable.ListBuffer.from(pool)
+        val prePoolSize = mutablePool.size
         authsByCoreIndex.get(coreIndex).foreach { auths =>
           for auth <- auths do
             val idx = mutablePool.indexWhere(h => h == auth.authHash)
             if idx >= 0 then
               mutablePool.remove(idx)
         }
+        val afterRemoveSize = mutablePool.size
 
-        if mutablePool.isEmpty then
-          // If pool is empty after consumption, add a zero hash
-          mutablePool += Hash.zero
-        else
-          // Check if all remaining items are zero hashes
-          val allAreZero = mutablePool.forall(_ == Hash.zero)
-          if allAreZero then
-            // Add another zero hash if all are zeros
-            mutablePool += Hash.zero
-          else
-            // Get new item from queue using rotation
-            val queueIndex = input.slot.toInt % coreQueue.size
-            val newItem = coreQueue(queueIndex)
-            mutablePool += newItem
+        // Step 2: Append new item from queue at cyclic position slot % queue_size
+        if coreQueue.nonEmpty then
+          val queueIndex = (input.slot % coreQueue.size).toInt
+          val newItem = coreQueue(queueIndex)
+          if coreIndex < 2 then
+            println(s"  Core $coreIndex: adding queue[$queueIndex] = ${newItem.toHex.take(16)}...")
+          mutablePool += newItem
 
-            // Ensure size constraints - remove oldest items from front
-            while mutablePool.size > constants.O do
-              mutablePool.remove(0)
+        // Step 3: Take rightmost O items (i.e., drop from front if size > O)
+        while mutablePool.size > constants.O do
+          mutablePool.remove(0)
 
         mutablePool.toList
     }

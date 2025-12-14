@@ -62,7 +62,8 @@ object history:
         builder ++= a.headerHash.bytes
         builder ++= a.beefyRoot.bytes
         builder ++= a.stateRoot.bytes
-        builder ++= a.reported.encode
+        val sortedReported = a.reported.sortBy(_.hash.toHex)
+        builder ++= sortedReported.encode
         builder.result()
 
     given JamDecoder[HistoricalBeta] with

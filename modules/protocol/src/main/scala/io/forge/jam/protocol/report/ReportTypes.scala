@@ -35,6 +35,8 @@ object ReportTypes:
   )
 
   object CoreStatisticsRecord:
+    def zero: CoreStatisticsRecord = CoreStatisticsRecord()
+
     given JamEncoder[CoreStatisticsRecord] with
       def encode(a: CoreStatisticsRecord): JamBytes =
         val builder = JamBytes.newBuilder
@@ -87,7 +89,9 @@ object ReportTypes:
     extrinsicCount: Long = 0,
     extrinsicSize: Long = 0,
     imports: Long = 0,
-    exports: Long = 0
+    exports: Long = 0,
+    accumulateCount: Long = 0,
+    accumulateGasUsed: Long = 0
   )
 
   object ServiceActivityRecord:
@@ -100,6 +104,8 @@ object ReportTypes:
         builder ++= codec.encodeCompactInteger(a.extrinsicSize)
         builder ++= codec.encodeCompactInteger(a.imports)
         builder ++= codec.encodeCompactInteger(a.exports)
+        builder ++= codec.encodeCompactInteger(a.accumulateCount)
+        builder ++= codec.encodeCompactInteger(a.accumulateGasUsed)
         builder.result()
 
     given JamDecoder[ServiceActivityRecord] with
@@ -112,8 +118,10 @@ object ReportTypes:
         val (extrinsicSize, d4) = codec.decodeCompactInteger(arr, pos); pos += d4
         val (imports, d5) = codec.decodeCompactInteger(arr, pos); pos += d5
         val (exports, d6) = codec.decodeCompactInteger(arr, pos); pos += d6
+        val (accumulateCount, d7) = codec.decodeCompactInteger(arr, pos); pos += d7
+        val (accumulateGasUsed, d8) = codec.decodeCompactInteger(arr, pos); pos += d8
         (ServiceActivityRecord(refinementCount, refinementGasUsed, extrinsicCount,
-          extrinsicSize, imports, exports), pos - offset)
+          extrinsicSize, imports, exports, accumulateCount, accumulateGasUsed), pos - offset)
 
     given Decoder[ServiceActivityRecord] =
       Decoder.instance { cursor =>

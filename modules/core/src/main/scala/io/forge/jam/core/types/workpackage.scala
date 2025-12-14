@@ -187,8 +187,9 @@ object workpackage:
         builder ++= codec.encodeCompactInteger(a.authOutput.length.toLong)
         builder ++= a.authOutput
         // segmentRootLookup - compact length prefix + fixed-size items
-        builder ++= codec.encodeCompactInteger(a.segmentRootLookup.length.toLong)
-        for lookup <- a.segmentRootLookup do
+        val sortedLookup = a.segmentRootLookup.sortBy(_.workPackageHash.toHex)
+        builder ++= codec.encodeCompactInteger(sortedLookup.length.toLong)
+        for lookup <- sortedLookup do
           builder ++= lookup.encode
         // results - compact length prefix + variable-size items
         builder ++= codec.encodeCompactInteger(a.results.length.toLong)
@@ -245,16 +246,19 @@ object workpackage:
           result
         }.toList
 
-        (WorkReport(
-          packageSpec,
-          context,
-          CoreIndex(coreIndex.toInt),
-          authorizerHash,
-          Gas(authGasUsed),
-          authOutput,
-          segmentRootLookup,
-          results
-        ), pos - offset)
+        (
+          WorkReport(
+            packageSpec,
+            context,
+            CoreIndex(coreIndex.toInt),
+            authorizerHash,
+            Gas(authGasUsed),
+            authOutput,
+            segmentRootLookup,
+            results
+          ),
+          pos - offset
+        )
 
     given Decoder[WorkReport] = Decoder.instance { cursor =>
       for

@@ -62,16 +62,22 @@ object ReportTransition:
 
   /**
    * Execute the Reports STF.
+   *
+   * @param input The input containing guarantees and current slot
+   * @param preState The pre-state for the Reports STF
+   * @param config The chain configuration
+   * @param skipAncestryValidation When true, skip anchor recency validation (used when ancestry feature is disabled)
    */
   def stf(
     input: ReportInput,
     preState: ReportState,
-    config: ChainConfig
+    config: ChainConfig,
+    skipAncestryValidation: Boolean = false
   ): (ReportState, ReportOutput) =
     val result = for
       _ <- validateGuaranteesOrder(input.guarantees)
       _ <- validateNoDuplicatePackages(input.guarantees, preState.recentBlocks)
-      _ <- validateAnchor(input.guarantees, preState.recentBlocks, input.slot, config)
+      _ <- if skipAncestryValidation then Right(()) else validateAnchor(input.guarantees, preState.recentBlocks, input.slot, config)
       processedGuarantees <- processGuarantees(input, preState, config)
     yield processedGuarantees
 
