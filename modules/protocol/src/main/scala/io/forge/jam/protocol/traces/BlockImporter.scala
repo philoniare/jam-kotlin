@@ -39,6 +39,7 @@ import io.forge.jam.protocol.statistics.StatisticsTransition
 import io.forge.jam.protocol.statistics.StatisticsTypes.*
 import io.forge.jam.protocol.dispute.DisputeTransition
 import io.forge.jam.protocol.dispute.DisputeTypes.*
+import org.slf4j.LoggerFactory
 
 /**
  * Result of a block import operation.
@@ -95,6 +96,7 @@ class BlockImporter(
   config: ChainConfig = ChainConfig.TINY,
   skipAncestryValidation: Boolean = false
 ):
+  private val logger = LoggerFactory.getLogger(getClass)
 
   /**
    * Imports a block and applies all state transitions.
@@ -232,8 +234,8 @@ class BlockImporter(
 
       // Get available reports from assurances
       val availableReports = assuranceOutput.ok.map(_.reported).getOrElse(List.empty)
-      println(
-        s"[DEBUG BlockImporter] assuranceOutput.reported=${availableReports.size} guarantees=${block.extrinsic.guarantees.size}"
+      logger.debug(
+        s"[BlockImporter] assuranceOutput.reported=${availableReports.size} guarantees=${block.extrinsic.guarantees.size}"
       )
 
       // Step 4: Run Reports STF
@@ -355,12 +357,12 @@ class BlockImporter(
           changedPrefixes += f"0x$prefix%02x"
 
       // Debug: Print ALL keyval details for debugging
-      println(s"[DEBUG BlockImporter KEYVALS] slot=${block.header.slot.value} total=${postKeyvals.size}")
+      logger.debug(s"[BlockImporter KEYVALS] slot=${block.header.slot.value} total=${postKeyvals.size}")
       for kv <- postKeyvals.sortBy(_.key.toHex) do
         val prefix = kv.key.toArray(0).toInt & 0xff
         val valueHash = Hashing.blake2b256(kv.value.toArray).toHex.take(16)
-        println(
-          f"[DEBUG KV] slot=${block.header.slot.value} key=${kv.key.toHex.take(16)}... prefix=0x$prefix%02x len=${kv.value.length}%5d valueHash=$valueHash"
+        logger.debug(
+          f"[KV] slot=${block.header.slot.value} key=${kv.key.toHex.take(16)}... prefix=0x$prefix%02x len=${kv.value.length}%5d valueHash=$valueHash"
         )
 
       // Step 14: Compute state root via Merkle trie

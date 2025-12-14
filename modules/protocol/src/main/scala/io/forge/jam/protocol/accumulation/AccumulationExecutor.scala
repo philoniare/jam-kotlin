@@ -7,6 +7,7 @@ import io.forge.jam.pvm.{InterruptKind, MemoryResult}
 import io.forge.jam.pvm.engine.{InterpretedModule, InterpretedInstance, PvmTraceWriter}
 import io.forge.jam.pvm.program.ProgramBlob
 import io.forge.jam.pvm.types.ProgramCounter
+import org.slf4j.LoggerFactory
 import spire.math.{UInt, UByte}
 
 import scala.collection.mutable
@@ -17,6 +18,7 @@ import scala.collection.mutable
  * @param config The chain configuration
  */
 class AccumulationExecutor(val config: ChainConfig):
+  private val logger = LoggerFactory.getLogger(getClass)
 
   private val moduleCache: mutable.Map[JamBytes, InterpretedModule] = mutable.Map.empty
   private val MAX_SERVICE_CODE_SIZE: Int = 4 * 1024 * 1024
@@ -133,7 +135,7 @@ class AccumulationExecutor(val config: ChainConfig):
     entropy: JamBytes,
     rawServiceDataByStateKey: mutable.Map[JamBytes, JamBytes]
   ): OnTransferResult =
-    println(s"[DEBUG executeOnTransfer] serviceId=$serviceId transfers.size=${transfers.size}")
+    logger.debug(s"[executeOnTransfer] serviceId=$serviceId transfers.size=${transfers.size}")
     if transfers.isEmpty then
       return OnTransferResult(accounts.get(serviceId), 0L)
 

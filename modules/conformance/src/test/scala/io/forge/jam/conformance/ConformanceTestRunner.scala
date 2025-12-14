@@ -4,6 +4,7 @@ import io.forge.jam.core.{ChainConfig, JamBytes, Hashing}
 import io.forge.jam.core.codec.encode
 import io.forge.jam.core.primitives.Hash
 import io.forge.jam.protocol.traces.{BlockImporter, ImportResult, RawState, StateMerklization}
+import org.slf4j.LoggerFactory
 
 import java.io.File
 import java.nio.file.{Files, Path}
@@ -31,6 +32,7 @@ class ConformanceTestRunner(
   debugBlockIndex: Int = -1, // Set to specific index to debug that block only
   faultyMode: Boolean = false // When true, step 29 state root mismatch is expected
 ):
+  private val logger = LoggerFactory.getLogger(getClass)
   private val stateStore = new StateStore()
   private var blockImporter: BlockImporter = _
   private var sessionFeatures: Int = 0

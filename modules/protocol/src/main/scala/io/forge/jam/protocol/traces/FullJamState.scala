@@ -33,6 +33,7 @@ import io.forge.jam.protocol.statistics.StatisticsTypes.{
   PreimagesAndSize
 }
 import io.forge.jam.protocol.report.ReportTypes.{CoreStatisticsRecord, ServiceStatisticsEntry}
+import org.slf4j.LoggerFactory
 
 import scala.collection.mutable
 
@@ -639,6 +640,7 @@ final case class FullJamState(
     builder.result()
 
 object FullJamState:
+  private val logger = LoggerFactory.getLogger(getClass)
 
   // Bandersnatch ring commitment size (144 bytes)
   private val RING_COMMITMENT_SIZE: Int = TinyConfig.BANDERSNATCH_RING_COMMITMENT_SIZE
@@ -684,16 +686,16 @@ object FullJamState:
       .filter(kv => (kv.key.toArray(0).toInt & 0xff) == 0)
       .map(kv => kv.key -> kv.value)
       .toMap
-    println(s"[DEBUG fromKeyvals] rawServiceDataByStateKey.size=${rawServiceDataByStateKey.size}")
-    rawServiceDataByStateKey.keys.foreach(k => println(s"[DEBUG fromKeyvals] storageKey=${k.toHex.take(32)}..."))
+    logger.debug(s"[fromKeyvals] rawServiceDataByStateKey.size=${rawServiceDataByStateKey.size}")
+    rawServiceDataByStateKey.keys.foreach(k => logger.debug(s"[fromKeyvals] storageKey=${k.toHex.take(32)}..."))
 
     // Decode recent history from keyvals
     val historyKv = keyvals.find(kv =>
       (kv.key.toArray(0).toInt & 0xff) == (StateKeys.RECENT_HISTORY.toInt & 0xff)
     )
-    historyKv.foreach(kv => println(s"[DEBUG fromKeyvals] 0x03 keyval len=${kv.value.length}"))
+    historyKv.foreach(kv => logger.debug(s"[fromKeyvals] 0x03 keyval len=${kv.value.length}"))
     val recentHistory = decodeRecentHistory(keyvals)
-    println(s"[DEBUG fromKeyvals] recentHistory.history.size=${recentHistory.history.size}")
+    logger.debug(s"[fromKeyvals] recentHistory.history.size=${recentHistory.history.size}")
 
     // Decode activity statistics from keyvals
     val (activityStatsCurrent, activityStatsLast, _) =
@@ -703,7 +705,7 @@ object FullJamState:
 
     // Decode accumulation history from keyvals (0x0F)
     val accumulationHistory = decodeAccumulationHistory(keyvals, config.epochLength)
-    println(s"[DEBUG fromKeyvals] accumulationHistory total hashes=${accumulationHistory.map(_.size).sum}")
+    logger.debug(s"[fromKeyvals] accumulationHistory total hashes=${accumulationHistory.map(_.size).sum}")
 
     FullJamState(
       timeslot = safroleState.tau,

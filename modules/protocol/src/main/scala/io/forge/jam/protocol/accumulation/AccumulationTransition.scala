@@ -4,6 +4,7 @@ import io.forge.jam.core.{ChainConfig, JamBytes, Hashing}
 import io.forge.jam.core.primitives.Hash
 import io.forge.jam.core.types.workpackage.WorkReport
 import org.bouncycastle.jcajce.provider.digest.Keccak
+import org.slf4j.LoggerFactory
 
 import scala.collection.mutable
 import java.nio.{ByteBuffer, ByteOrder}
@@ -18,6 +19,7 @@ import java.nio.{ByteBuffer, ByteOrder}
  * - Statistics tracking
  */
 object AccumulationTransition:
+  private val logger = LoggerFactory.getLogger(getClass)
 
   /**
    * Execute the Accumulation STF.
@@ -469,9 +471,9 @@ object AccumulationTransition:
     // Group work items by service (NO transfers here - v0.7.0 separates them)
     val serviceOperands = mutable.Map.empty[Long, mutable.ListBuffer[AccumulationOperand]]
 
-    println(s"[DEBUG executeAccumulation] Processing ${reports.size} reports, alwaysAccers=${alwaysAccers.size}, deferredTransfers=${deferredTransfers.size}")
+    logger.debug(s"[executeAccumulation] Processing ${reports.size} reports, alwaysAccers=${alwaysAccers.size}, deferredTransfers=${deferredTransfers.size}")
     for report <- reports do
-      println(s"[DEBUG executeAccumulation] Report has ${report.results.size} results")
+      logger.debug(s"[executeAccumulation] Report has ${report.results.size} results")
       for result <- report.results do
         val operand = OperandTuple(
           packageHash = JamBytes(report.packageSpec.hash.bytes.toArray),
@@ -529,7 +531,7 @@ object AccumulationTransition:
       val prevGas = gasUsedMap.getOrElse(serviceId, 0L)
       val newGas = prevGas + execResult.gasUsed
       gasUsedMap(serviceId) = newGas
-      println(s"[DEBUG executeAccumulation] serviceId=$serviceId execResult.gasUsed=${execResult.gasUsed} newGas=$newGas")
+      logger.debug(s"[executeAccumulation] serviceId=$serviceId execResult.gasUsed=${execResult.gasUsed} newGas=$newGas")
 
       // Capture privilege snapshot
       privilegeSnapshots(serviceId) = PrivilegeSnapshot(
@@ -560,7 +562,7 @@ object AccumulationTransition:
       finalState
 
     // Execute on_transfer for incoming deferred transfers (v0.7.0 - separate entry point PC=10)
-    println(s"[DEBUG executeAccumulation] deferredTransfers.size=${deferredTransfers.size} newDeferredTransfers.size=${newDeferredTransfers.size}")
+    logger.debug(s"[executeAccumulation] deferredTransfers.size=${deferredTransfers.size} newDeferredTransfers.size=${newDeferredTransfers.size}")
     val stateAfterTransfers = if deferredTransfers.nonEmpty then
       // Group transfers by destination service
       val transfersByService = deferredTransfers.groupBy(_.destination)
@@ -583,9 +585,9 @@ object AccumulationTransition:
     else
       stateAfterPreimages
 
-    println(s"[DEBUG executeAccumulation FINAL] rawServiceDataByStateKey.size=${stateAfterTransfers.rawServiceDataByStateKey.size}")
+    logger.debug(s"[executeAccumulation FINAL] rawServiceDataByStateKey.size=${stateAfterTransfers.rawServiceDataByStateKey.size}")
     stateAfterTransfers.rawServiceDataByStateKey.foreach { case (k, v) =>
-      println(s"[DEBUG executeAccumulation FINAL] key=${k.toHex.take(32)}... valueLen=${v.length}")
+      logger.debug(s"[executeAccumulation FINAL] key=${k.toHex.take(32)}... valueLen=${v.length}")
     }
     AccumulationExecResult(
       stateAfterTransfers,
@@ -697,9 +699,9 @@ object AccumulationTransition:
     transferStatsPerService: Map[Long, (Long, Long)]
   ): List[ServiceStatisticsEntry] =
     // Debug output
-    println(s"[DEBUG updateStatistics] gasUsedPerService: $gasUsedPerService")
-    println(s"[DEBUG updateStatistics] workItemsPerService: $workItemsPerService")
-    println(s"[DEBUG updateStatistics] transferStatsPerService: $transferStatsPerService")
+    logger.debug(s"[updateStatistics] gasUsedPerService: $gasUsedPerService")
+    logger.debug(s"[updateStatistics] workItemsPerService: $workItemsPerService")
+    logger.debug(s"[updateStatistics] transferStatsPerService: $transferStatsPerService")
 
     // Build fresh statistics from only this slot's activity
     val statsMap = mutable.Map.empty[Long, ServiceStatisticsEntry]
@@ -712,7 +714,7 @@ object AccumulationTransition:
       val workItems = workItemsPerService.getOrElse(serviceId, 0)
       val (transferCount, transferGasUsed) = transferStatsPerService.getOrElse(serviceId, (0L, 0L))
 
-      println(s"[DEBUG updateStatistics] serviceId=$serviceId accGasUsed=$accGasUsed workItems=$workItems")
+      logger.debug(s"[updateStatistics] serviceId=$serviceId accGasUsed=$accGasUsed workItems=$workItems")
 
       // Only include services that actually did something
       if accGasUsed > 0 || workItems > 0 || transferCount > 0 then

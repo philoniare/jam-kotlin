@@ -3,6 +3,7 @@ package io.forge.jam.protocol.authorization
 import io.forge.jam.core.{ChainConfig, constants}
 import io.forge.jam.core.primitives.Hash
 import io.forge.jam.protocol.authorization.AuthorizationTypes.*
+import org.slf4j.LoggerFactory
 
 /**
  * Authorization State Transition Function.
@@ -11,6 +12,7 @@ import io.forge.jam.protocol.authorization.AuthorizationTypes.*
  * from guarantee extrinsics and queue rotation based on timeslot.
  */
 object AuthorizationTransition:
+  private val logger = LoggerFactory.getLogger(getClass)
 
   /**
    * Execute the Authorization STF.
@@ -45,7 +47,7 @@ object AuthorizationTransition:
           val queueIndex = (input.slot % coreQueue.size).toInt
           val newItem = coreQueue(queueIndex)
           if coreIndex < 2 then
-            println(s"  Core $coreIndex: adding queue[$queueIndex] = ${newItem.toHex.take(16)}...")
+            logger.debug(s"Core $coreIndex: adding queue[$queueIndex] = ${newItem.toHex.take(16)}...")
           mutablePool += newItem
 
         // Step 3: Take rightmost O items (i.e., drop from front if size > O)
