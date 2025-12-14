@@ -1,0 +1,28 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+.bloop
+.metals
+*.swp
+*.swo
+
+# Build artifacts
+target/
+project/target/
+project/project/
+
+# Test vectors (large)
+jamtestvectors/
+graypaper/
+jam-conformance/
+
+# Logs
+*.log
+
+# Native build artifacts (we build fresh in Docker)
+modules/crypto/native/build/
+modules/crypto/native/*/target/

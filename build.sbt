@@ -1,6 +1,6 @@
 import scala.sys.process._
 
-ThisBuild / scalaVersion := "3.3.3"
+ThisBuild / scalaVersion := "3.3.7"
 ThisBuild / organization := "io.forge.jam"
 ThisBuild / version := "0.1.0-SNAPSHOT"
 
@@ -35,6 +35,8 @@ lazy val core = (project in file("modules/core"))
             "org.bouncycastle" % "bcprov-jdk18on" % "1.77",
             "io.circe" %% "circe-core" % "0.14.6",
             "io.circe" %% "circe-parser" % "0.14.6",
+            "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5",
+            "ch.qos.logback" % "logback-classic" % "1.4.11",
             "org.scalatest" %% "scalatest" % "3.2.17" % Test
         ),
         scalacOptions ++= Seq(
@@ -51,6 +53,8 @@ lazy val crypto = (project in file("modules/crypto"))
         name := "jam-crypto",
         libraryDependencies ++= Seq(
             "org.typelevel" %% "spire" % "0.18.0",
+            "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5",
+            "ch.qos.logback" % "logback-classic" % "1.4.11",
             "org.scalatest" %% "scalatest" % "3.2.17" % Test
         ),
         scalacOptions ++= Seq(
@@ -153,6 +157,8 @@ lazy val pvm = (project in file("modules/pvm"))
         name := "jam-pvm",
         libraryDependencies ++= Seq(
             "org.typelevel" %% "spire" % "0.18.0",
+            "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5",
+            "ch.qos.logback" % "logback-classic" % "1.4.11",
             "org.scalatest" %% "scalatest" % "3.2.17" % Test,
             "org.scalacheck" %% "scalacheck" % "1.17.0" % Test,
             "org.scalatestplus" %% "scalacheck-1-17" % "3.2.17.0" % Test,
@@ -176,6 +182,8 @@ lazy val protocol = (project in file("modules/protocol"))
         libraryDependencies ++= Seq(
             "org.typelevel" %% "spire" % "0.18.0",
             "org.bouncycastle" % "bcprov-jdk18on" % "1.77",
+            "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5",
+            "ch.qos.logback" % "logback-classic" % "1.4.11",
             // circe for JSON parsing - needed for STF types and test loading
             "io.circe" %% "circe-core" % "0.14.6",
             "io.circe" %% "circe-generic" % "0.14.6",
@@ -203,6 +211,8 @@ lazy val conformance = (project in file("modules/conformance"))
         name := "jam-conformance",
         libraryDependencies ++= Seq(
             "org.typelevel" %% "spire" % "0.18.0",
+            "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5",
+            "ch.qos.logback" % "logback-classic" % "1.4.11",
             // cats-effect for functional async IO
             "org.typelevel" %% "cats-effect" % "3.5.4",
             // fs2-io for Unix domain socket support
@@ -221,5 +231,20 @@ lazy val conformance = (project in file("modules/conformance"))
         Test / javaOptions ++= Seq(
             s"-Djava.library.path=${(ThisBuild / baseDirectory).value}/modules/crypto/native/build/$osDirName:${(ThisBuild / baseDirectory).value}/modules/crypto/src/main/resources",
             s"-Djam.base.dir=${(ThisBuild / baseDirectory).value}"
-        )
+        ),
+        // Assembly settings for creating fat JAR
+        assembly / mainClass := Some("io.forge.jam.conformance.ConformanceServerApp"),
+        assembly / assemblyJarName := "jam-conformance.jar",
+        assembly / assemblyMergeStrategy := {
+            // Discard signature files from signed JARs (e.g., Bouncy Castle)
+            case x if x.endsWith(".SF") => MergeStrategy.discard
+            case x if x.endsWith(".DSA") => MergeStrategy.discard
+            case x if x.endsWith(".RSA") => MergeStrategy.discard
+            case PathList("META-INF", "versions", _*) => MergeStrategy.first
+            case PathList("META-INF", "MANIFEST.MF") => MergeStrategy.discard
+            case PathList("META-INF", _*) => MergeStrategy.first
+            case "module-info.class" => MergeStrategy.discard
+            case x if x.endsWith(".class") => MergeStrategy.first
+            case _ => MergeStrategy.first
+        }
     )
