@@ -106,7 +106,7 @@ class AssuranceTest extends AnyFunSuite with Matchers:
 
     val config = TinyConfig.copy(validatorCount = 4, coresCount = 4)
     val (_, output) = AssuranceTransition.stfInternal(input, state, config)
-    output.err shouldBe Some(AssuranceErrorCode.BadSignature)
+    output.left.toOption shouldBe Some(AssuranceErrorCode.BadSignature)
   }
 
   test("2/3 supermajority threshold") {
@@ -145,7 +145,7 @@ class AssuranceTest extends AnyFunSuite with Matchers:
     postState.availAssignments(0) shouldBe None
     // Second assignment should remain (10 + 5 = 15 > 12)
     postState.availAssignments(1) shouldBe defined
-    output.ok shouldBe defined
+    output.isRight shouldBe true
   }
 
   test("Ed25519 signature verification") {
@@ -169,7 +169,7 @@ class AssuranceTest extends AnyFunSuite with Matchers:
     val config = TinyConfig.copy(validatorCount = 4, coresCount = 2)
     val (_, output) = AssuranceTransition.stfInternal(input, state, config)
 
-    output.err shouldBe Some(AssuranceErrorCode.BadSignature)
+    output.left.toOption shouldBe Some(AssuranceErrorCode.BadSignature)
   }
 
   test("tiny config state transition") {
@@ -234,28 +234,22 @@ class AssuranceTest extends AnyFunSuite with Matchers:
     actual: AssuranceOutput,
     testCaseName: String
   ): Unit =
-    (expected.ok, expected.err) match
-      case (Some(expectedMarks), _) =>
-        actual
-          .ok shouldBe defined withClue s"Expected OK output but got error in test case: $testCaseName. Actual: $actual"
-        actual.err shouldBe None withClue s"Expected OK output but got both OK and error in test case: $testCaseName"
+    expected match
+      case Right(expectedMarks) =>
+        actual.isRight shouldBe true withClue s"Expected OK output but got error in test case: $testCaseName. Actual: $actual"
 
-        expectedMarks.reported.size shouldBe actual.ok.get.reported.size withClue
+        val actualMarks = actual.toOption.get
+        expectedMarks.reported.size shouldBe actualMarks.reported.size withClue
           s"Reported work reports size mismatch in test case: $testCaseName"
 
-        expectedMarks.reported.zip(actual.ok.get.reported).zipWithIndex.foreach {
+        expectedMarks.reported.zip(actualMarks.reported).zipWithIndex.foreach {
           case ((exp, act), index) =>
             exp shouldBe act withClue s"Work report mismatch at index $index in test case: $testCaseName"
         }
 
-      case (_, Some(expectedErr)) =>
-        actual
-          .err shouldBe defined withClue s"Expected error output but got OK in test case: $testCaseName. Actual: $actual"
-        actual.ok shouldBe None withClue s"Expected error output but got both OK and error in test case: $testCaseName"
-        expectedErr shouldBe actual.err.get withClue s"Error code mismatch in test case: $testCaseName"
-
-      case (None, None) =>
-        fail(s"Invalid expected AssuranceOutput - both ok and err are None in test case: $testCaseName")
+      case Left(expectedErr) =>
+        actual.isLeft shouldBe true withClue s"Expected error output but got OK in test case: $testCaseName. Actual: $actual"
+        expectedErr shouldBe actual.left.toOption.get withClue s"Error code mismatch in test case: $testCaseName"
 
   // Helper method to compare AssuranceState instances
   private def assertAssuranceStateEquals(

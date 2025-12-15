@@ -157,7 +157,7 @@ object TracesBenchmarkApp:
 
               val (_, safroleOutput) = SafroleTransition.stf(safroleInput, jamState, config)
 
-              if safroleOutput.err.isEmpty then
+              if safroleOutput.isRight then
                 processedSteps += 1
               else
                 errors += 1

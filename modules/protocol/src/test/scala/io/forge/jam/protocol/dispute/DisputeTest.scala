@@ -89,8 +89,7 @@ class DisputeTest extends AnyFunSuite with Matchers:
     val input = DisputeInput(emptyDisputes)
     val (postState, output) = DisputeTransition.stfInternal(input, state, config)
 
-    output.ok shouldBe defined
-    output.err shouldBe None
+    output.isRight shouldBe true
     postState.psi.bad shouldBe empty
     postState.psi.good shouldBe empty
     postState.psi.wonky shouldBe empty
@@ -109,7 +108,7 @@ class DisputeTest extends AnyFunSuite with Matchers:
     val input = DisputeInput(emptyDisputes)
     val (_, output) = DisputeTransition.stfInternal(input, state, config)
 
-    output.ok shouldBe defined
+    output.isRight shouldBe true
   }
 
   test("verdict processing with supermajority (good)") {
@@ -140,7 +139,7 @@ class DisputeTest extends AnyFunSuite with Matchers:
     val (_, output) = DisputeTransition.stfInternal(input, state, config)
 
     // Should fail with BadGuarantorKey since the key is not in kappa or lambda
-    output.err shouldBe defined
+    output.isLeft shouldBe true
   }
 
   test("fault signature verification") {
@@ -161,7 +160,7 @@ class DisputeTest extends AnyFunSuite with Matchers:
     val (_, output) = DisputeTransition.stfInternal(input, state, config)
 
     // Should fail with BadAuditorKey since the key is not in kappa or lambda
-    output.err shouldBe defined
+    output.isLeft shouldBe true
   }
 
   test("sorted/unique ordering validation") {
@@ -190,7 +189,7 @@ class DisputeTest extends AnyFunSuite with Matchers:
     val (_, output) = DisputeTransition.stfInternal(input, state, config)
 
     // Should fail since keys are duplicate (not unique)
-    output.err shouldBe defined
+    output.isLeft shouldBe true
   }
 
   test("tiny config state transition") {
@@ -247,28 +246,23 @@ class DisputeTest extends AnyFunSuite with Matchers:
     actual: DisputeOutput,
     testCaseName: String
   ): Unit =
-    (expected.ok, expected.err) match
-      case (Some(expectedMarks), _) =>
-        actual
-          .ok shouldBe defined withClue s"Expected OK output but got error in test case: $testCaseName. Actual error: ${actual.err}"
-        actual.err shouldBe None withClue s"Expected OK output but got both OK and error in test case: $testCaseName"
+    expected match
+      case Right(expectedMarks) =>
+        actual.isRight shouldBe true withClue s"Expected OK output but got error in test case: $testCaseName. Actual error: ${actual.left.toOption}"
 
-        expectedMarks.offenders.size shouldBe actual.ok.get.offenders.size withClue
+        val actualMarks = actual.toOption.get
+        expectedMarks.offenders.size shouldBe actualMarks.offenders.size withClue
           s"Offenders size mismatch in test case: $testCaseName"
 
-        expectedMarks.offenders.zip(actual.ok.get.offenders).zipWithIndex.foreach {
+        expectedMarks.offenders.zip(actualMarks.offenders).zipWithIndex.foreach {
           case ((exp, act), index) =>
             java.util.Arrays.equals(exp.bytes, act.bytes) shouldBe true withClue
               s"Offender mismatch at index $index in test case: $testCaseName"
         }
 
-      case (_, Some(expectedErr)) =>
-        actual.err shouldBe defined withClue s"Expected error output but got OK in test case: $testCaseName. Actual OK: ${actual.ok}"
-        actual.ok shouldBe None withClue s"Expected error output but got both OK and error in test case: $testCaseName"
-        expectedErr shouldBe actual.err.get withClue s"Error code mismatch in test case: $testCaseName"
-
-      case (None, None) =>
-        fail(s"Invalid expected DisputeOutput - both ok and err are None in test case: $testCaseName")
+      case Left(expectedErr) =>
+        actual.isLeft shouldBe true withClue s"Expected error output but got OK in test case: $testCaseName. Actual OK: ${actual.toOption}"
+        expectedErr shouldBe actual.left.toOption.get withClue s"Error code mismatch in test case: $testCaseName"
 
   // Helper method to compare DisputeState instances
   private def assertDisputeStateEquals(

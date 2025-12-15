@@ -4,6 +4,14 @@ ThisBuild / scalaVersion := "3.3.7"
 ThisBuild / organization := "io.forge.jam"
 ThisBuild / version := "0.1.0-SNAPSHOT"
 
+// Common compiler options for all modules
+ThisBuild / scalacOptions ++= Seq(
+  "-Wunused:all"  // Warn on unused imports, privates, locals, params, etc.
+)
+
+// Common dependency versions
+val catsVersion = "2.10.0"
+
 // Detect OS for native library paths
 val osName = System.getProperty("os.name").toLowerCase
 val osDirName = if (osName.contains("mac")) "mac"
@@ -31,6 +39,7 @@ lazy val core = (project in file("modules/core"))
   .settings(
     name := "jam-core",
     libraryDependencies ++= Seq(
+      "org.typelevel" %% "cats-core" % catsVersion,
       "org.typelevel" %% "spire" % "0.18.0",
       "org.bouncycastle" % "bcprov-jdk18on" % "1.77",
       "io.circe" %% "circe-core" % "0.14.6",
@@ -52,6 +61,7 @@ lazy val crypto = (project in file("modules/crypto"))
   .settings(
     name := "jam-crypto",
     libraryDependencies ++= Seq(
+      "org.typelevel" %% "cats-core" % catsVersion,
       "org.typelevel" %% "spire" % "0.18.0",
       "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5",
       "ch.qos.logback" % "logback-classic" % "1.4.11",
@@ -158,6 +168,7 @@ lazy val pvm = (project in file("modules/pvm"))
   .settings(
     name := "jam-pvm",
     libraryDependencies ++= Seq(
+      "org.typelevel" %% "cats-core" % catsVersion,
       "org.typelevel" %% "spire" % "0.18.0",
       "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5",
       "ch.qos.logback" % "logback-classic" % "1.4.11",
@@ -182,6 +193,7 @@ lazy val protocol = (project in file("modules/protocol"))
   .settings(
     name := "jam-protocol",
     libraryDependencies ++= Seq(
+      "org.typelevel" %% "cats-core" % catsVersion,
       "org.typelevel" %% "spire" % "0.18.0",
       "org.bouncycastle" % "bcprov-jdk18on" % "1.77",
       "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5",
@@ -213,6 +225,7 @@ lazy val conformance = (project in file("modules/conformance"))
   .settings(
     name := "jam-conformance",
     libraryDependencies ++= Seq(
+      "org.typelevel" %% "cats-core" % catsVersion,
       "org.typelevel" %% "spire" % "0.18.0",
       "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5",
       "ch.qos.logback" % "logback-classic" % "1.4.11",

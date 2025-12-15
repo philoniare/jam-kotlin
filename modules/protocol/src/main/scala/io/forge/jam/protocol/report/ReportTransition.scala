@@ -1,5 +1,6 @@
 package io.forge.jam.protocol.report
 
+import cats.syntax.all.*
 import io.forge.jam.core.{ChainConfig, JamBytes, Hashing, Shuffle, constants, StfResult, ValidationHelpers}
 import io.forge.jam.core.codec.encode
 import io.forge.jam.core.primitives.{Hash, Ed25519PublicKey, ValidatorIndex}
@@ -136,13 +137,18 @@ object ReportTransition:
     preState: ReportState,
     config: ChainConfig
   ): Either[ReportErrorCode, (List[WorkReport], List[SegmentRootLookup], List[Hash])] =
-    val seenCores = scala.collection.mutable.Set[Int]()
-    val reports = scala.collection.mutable.ListBuffer[WorkReport]()
-    val packages = scala.collection.mutable.ListBuffer[SegmentRootLookup]()
-    val guarantors = scala.collection.mutable.ListBuffer[Hash]()
+    // Accumulated state during processing
+    case class ProcessState(
+      seenCores: Set[Int],
+      reports: List[WorkReport],
+      packages: List[SegmentRootLookup],
+      guarantors: List[Hash]
+    )
 
-    for guarantee <- input.guarantees do
-      val result =
+    val initial = ProcessState(Set.empty, List.empty, List.empty, List.empty)
+
+    input.guarantees.foldLeft[Either[ReportErrorCode, ProcessState]](Right(initial)) { (accum, guarantee) =>
+      accum.flatMap { state =>
         for
           _ <- validateGuarantorSignatureOrder(guarantee)
           _ <- validateWorkReport(
@@ -163,21 +169,21 @@ object ReportTransition:
             preState.offenders,
             config
           )
-          _ <- require(!seenCores.contains(guarantee.report.coreIndex.toInt), ReportErrorCode.CoreEngaged)
-        yield ()
-
-      result match
-        case Left(err) => return Left(err)
-        case Right(_) =>
-          seenCores += guarantee.report.coreIndex.toInt
-          reports += guarantee.report
-          packages += SegmentRootLookup(guarantee.report.packageSpec.hash, guarantee.report.packageSpec.exportsRoot)
-
+          _ <- require(!state.seenCores.contains(guarantee.report.coreIndex.toInt), ReportErrorCode.CoreEngaged)
+        yield {
           val ctx = computeRotationContext(guarantee.slot.toInt.toLong, input.slot, config)
           val validators = selectValidatorSet(ctx, preState.currValidators, preState.prevValidators)
-          guarantors ++= guarantee.signatures.map(sig => Hash(validators(sig.validatorIndex.toInt).ed25519.bytes))
+          val newGuarantors = guarantee.signatures.map(sig => Hash(validators(sig.validatorIndex.toInt).ed25519.bytes))
 
-    Right((reports.toList, packages.toList, guarantors.toList))
+          state.copy(
+            seenCores = state.seenCores + guarantee.report.coreIndex.toInt,
+            reports = state.reports :+ guarantee.report,
+            packages = state.packages :+ SegmentRootLookup(guarantee.report.packageSpec.hash, guarantee.report.packageSpec.exportsRoot),
+            guarantors = state.guarantors ++ newGuarantors
+          )
+        }
+      }
+    }.map(s => (s.reports, s.packages, s.guarantors))
 
   /** Validate guarantees are sorted by core index. */
   private def validateGuaranteesOrder(guarantees: List[GuaranteeExtrinsic]): ValidationResult =

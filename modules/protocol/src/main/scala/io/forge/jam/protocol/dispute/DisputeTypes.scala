@@ -268,7 +268,7 @@ object DisputeTypes:
   )
 
   object DisputeCase:
-    import DisputeOutput.circeDecoder
+    import DisputeOutput.{given_JamEncoder_DisputeOutput, given_JamDecoder_DisputeOutput, circeDecoder}
 
     /** Create a config-aware decoder for DisputeCase */
     def decoder(coreCount: Int, validatorCount: Int, votesPerVerdict: Int): JamDecoder[DisputeCase] =

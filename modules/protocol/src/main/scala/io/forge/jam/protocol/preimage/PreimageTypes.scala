@@ -399,7 +399,7 @@ object PreimageTypes:
   )
 
   object PreimageCase:
-    import PreimageOutput.circeDecoder
+    import PreimageOutput.{given_JamEncoder_PreimageOutput, given_JamDecoder_PreimageOutput, circeDecoder}
 
     given JamEncoder[PreimageCase] with
       def encode(a: PreimageCase): JamBytes =

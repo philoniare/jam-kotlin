@@ -1,5 +1,6 @@
 package io.forge.jam.protocol.statistics
 
+import cats.syntax.all.*
 import io.forge.jam.core.ChainConfig
 import io.forge.jam.protocol.statistics.StatisticsTypes.*
 import io.forge.jam.protocol.state.JamState
@@ -50,48 +51,46 @@ object StatisticsTransition:
     val preEpoch = preState.slot / config.epochLength
     val postEpoch = input.slot / config.epochLength
 
-    // Start with mutable copies of stats
-    var currStats = preState.valsCurrStats.toArray.map(_.copy())
-
     // Handle epoch transition: rotate stats
-    val lastStats = if postEpoch > preEpoch then
+    val (baseStats, lastStats) = if postEpoch > preEpoch then
       // Current becomes last, reset current
-      val newLastStats = currStats.toList
-      currStats = Array.fill(config.validatorCount)(StatCount.zero)
-      newLastStats
+      (List.fill(config.validatorCount)(StatCount.zero), preState.valsCurrStats)
     else
-      preState.valsLastStats
+      (preState.valsCurrStats, preState.valsLastStats)
+
+    // Helper to update stat at index
+    def updateStatAt(stats: List[StatCount], idx: Int, f: StatCount => StatCount): List[StatCount] =
+      stats.zipWithIndex.map { case (stat, i) => if i == idx then f(stat) else stat }
 
     // Update author's stats
     val authorIdx = input.authorIndex.toInt
-    currStats(authorIdx) = currStats(authorIdx).copy(
-      blocks = currStats(authorIdx).blocks + 1,
-      tickets = currStats(authorIdx).tickets + input.extrinsic.tickets.size,
-      preImages = currStats(authorIdx).preImages + input.extrinsic.preimages.size,
-      preImagesSize = currStats(authorIdx).preImagesSize + input.extrinsic.preimages.map(_.blob.length).sum
+    val afterAuthor = updateStatAt(baseStats, authorIdx, stat =>
+      stat.copy(
+        blocks = stat.blocks + 1,
+        tickets = stat.tickets + input.extrinsic.tickets.size,
+        preImages = stat.preImages + input.extrinsic.preimages.size,
+        preImagesSize = stat.preImagesSize + input.extrinsic.preimages.map(_.blob.length).sum
+      )
     )
 
-    // Update guarantees - each unique validator who signed any guarantee gets +1 credit per block
-    val reporters = scala.collection.mutable.Set[Int]()
-    input.extrinsic.guarantees.foreach { guarantee =>
-      guarantee.signatures.foreach(sig => reporters.add(sig.validatorIndex.toInt))
-    }
-    reporters.foreach { validatorIndex =>
-      currStats(validatorIndex) = currStats(validatorIndex).copy(
-        guarantees = currStats(validatorIndex).guarantees + 1
-      )
+    // Collect unique reporters from guarantees
+    val reporters = input.extrinsic.guarantees
+      .flatMap(_.signatures.map(_.validatorIndex.toInt))
+      .toSet
+
+    // Update guarantees - each unique validator gets +1 credit per block
+    val afterGuarantees = reporters.foldLeft(afterAuthor) { (stats, validatorIndex) =>
+      updateStatAt(stats, validatorIndex, stat => stat.copy(guarantees = stat.guarantees + 1))
     }
 
-    // Update assurances
-    input.extrinsic.assurances.foreach { assurance =>
+    // Update assurances using foldLeft
+    val afterAssurances = input.extrinsic.assurances.foldLeft(afterGuarantees) { (stats, assurance) =>
       val idx = assurance.validatorIndex.toInt
-      currStats(idx) = currStats(idx).copy(
-        assurances = currStats(idx).assurances + 1
-      )
+      updateStatAt(stats, idx, stat => stat.copy(assurances = stat.assurances + 1))
     }
 
     val postState = StatState(
-      valsCurrStats = currStats.toList,
+      valsCurrStats = afterAssurances,
       valsLastStats = lastStats,
       slot = preState.slot,
       currValidators = preState.currValidators

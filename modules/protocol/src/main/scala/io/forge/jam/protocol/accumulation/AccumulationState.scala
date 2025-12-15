@@ -808,7 +808,7 @@ object AccumulationOutput:
     def encode(a: AccumulationOutput): JamBytes =
       val builder = JamBytes.newBuilder
       builder += 0.toByte // discriminator for ok
-      a.ok.foreach(data => builder ++= data.encode)
+      a.foreach(data => builder ++= data.encode)
       builder.result()
 
   given jamDecoder: JamDecoder[AccumulationOutput] with

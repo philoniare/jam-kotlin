@@ -1,5 +1,6 @@
 package io.forge.jam.protocol.traces
 
+import cats.syntax.all.*
 import io.forge.jam.core.{ChainConfig, JamBytes, Hashing}
 import io.forge.jam.core.primitives.Hash
 import io.forge.jam.core.codec.encode
@@ -123,10 +124,10 @@ class BlockImporter(
       val safroleInput = InputExtractor.extractSafroleInput(block)
       val (stateAfterSafrole, safroleOutput) = SafroleTransition.stf(safroleInput, jamState, config)
 
-      if safroleOutput.err.isDefined then
+      if safroleOutput.isLeft then
         return ImportResult.Failure(
           ImportError.SafroleError,
-          s"Safrole STF error: ${safroleOutput.err.get}"
+          s"Safrole STF error: ${safroleOutput.left.toOption.get}"
         )
 
       jamState = stateAfterSafrole
@@ -195,7 +196,7 @@ class BlockImporter(
                 )
 
       // Step 2.6: Validate epoch mark matches Safrole output
-      val safroleEpochMark = safroleOutput.ok.flatMap(_.epochMark)
+      val safroleEpochMark = safroleOutput.toOption.flatMap(_.epochMark)
       if safroleEpochMark != block.header.epochMark then
         return ImportResult.Failure(
           ImportError.InvalidHeader,
@@ -203,7 +204,7 @@ class BlockImporter(
         )
 
       // Step 2.7: Validate tickets mark matches Safrole output
-      val safroleTicketsMark = safroleOutput.ok.flatMap(_.ticketsMark)
+      val safroleTicketsMark = safroleOutput.toOption.flatMap(_.ticketsMark)
       if safroleTicketsMark != block.header.ticketsMark then
         return ImportResult.Failure(
           ImportError.InvalidHeader,
@@ -214,10 +215,10 @@ class BlockImporter(
       val disputeInput = InputExtractor.extractDisputeInput(block)
       val (stateAfterDispute, disputeOutput) = DisputeTransition.stf(disputeInput, jamState, config)
 
-      if disputeOutput.err.isDefined then
+      if disputeOutput.isLeft then
         return ImportResult.Failure(
           ImportError.DisputeError,
-          s"Dispute STF error: ${disputeOutput.err.get}"
+          s"Dispute STF error: ${disputeOutput.left.toOption.get}"
         )
 
       jamState = stateAfterDispute
@@ -226,16 +227,16 @@ class BlockImporter(
       val assuranceInput = InputExtractor.extractAssuranceInput(block)
       val (stateAfterAssurance, assuranceOutput) = AssuranceTransition.stf(assuranceInput, jamState, config)
 
-      if assuranceOutput.err.isDefined then
+      if assuranceOutput.isLeft then
         return ImportResult.Failure(
           ImportError.AssuranceError,
-          s"Assurance STF error: ${assuranceOutput.err.get}"
+          s"Assurance STF error: ${assuranceOutput.left.toOption.get}"
         )
 
       jamState = stateAfterAssurance
 
       // Get available reports from assurances
-      val availableReports = assuranceOutput.ok.map(_.reported).getOrElse(List.empty)
+      val availableReports = assuranceOutput.toOption.map(_.reported).getOrElse(List.empty)
       logger.debug(
         s"[BlockImporter] assuranceOutput.reported=${availableReports.size} guarantees=${block.extrinsic.guarantees.size}"
       )
@@ -255,10 +256,10 @@ class BlockImporter(
       val (stateAfterReport, reportOutput) =
         ReportTransition.stf(reportInput, jamState, config, skipAncestryValidation)
 
-      if reportOutput.err.isDefined then
+      if reportOutput.isLeft then
         return ImportResult.Failure(
           ImportError.ReportError,
-          s"Report STF error: ${reportOutput.err.get}"
+          s"Report STF error: ${reportOutput.left.toOption.get}"
         )
 
       jamState = stateAfterReport
@@ -273,7 +274,7 @@ class BlockImporter(
 
       jamState = stateAfterAccumulation
 
-      val accumulationOutputData = accumulationOutput.ok.get
+      val accumulationOutputData = accumulationOutput.toOption.get
       val accumulateRoot = accumulationOutputData.ok
 
       // Step 7: Run History STF using unified JamState pipeline
@@ -292,10 +293,10 @@ class BlockImporter(
       val preimageInput = InputExtractor.extractPreimageInput(block, block.header.slot.value.toLong)
       val (stateAfterPreimage, preimageOutput) = PreimageTransition.stf(preimageInput, jamState)
 
-      if preimageOutput.err.isDefined then
+      if preimageOutput.isLeft then
         return ImportResult.Failure(
           ImportError.PreimageError,
-          s"preimages error: ${preimageOutput.err.get match
+          s"preimages error: ${preimageOutput.left.toOption.get match
               case PreimageErrorCode.PreimageUnneeded => "preimage not required"
               case PreimageErrorCode.PreimagesNotSortedUnique => "preimages not sorted unique"
             }"
@@ -400,71 +401,66 @@ class BlockImporter(
     assurances: List[AssuranceExtrinsic],
     maxCores: Int
   ): List[CoreStatisticsRecord] =
-    val coreStats = Array.fill(maxCores)(CoreStatisticsRecord())
+    // Helper to update stat at specific core index
+    def updateAt(stats: List[CoreStatisticsRecord], idx: Int, f: CoreStatisticsRecord => CoreStatisticsRecord): List[CoreStatisticsRecord] =
+      if idx >= 0 && idx < stats.length then
+        stats.zipWithIndex.map { case (s, i) => if i == idx then f(s) else s }
+      else
+        stats
 
-    // For each guarantee, add packageSize and per-digest stats to the core
-    for guarantee <- guarantees do
+    val initialStats = List.fill(maxCores)(CoreStatisticsRecord())
+
+    // Process guarantees using foldLeft
+    val afterGuarantees = guarantees.foldLeft(initialStats) { (stats, guarantee) =>
       val report = guarantee.report
       val coreIdx = report.coreIndex.toInt
       if coreIdx >= 0 && coreIdx < maxCores then
-        var imports = 0L
-        var extrinsicCount = 0L
-        var extrinsicSize = 0L
-        var exports = 0L
-        var gasUsed = 0L
+        val totals = report.results.foldLeft((0L, 0L, 0L, 0L, 0L)) {
+          case ((imports, extCount, extSize, exports, gas), result) =>
+            val load = result.refineLoad
+            (imports + load.imports.toLong, extCount + load.extrinsicCount.toLong,
+             extSize + load.extrinsicSize.toLong, exports + load.exports.toLong, gas + load.gasUsed.toLong)
+        }
+        updateAt(stats, coreIdx, current => current.copy(
+          imports = current.imports + totals._1,
+          extrinsicCount = current.extrinsicCount + totals._2,
+          extrinsicSize = current.extrinsicSize + totals._3,
+          exports = current.exports + totals._4,
+          bundleSize = current.bundleSize + report.packageSpec.length.toLong,
+          gasUsed = current.gasUsed + totals._5
+        ))
+      else
+        stats
+    }
 
-        for result <- report.results do
-          val load = result.refineLoad
-          imports += load.imports.toLong
-          extrinsicCount += load.extrinsicCount.toLong
-          extrinsicSize += load.extrinsicSize.toLong
-          exports += load.exports.toLong
-          gasUsed += load.gasUsed.toLong
-
-        val current = coreStats(coreIdx)
-        coreStats(coreIdx) = current.copy(
-          imports = current.imports + imports,
-          extrinsicCount = current.extrinsicCount + extrinsicCount,
-          extrinsicSize = current.extrinsicSize + extrinsicSize,
-          exports = current.exports + exports,
-          bundleSize = current.bundleSize + report.packageSpec.length.toLong, // packageSize
-          gasUsed = current.gasUsed + gasUsed
-        )
-
-    // Add dataSize from available reports
-    // dataSize = package.length + segmentsSize
-    // segmentsSize = segmentSize * ceil((segmentCount * 65) / 64)
-    val segmentSize = 4104L // Default segment size for tiny config
-    for report <- availableReports do
+    // Add dataSize from available reports using foldLeft
+    val segmentSize = 4104L
+    val afterReports = availableReports.foldLeft(afterGuarantees) { (stats, report) =>
       val coreIndex = report.coreIndex.toInt
-      if coreIndex >= 0 && coreIndex < coreStats.length then
+      if coreIndex >= 0 && coreIndex < stats.length then
         val packageLength = report.packageSpec.length.toLong
         val segmentCount = report.packageSpec.exportsCount.toLong
         val segmentsSize = segmentSize * ((segmentCount * 65 + 63) / 64)
         val dataSize = packageLength + segmentsSize
+        updateAt(stats, coreIndex, c => c.copy(daLoad = c.daLoad + dataSize))
+      else
+        stats
+    }
 
-        val current = coreStats(coreIndex)
-        coreStats(coreIndex) = current.copy(
-          daLoad = current.daLoad + dataSize
-        )
-
-    // Add assuranceCount/popularity from assurances
-    // Each assurance has a bitfield indicating which cores the validator attests to
-    for assurance <- assurances do
+    // Add popularity from assurances using foldLeft
+    assurances.foldLeft(afterReports) { (stats, assurance) =>
       val bitfield = assurance.bitfield.toArray
-      for coreIndex <- 0 until maxCores do
-        // Check if bit at coreIndex is set in the bitfield
+      (0 until maxCores).foldLeft(stats) { (s, coreIndex) =>
         val byteIndex = coreIndex / 8
         val bitIndex = coreIndex % 8
         if byteIndex < bitfield.length then
           val attested = (bitfield(byteIndex).toInt & (1 << bitIndex)) != 0
-          if attested && coreIndex < coreStats.length then
-            val current = coreStats(coreIndex)
-            coreStats(coreIndex) = current.copy(
-              popularity = current.popularity + 1
-            )
-
-    coreStats.toList
+          if attested then updateAt(s, coreIndex, c => c.copy(popularity = c.popularity + 1))
+          else s
+        else
+          s
+      }
+    }
 
   /**
    * Compute fresh service statistics by combining:
@@ -477,51 +473,43 @@ class BlockImporter(
     preimages: List[Preimage],
     accumulationStats: Map[Long, (Long, Int)] // serviceId -> (gasUsed, workItemCount)
   ): List[ReportTypes.ServiceStatisticsEntry] =
-    // Collect all service IDs from all sources
-    val serviceIds = scala.collection.mutable.Set[Long]()
+    // Collect all service IDs from all sources (immutable)
+    val guaranteeServiceIds = guarantees.flatMap(_.report.results.map(_.serviceId.value.toLong))
+    val preimageServiceIds = preimages.map(_.requester.value.toLong)
+    val allServiceIds = (guaranteeServiceIds ++ preimageServiceIds ++ accumulationStats.keys).toSet
 
-    // From guarantees
-    for guarantee <- guarantees do
-      for result <- guarantee.report.results do
-        serviceIds.add(result.serviceId.value.toLong)
-    // From preimages
-    for preimage <- preimages do
-      serviceIds.add(preimage.requester.value.toLong)
-    // From accumulation
-    serviceIds ++= accumulationStats.keys
+    // Build initial stats map with empty records for all services
+    val initialStats = allServiceIds.map(id => id -> ReportTypes.ServiceActivityRecord()).toMap
 
-    // Initialize fresh stats for each service
-    val statsMap = scala.collection.mutable.Map[Long, ReportTypes.ServiceActivityRecord]()
-    for serviceId <- serviceIds do
-      statsMap(serviceId) = ReportTypes.ServiceActivityRecord()
-
-    // Update from guarantees (work reports)
-    for guarantee <- guarantees do
-      for result <- guarantee.report.results do
+    // Update from guarantees using foldLeft
+    val afterGuarantees = guarantees.foldLeft(initialStats) { (stats, guarantee) =>
+      guarantee.report.results.foldLeft(stats) { (s, result) =>
         val serviceId = result.serviceId.value.toLong
-        val current = statsMap.getOrElse(serviceId, ReportTypes.ServiceActivityRecord())
+        val current = s.getOrElse(serviceId, ReportTypes.ServiceActivityRecord())
         val refineLoad = result.refineLoad
-        statsMap(serviceId) = current.copy(
+        s.updated(serviceId, current.copy(
           refinementCount = current.refinementCount + 1L,
           refinementGasUsed = current.refinementGasUsed + refineLoad.gasUsed.toLong,
           imports = current.imports + refineLoad.imports.toLong,
           exports = current.exports + refineLoad.exports.toLong,
           extrinsicCount = current.extrinsicCount + refineLoad.extrinsicCount.toLong,
           extrinsicSize = current.extrinsicSize + refineLoad.extrinsicSize.toLong
-        )
+        ))
+      }
+    }
 
-    // Update from accumulation stats (accumulateCount, accumulateGasUsed)
-    for (serviceId, (gasUsed, count)) <- accumulationStats do
-      val current = statsMap.getOrElse(serviceId, ReportTypes.ServiceActivityRecord())
-      statsMap(serviceId) = current.copy(
+    // Update from accumulation stats using foldLeft
+    val afterAccumulation = accumulationStats.foldLeft(afterGuarantees) { case (stats, (serviceId, (gasUsed, count))) =>
+      val current = stats.getOrElse(serviceId, ReportTypes.ServiceActivityRecord())
+      stats.updated(serviceId, current.copy(
         accumulateCount = current.accumulateCount + count.toLong,
         accumulateGasUsed = current.accumulateGasUsed + gasUsed
-      )
+      ))
+    }
 
     // Return sorted list by service ID
-    statsMap.toList.sortBy(_._1).map {
-      case (id, record) =>
-        ReportTypes.ServiceStatisticsEntry(id = id, record = record)
+    afterAccumulation.toList.sortBy(_._1).map {
+      case (id, record) => ReportTypes.ServiceStatisticsEntry(id = id, record = record)
     }
 
   /**

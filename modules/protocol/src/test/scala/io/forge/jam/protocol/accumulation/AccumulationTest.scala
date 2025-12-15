@@ -186,11 +186,11 @@ class AccumulationTest extends AnyFunSuite with Matchers:
     actual: AccumulationOutput,
     testCaseName: String
   ): Unit =
-    expected.ok.isDefined shouldBe true withClue s"Expected output should be defined in test case: $testCaseName"
-    actual.ok.isDefined shouldBe true withClue s"Actual output should be defined in test case: $testCaseName"
+    expected.isRight shouldBe true withClue s"Expected output should be defined in test case: $testCaseName"
+    actual.isRight shouldBe true withClue s"Actual output should be defined in test case: $testCaseName"
 
-    val expectedData = expected.ok.get
-    val actualData = actual.ok.get
+    val expectedData = expected.toOption.get
+    val actualData = actual.toOption.get
 
     java.util.Arrays.equals(expectedData.ok.toArray, actualData.ok.toArray) shouldBe true withClue
       s"Output mismatch in test case: $testCaseName. Expected: ${expectedData.ok.toHex.take(64)}, Actual: ${actualData.ok.toHex.take(64)}"

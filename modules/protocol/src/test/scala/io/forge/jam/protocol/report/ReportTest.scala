@@ -119,7 +119,7 @@ class ReportTest extends AnyFunSuite with Matchers:
     val (postState, output) = ReportTransition.stfInternal(input, preState, TinyConfig)
 
     // Should fail - some validation error should occur
-    output.err shouldBe defined
+    output.isLeft shouldBe true
     postState shouldBe preState
   }
 
@@ -177,7 +177,7 @@ class ReportTest extends AnyFunSuite with Matchers:
     val (postState, output) = ReportTransition.stfInternal(input, preState, TinyConfig)
 
     // Should fail due to unauthorized core or insufficient signatures
-    output.err shouldBe defined
+    output.isLeft shouldBe true
     postState shouldBe preState
   }
 
@@ -236,7 +236,7 @@ class ReportTest extends AnyFunSuite with Matchers:
     val (postState, output) = ReportTransition.stfInternal(input, preState, TinyConfig)
 
     // Should fail - either due to gas or insufficient signatures
-    output.err shouldBe defined
+    output.isLeft shouldBe true
     postState shouldBe preState
   }
 
@@ -296,7 +296,7 @@ class ReportTest extends AnyFunSuite with Matchers:
 
     // Should fail - an error should occur during validation
     // The actual error depends on validation order (could be InsufficientGuarantees or AnchorNotRecent)
-    output.err shouldBe defined
+    output.isLeft shouldBe true
     postState shouldBe preState
   }
 
@@ -364,7 +364,7 @@ class ReportTest extends AnyFunSuite with Matchers:
     val (postState, output) = ReportTransition.stfInternal(input, preState, TinyConfig)
 
     // Should fail due to anchor not recent
-    output.err shouldBe defined
+    output.isLeft shouldBe true
     postState shouldBe preState
   }
 
@@ -429,8 +429,8 @@ class ReportTest extends AnyFunSuite with Matchers:
     val (postState, output) = ReportTransition.stfInternal(input, preState, TinyConfig)
 
     // Should fail due to duplicate package
-    output.err shouldBe defined
-    output.err.get shouldBe ReportErrorCode.DuplicatePackage
+    output.isLeft shouldBe true
+    output.left.toOption.get shouldBe ReportErrorCode.DuplicatePackage
     postState shouldBe preState
   }
 
@@ -488,24 +488,19 @@ class ReportTest extends AnyFunSuite with Matchers:
     actual: ReportOutput,
     testCaseName: String
   ): Unit =
-    (expected.err, actual.err) match
-      case (Some(expectedErr), Some(actualErr)) =>
+    (expected, actual) match
+      case (Left(expectedErr), Left(actualErr)) =>
         expectedErr shouldBe actualErr withClue s"Error code mismatch in test case: $testCaseName"
-      case (Some(expectedErr), None) =>
+      case (Left(expectedErr), Right(_)) =>
         fail(s"Expected error $expectedErr but got success in test case: $testCaseName")
-      case (None, Some(actualErr)) =>
+      case (Right(_), Left(actualErr)) =>
         fail(s"Expected success but got error $actualErr in test case: $testCaseName")
-      case (None, None) =>
+      case (Right(expMarks), Right(actMarks)) =>
         // Both are success, compare output marks
-        expected.ok.isDefined shouldBe actual.ok.isDefined withClue
-          s"OK status mismatch in test case: $testCaseName"
-        (expected.ok, actual.ok) match
-          case (Some(expMarks), Some(actMarks)) =>
-            expMarks.reported.size shouldBe actMarks.reported.size withClue
-              s"Reported packages count mismatch in test case: $testCaseName"
-            expMarks.reporters.size shouldBe actMarks.reporters.size withClue
-              s"Reporters count mismatch in test case: $testCaseName"
-          case _ => ()
+        expMarks.reported.size shouldBe actMarks.reported.size withClue
+          s"Reported packages count mismatch in test case: $testCaseName"
+        expMarks.reporters.size shouldBe actMarks.reporters.size withClue
+          s"Reporters count mismatch in test case: $testCaseName"
 
   // Helper method to compare ReportState instances
   private def assertReportStateEquals(

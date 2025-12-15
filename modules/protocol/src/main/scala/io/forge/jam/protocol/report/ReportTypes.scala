@@ -550,7 +550,7 @@ object ReportTypes:
   )
 
   object ReportCase:
-    import ReportOutput.circeDecoder
+    import ReportOutput.{given_JamEncoder_ReportOutput, given_JamDecoder_ReportOutput, circeDecoder}
 
     def decoder(coresCount: Int, validatorsCount: Int): JamDecoder[ReportCase] = new JamDecoder[ReportCase]:
       def decode(bytes: JamBytes, offset: Int): (ReportCase, Int) =

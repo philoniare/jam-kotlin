@@ -124,8 +124,8 @@ class TracesTest extends AnyFunSuite with Matchers:
         val (safrolePostState, safroleOutput) = SafroleTransition.stf(safroleInput, jamState, config)
 
         // Verify STF succeeded or failed as expected
-        if safroleOutput.err.isDefined then
-          info(s"Safrole STF returned error: ${safroleOutput.err.get}")
+        if safroleOutput.isLeft then
+          info(s"Safrole STF returned error: ${safroleOutput.left.toOption.get}")
         else
           // Verify timeslot was updated
           safrolePostState.tau should be >= step.block.header.slot.value.toLong withClue

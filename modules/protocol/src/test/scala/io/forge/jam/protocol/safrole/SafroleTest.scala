@@ -182,12 +182,11 @@ class SafroleTest extends AnyFunSuite with Matchers:
     actual: SafroleOutput,
     testCaseName: String
   ): Unit = {
-    (expected.ok, expected.err) match {
-      case (Some(expectedData), _) =>
-        actual.ok shouldBe defined withClue s"Expected OK output but got error in test case: $testCaseName. Actual error: ${actual.err}"
-        actual.err shouldBe None withClue s"Expected OK output but got both OK and error in test case: $testCaseName"
+    expected match {
+      case Right(expectedData) =>
+        actual.isRight shouldBe true withClue s"Expected OK output but got error in test case: $testCaseName. Actual error: ${actual.left.toOption}"
 
-        val actualData = actual.ok.get
+        val actualData = actual.toOption.get
 
         // Compare epoch_mark
         (expectedData.epochMark, actualData.epochMark) match {
@@ -229,13 +228,9 @@ class SafroleTest extends AnyFunSuite with Matchers:
             fail(s"Expected no tickets_mark but got Some in test case: $testCaseName")
         }
 
-      case (_, Some(expectedErr)) =>
-        actual.err shouldBe defined withClue s"Expected error output but got OK in test case: $testCaseName. Actual OK: ${actual.ok}"
-        actual.ok shouldBe None withClue s"Expected error output but got both OK and error in test case: $testCaseName"
-        expectedErr shouldBe actual.err.get withClue s"Error code mismatch in test case: $testCaseName. Expected: $expectedErr, Actual: ${actual.err.get}"
-
-      case (None, None) =>
-        fail(s"Invalid expected SafroleOutput - both ok and err are None in test case: $testCaseName")
+      case Left(expectedErr) =>
+        actual.isLeft shouldBe true withClue s"Expected error output but got OK in test case: $testCaseName. Actual OK: ${actual.toOption}"
+        expectedErr shouldBe actual.left.toOption.get withClue s"Error code mismatch in test case: $testCaseName. Expected: $expectedErr, Actual: ${actual.left.toOption.get}"
     }
   }
 

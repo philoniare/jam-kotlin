@@ -1,5 +1,6 @@
 package io.forge.jam.protocol.preimage
 
+import cats.syntax.all.*
 import io.forge.jam.core.JamBytes.compareUnsigned
 import io.forge.jam.core.{Hashing, StfResult}
 import io.forge.jam.core.primitives.Hash
@@ -159,25 +160,18 @@ object PreimageTransition:
     preState: PreimageState
   ): (PreimageState, PreimageOutput) =
     // First check if all preimages are needed (account exists, lookup entry exists with empty value)
-    var validationError: Option[PreimageErrorCode] = None
-
-    val iter = input.preimages.iterator
-    while iter.hasNext && validationError.isEmpty do
-      val submission = iter.next()
-      val accountOpt = preState.accounts.find(_.id == submission.requester.value.toLong)
-      accountOpt match
-        case None =>
-          validationError = Some(PreimageErrorCode.PreimageUnneeded)
-        case Some(account) =>
+    val validationResult = input.preimages.traverse { submission =>
+      preState.accounts.find(_.id == submission.requester.value.toLong)
+        .toRight(PreimageErrorCode.PreimageUnneeded)
+        .flatMap { account =>
           val hash = Hashing.blake2b256(submission.blob).bytes
           val length = submission.blob.length.toLong
+          Either.cond(isPreimageSolicited(account, hash, length), submission, PreimageErrorCode.PreimageUnneeded)
+        }
+    }
 
-          // Verify this preimage was solicited and not already available
-          if !isPreimageSolicited(account, hash, length) then
-            validationError = Some(PreimageErrorCode.PreimageUnneeded)
-
-    if validationError.isDefined then
-      return (preState, StfResult.error(validationError.get))
+    if validationResult.isLeft then
+      return (preState, StfResult.error(validationResult.left.toOption.get))
 
     // Then validate that preimages are sorted and unique by (requester, hash)
     if !arePreimagesSortedAndUnique(input.preimages) then

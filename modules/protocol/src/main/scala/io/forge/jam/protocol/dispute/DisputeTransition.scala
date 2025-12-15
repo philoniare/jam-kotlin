@@ -1,5 +1,6 @@
 package io.forge.jam.protocol.dispute
 
+import cats.syntax.all.*
 import io.forge.jam.core.{ChainConfig, Hashing, constants, StfResult, ValidationHelpers}
 import io.forge.jam.core.JamBytes.compareUnsigned
 import io.forge.jam.core.primitives.{Hash, Ed25519PublicKey, Ed25519Signature, Timeslot}
@@ -219,61 +220,68 @@ object DisputeTransition:
     preState: DisputeState,
     config: ChainConfig
   ): (DisputeState, List[Ed25519PublicKey]) =
-    // offendersMark tracks the output in processing order
-    val offendersMark = scala.collection.mutable.ListBuffer[Ed25519PublicKey]()
-    // newOffendersSet tracks unique offenders for state update
-    val newOffendersSet = scala.collection.mutable.Set[Ed25519PublicKey]()
+    // Intermediate state for tracking processed results
+    case class ProcessState(
+      good: List[Hash],
+      bad: List[Hash],
+      wonky: List[Hash],
+      offendersMark: List[Ed25519PublicKey],
+      newOffendersSet: Set[Ed25519PublicKey]
+    )
 
-    // Initialize psi with copies of existing lists
-    var good = preState.psi.good
-    var bad = preState.psi.bad
-    var wonky = preState.psi.wonky
-    var offenders = preState.psi.offenders
-
-    // Process verdicts
-    for verdict <- disputes.verdicts do
+    // Process verdicts using foldLeft
+    val afterVerdicts = disputes.verdicts.foldLeft(
+      ProcessState(preState.psi.good, preState.psi.bad, preState.psi.wonky, List.empty, Set.empty)
+    ) { (state, verdict) =>
       val positiveVotes = verdict.votes.count(_.vote)
-
-      // Update PSI sets based on vote count
       if positiveVotes >= config.votesPerVerdict then
-        good = good :+ verdict.target
+        state.copy(good = state.good :+ verdict.target)
       else if positiveVotes == 0 then
-        bad = bad :+ verdict.target
+        state.copy(bad = state.bad :+ verdict.target)
       else if positiveVotes == config.oneThird then
-        wonky = wonky :+ verdict.target
+        state.copy(wonky = state.wonky :+ verdict.target)
+      else
+        state
+    }
 
-    // Process culprits - add to both mark and state if not already an offender
-    for culprit <- disputes.culprits do
-      val keyInOffenders = offenders.exists(k => java.util.Arrays.equals(k.bytes, culprit.key.bytes))
+    // Process culprits using foldLeft
+    val afterCulprits = disputes.culprits.foldLeft(afterVerdicts) { (state, culprit) =>
+      val keyInOffenders = preState.psi.offenders.exists(k => java.util.Arrays.equals(k.bytes, culprit.key.bytes))
+      val keyAlreadyAdded = state.newOffendersSet.exists(k => java.util.Arrays.equals(k.bytes, culprit.key.bytes))
 
-      if !keyInOffenders then
-        val keyAlreadyAdded = newOffendersSet.exists(k => java.util.Arrays.equals(k.bytes, culprit.key.bytes))
-        if !keyAlreadyAdded then
-          newOffendersSet += culprit.key
-          offendersMark += culprit.key
+      if !keyInOffenders && !keyAlreadyAdded then
+        state.copy(
+          offendersMark = state.offendersMark :+ culprit.key,
+          newOffendersSet = state.newOffendersSet + culprit.key
+        )
+      else
+        state
+    }
 
-    // Process faults
-    for fault <- disputes.faults do
-      val isBad = bad.exists(h => java.util.Arrays.equals(h.bytes, fault.target.bytes))
-      val isGood = good.exists(h => java.util.Arrays.equals(h.bytes, fault.target.bytes))
+    // Process faults using foldLeft
+    val afterFaults = disputes.faults.foldLeft(afterCulprits) { (state, fault) =>
+      val isBad = state.bad.exists(h => java.util.Arrays.equals(h.bytes, fault.target.bytes))
+      val isGood = state.good.exists(h => java.util.Arrays.equals(h.bytes, fault.target.bytes))
 
       // A fault exists if:
       // - Report is in good but validator voted false (they were wrong)
       // - Report is in bad but validator voted true (they were wrong)
       val voteConflicts = (isGood && !fault.vote) || (isBad && fault.vote)
-      val keyInOffenders = offenders.exists(k => java.util.Arrays.equals(k.bytes, fault.key.bytes))
+      val keyInOffenders = preState.psi.offenders.exists(k => java.util.Arrays.equals(k.bytes, fault.key.bytes))
+      val keyAlreadyAdded = state.newOffendersSet.exists(k => java.util.Arrays.equals(k.bytes, fault.key.bytes))
 
-      if voteConflicts && !keyInOffenders then
-        val keyAlreadyAdded = newOffendersSet.exists(k => java.util.Arrays.equals(k.bytes, fault.key.bytes))
-        if !keyAlreadyAdded then
-          newOffendersSet += fault.key
-          offendersMark += fault.key
+      if voteConflicts && !keyInOffenders && !keyAlreadyAdded then
+        state.copy(
+          offendersMark = state.offendersMark :+ fault.key,
+          newOffendersSet = state.newOffendersSet + fault.key
+        )
+      else
+        state
+    }
 
     // Sort new offenders by key for adding to state
-    val sortedNewOffenders = newOffendersSet.toList.sortWith((a, b) => compareUnsigned(a.bytes, b.bytes) < 0)
-
-    // Add sorted offenders to state
-    offenders = offenders ++ sortedNewOffenders
+    val sortedNewOffenders = afterFaults.newOffendersSet.toList.sortWith((a, b) => compareUnsigned(a.bytes, b.bytes) < 0)
+    val finalOffenders = preState.psi.offenders ++ sortedNewOffenders
 
     // Clear invalid reports from rho
     val newRho = preState.rho.map { assignmentOpt =>
@@ -283,18 +291,18 @@ object DisputeTransition:
         )
 
         // Clear if the report is in bad or wonky
-        val isInvalid = bad.exists(h => java.util.Arrays.equals(h.bytes, reportHash.bytes)) ||
-          wonky.exists(h => java.util.Arrays.equals(h.bytes, reportHash.bytes))
+        val isInvalid = afterFaults.bad.exists(h => java.util.Arrays.equals(h.bytes, reportHash.bytes)) ||
+          afterFaults.wonky.exists(h => java.util.Arrays.equals(h.bytes, reportHash.bytes))
 
         if isInvalid then None else Some(assignment)
       }
     }
 
-    val newPsi = Psi(good, bad, wonky, offenders)
+    val newPsi = Psi(afterFaults.good, afterFaults.bad, afterFaults.wonky, finalOffenders)
     val newState = preState.copy(psi = newPsi, rho = newRho)
 
     // Return the unsorted offendersMark for the output
-    (newState, offendersMark.toList)
+    (newState, afterFaults.offendersMark)
 
   /**
    * Execute the Disputes STF using unified JamState.

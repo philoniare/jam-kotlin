@@ -45,8 +45,8 @@ class PreimageTest extends AnyFunSuite with Matchers:
 
     val (postState, output) = PreimageTransition.stfInternal(input, preState)
 
-    output.err shouldBe defined
-    output.err.get shouldBe PreimageErrorCode.PreimageUnneeded
+    output.isLeft shouldBe true
+    output.left.toOption.get shouldBe PreimageErrorCode.PreimageUnneeded
     postState shouldBe preState // State should not change on error
   }
 
@@ -80,8 +80,8 @@ class PreimageTest extends AnyFunSuite with Matchers:
     val (_, output) = PreimageTransition.stfInternal(input, preState)
 
     // Expected to fail because preimages are not solicited (no lookup entry exists)
-    output.err shouldBe defined
-    output.err.get shouldBe PreimageErrorCode.PreimageUnneeded
+    output.isLeft shouldBe true
+    output.left.toOption.get shouldBe PreimageErrorCode.PreimageUnneeded
   }
 
   test("preimage storage by service") {
@@ -109,8 +109,7 @@ class PreimageTest extends AnyFunSuite with Matchers:
 
     val (postState, output) = PreimageTransition.stfInternal(input, preState)
 
-    output.ok shouldBe defined
-    output.err shouldBe None
+    output.isRight shouldBe true
 
     // Verify preimage was stored
     val updatedAccount = postState.accounts.find(_.id == 5).get
@@ -148,7 +147,7 @@ class PreimageTest extends AnyFunSuite with Matchers:
 
     val (postState, output) = PreimageTransition.stfInternal(input, preState)
 
-    output.ok shouldBe defined
+    output.isRight shouldBe true
 
     // Verify lookup metadata was updated with timestamp
     val updatedAccount = postState.accounts.find(_.id == 7).get
@@ -212,17 +211,16 @@ class PreimageTest extends AnyFunSuite with Matchers:
     actual: PreimageOutput,
     testCaseName: String
   ): Unit =
-    (expected.err, actual.err) match
-      case (Some(expectedErr), Some(actualErr)) =>
+    (expected, actual) match
+      case (Left(expectedErr), Left(actualErr)) =>
         expectedErr shouldBe actualErr withClue s"Error code mismatch in test case: $testCaseName"
-      case (Some(expectedErr), None) =>
+      case (Left(expectedErr), Right(_)) =>
         fail(s"Expected error $expectedErr but got success in test case: $testCaseName")
-      case (None, Some(actualErr)) =>
+      case (Right(_), Left(actualErr)) =>
         fail(s"Expected success but got error $actualErr in test case: $testCaseName")
-      case (None, None) =>
-        // Both are success
-        expected.ok.isDefined shouldBe actual.ok.isDefined withClue
-          s"OK status mismatch in test case: $testCaseName"
+      case (Right(_), Right(_)) =>
+        // Both are success - nothing to compare for Unit output
+        ()
 
   // Helper method to compare PreimageState instances
   private def assertPreimageStateEquals(

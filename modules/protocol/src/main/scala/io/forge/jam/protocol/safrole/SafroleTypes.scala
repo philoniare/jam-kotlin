@@ -385,13 +385,13 @@ object SafroleTypes:
         val builder = JamBytes.newBuilder
         builder ++= a.input.encode
         builder ++= a.preState.encode
-        a.output.ok match
-          case Some(data) =>
+        a.output match
+          case Right(data) =>
             builder += 0.toByte
             builder ++= data.encode
-          case None =>
+          case Left(err) =>
             builder += 1.toByte
-            builder ++= a.output.err.get.encode
+            builder ++= err.encode
         builder ++= a.postState.encode
         builder.result()
 

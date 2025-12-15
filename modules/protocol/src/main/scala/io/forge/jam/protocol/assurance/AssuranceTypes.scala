@@ -204,7 +204,7 @@ object AssuranceTypes:
   )
 
   object AssuranceCase:
-    import AssuranceOutput.circeDecoder
+    import AssuranceOutput.{given_JamEncoder_AssuranceOutput, given_JamDecoder_AssuranceOutput, circeDecoder}
 
     /** Create a config-aware decoder for AssuranceCase */
     def decoder(coreCount: Int, validatorCount: Int): JamDecoder[AssuranceCase] = new JamDecoder[AssuranceCase]:

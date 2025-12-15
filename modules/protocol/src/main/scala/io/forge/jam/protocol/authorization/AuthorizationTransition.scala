@@ -54,29 +54,28 @@ object AuthorizationTransition:
         val coreQueue = preState.authQueues(coreIndex)
 
         // Step 1: F(c) - Remove consumed authorizers from the pool
-        val mutablePool = scala.collection.mutable.ListBuffer.from(pool)
-        val prePoolSize = mutablePool.size
-        authsByCoreIndex.get(coreIndex).foreach { auths =>
-          for auth <- auths do
-            val idx = mutablePool.indexWhere(h => h == auth.authHash)
-            if idx >= 0 then
-              mutablePool.remove(idx)
+        // For each consumed auth, remove first matching hash from pool
+        val consumedHashes = authsByCoreIndex.getOrElse(coreIndex, List.empty).map(_.authHash)
+        val poolAfterRemoval = consumedHashes.foldLeft(pool) { (currentPool, hashToRemove) =>
+          val idx = currentPool.indexWhere(_ == hashToRemove)
+          if idx >= 0 then
+            currentPool.take(idx) ++ currentPool.drop(idx + 1)
+          else
+            currentPool
         }
-        val afterRemoveSize = mutablePool.size
 
         // Step 2: Append new item from queue at cyclic position slot % queue_size
-        if coreQueue.nonEmpty then
+        val poolWithNew = if coreQueue.nonEmpty then
           val queueIndex = (input.slot % coreQueue.size).toInt
           val newItem = coreQueue(queueIndex)
           if coreIndex < 2 then
             logger.debug(s"Core $coreIndex: adding queue[$queueIndex] = ${newItem.toHex.take(16)}...")
-          mutablePool += newItem
+          poolAfterRemoval :+ newItem
+        else
+          poolAfterRemoval
 
         // Step 3: Take rightmost O items (i.e., drop from front if size > O)
-        while mutablePool.size > constants.O do
-          mutablePool.remove(0)
-
-        mutablePool.toList
+        poolWithNew.takeRight(constants.O)
     }
 
     AuthState(
