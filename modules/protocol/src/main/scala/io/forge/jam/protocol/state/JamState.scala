@@ -417,17 +417,22 @@ object JamState:
     )
 
     /** Apply SafroleState changes back to JamState */
-    def apply(state: JamState, post: SafroleState): JamState = state
-      .focus(_.tau).replace(post.tau)
-      .focus(_.entropy.pool).replace(post.eta)
-      .focus(_.validators.previous).replace(post.lambda)
-      .focus(_.validators.current).replace(post.kappa)
-      .focus(_.validators.nextEpoch).replace(post.gammaK)
-      .focus(_.validators.queue).replace(post.iota)
-      .focus(_.gamma.a).replace(post.gammaA)
-      .focus(_.gamma.s).replace(post.gammaS)
-      .focus(_.gamma.z).replace(post.gammaZ)
-      .focus(_.postOffenders).replace(post.postOffenders)
+    def apply(state: JamState, post: SafroleState): JamState = state.copy(
+      tau = post.tau,
+      entropy = state.entropy.copy(pool = post.eta),
+      validators = state.validators.copy(
+        previous = post.lambda,
+        current = post.kappa,
+        nextEpoch = post.gammaK,
+        queue = post.iota
+      ),
+      gamma = state.gamma.copy(
+        a = post.gammaA,
+        s = post.gammaS,
+        z = post.gammaZ
+      ),
+      postOffenders = post.postOffenders
+    )
 
   /**
    * Dispute lens bundle - extracts and applies Dispute-related state.
@@ -446,9 +451,10 @@ object JamState:
     )
 
     /** Apply DisputeState changes back to JamState (only psi and rho are modified) */
-    def apply(state: JamState, post: DisputeState): JamState = state
-      .focus(_.psi).replace(post.psi)
-      .focus(_.cores.reports).replace(post.rho)
+    def apply(state: JamState, post: DisputeState): JamState = state.copy(
+      psi = post.psi,
+      cores = state.cores.copy(reports = post.rho)
+    )
 
   /**
    * Assurance lens bundle - extracts and applies Assurance-related state.
@@ -464,8 +470,9 @@ object JamState:
     )
 
     /** Apply AssuranceState changes back to JamState */
-    def apply(state: JamState, post: AssuranceState): JamState = state
-      .focus(_.cores.reports).replace(post.availAssignments)
+    def apply(state: JamState, post: AssuranceState): JamState = state.copy(
+      cores = state.cores.copy(reports = post.availAssignments)
+    )
 
   /**
    * Authorization lens bundle - extracts and applies Authorization-related state.
@@ -481,9 +488,10 @@ object JamState:
     )
 
     /** Apply AuthState changes back to JamState */
-    def apply(state: JamState, post: AuthState): JamState = state
-      .focus(_.authPools).replace(post.authPools)
-      .focus(_.authQueues).replace(post.authQueues)
+    def apply(state: JamState, post: AuthState): JamState = state.copy(
+      authPools = post.authPools,
+      authQueues = post.authQueues
+    )
 
   /**
    * History lens bundle - extracts and applies History-related state.
@@ -498,8 +506,9 @@ object JamState:
     )
 
     /** Apply HistoricalState changes back to JamState */
-    def apply(state: JamState, post: HistoricalState): JamState = state
-      .focus(_.beta).replace(post.beta)
+    def apply(state: JamState, post: HistoricalState): JamState = state.copy(
+      beta = post.beta
+    )
 
   /**
    * Statistics lens bundle - extracts and applies Statistics-related state.
@@ -517,9 +526,12 @@ object JamState:
     )
 
     /** Apply StatState changes back to JamState (only stats are modified) */
-    def apply(state: JamState, post: StatState): JamState = state
-      .focus(_.statistics.current).replace(post.valsCurrStats)
-      .focus(_.statistics.last).replace(post.valsLastStats)
+    def apply(state: JamState, post: StatState): JamState = state.copy(
+      statistics = state.statistics.copy(
+        current = post.valsCurrStats,
+        last = post.valsLastStats
+      )
+    )
 
   /**
    * Report lens bundle - extracts and applies Report-related state.
@@ -553,10 +565,13 @@ object JamState:
       )
 
     /** Apply ReportState changes back to JamState */
-    def apply(state: JamState, post: ReportState): JamState = state
-      .focus(_.cores.reports).replace(post.availAssignments)
-      .focus(_.cores.statistics).replace(post.coresStatistics)
-      .focus(_.serviceStatistics).replace(post.servicesStatistics)
+    def apply(state: JamState, post: ReportState): JamState = state.copy(
+      cores = state.cores.copy(
+        reports = post.availAssignments,
+        statistics = post.coresStatistics
+      ),
+      serviceStatistics = post.servicesStatistics
+    )
 
   /**
    * Convert a JamState back to FullJamState for encoding.

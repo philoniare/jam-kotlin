@@ -333,9 +333,10 @@ class BlockImporter(
 
       // Step 13: Convert final JamState to FullJamState for encoding
       // Apply final core and service statistics to the state
-      val finalJamState = jamState
-        .focus(_.cores.statistics).replace(finalCoreStats)
-        .focus(_.serviceStatistics).replace(finalServiceStats)
+      val finalJamState = jamState.copy(
+        cores = jamState.cores.copy(statistics = finalCoreStats),
+        serviceStatistics = finalServiceStats
+      )
       val mergedState = JamState.toFullJamState(finalJamState)
 
       // Step 14: Encode merged state back to keyvals

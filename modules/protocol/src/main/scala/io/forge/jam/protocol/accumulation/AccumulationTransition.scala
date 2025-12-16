@@ -57,12 +57,15 @@ object AccumulationTransition:
     val (postState, output) = stfInternal(input, preState, config)
 
     // Update JamState with results
-    val updatedState = state
-      .focus(_.accumulation.readyQueue).replace(postState.readyQueue)
-      .focus(_.accumulation.accumulated).replace(postState.accumulated)
-      .focus(_.accumulation.privileges).replace(postState.privileges)
-      .focus(_.accumulation.serviceAccounts).replace(postState.accounts)
-      .focus(_.rawServiceDataByStateKey).replace(postState.rawServiceDataByStateKey.toMap)
+    val updatedState = state.copy(
+      accumulation = state.accumulation.copy(
+        readyQueue = postState.readyQueue,
+        accumulated = postState.accumulated,
+        privileges = postState.privileges,
+        serviceAccounts = postState.accounts
+      ),
+      rawServiceDataByStateKey = postState.rawServiceDataByStateKey.toMap
+    )
 
     (updatedState, output)
 

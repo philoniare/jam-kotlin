@@ -143,8 +143,9 @@ object PreimageTransition:
     }
 
     // Update JamState with results
-    val updatedState = state
-      .focus(_.accumulation.serviceAccounts).replace(updatedServiceAccounts)
+    val updatedState = state.copy(
+      accumulation = state.accumulation.copy(serviceAccounts = updatedServiceAccounts)
+    )
 
     (updatedState, output)
 
