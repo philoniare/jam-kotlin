@@ -13,10 +13,6 @@ import io.forge.jam.core.types.history.{ReportedWorkPackage, HistoricalBeta, His
 /**
  * Protocol type codecs using scodec for core JAM protocol structures.
  *
- * This object provides scodec Codec instances for protocol types that were
- * previously encoded/decoded using JamEncoder/JamDecoder. These codecs
- * produce identical binary output for compatibility.
- *
  * == Included Types ==
  * - ValidatorKey: Full validator key (336 bytes)
  * - TicketMark: Ticket identifier (33 bytes)
@@ -104,8 +100,9 @@ object ProtocolCodecs:
    */
   given epochValidatorKeyCodec: Codec[EpochValidatorKey] =
     (JamCodecs.bandersnatchPublicKeyCodec :: JamCodecs.ed25519PublicKeyCodec).xmap(
-      { case (bandersnatch, ed25519) =>
-        EpochValidatorKey(bandersnatch, ed25519)
+      {
+        case (bandersnatch, ed25519) =>
+          EpochValidatorKey(bandersnatch, ed25519)
       },
       evk => (evk.bandersnatch, evk.ed25519)
     )
@@ -126,10 +123,11 @@ object ProtocolCodecs:
    */
   def epochMarkCodec(validatorCount: Int): Codec[EpochMark] =
     (JamCodecs.hashCodec ::
-     JamCodecs.hashCodec ::
-     JamCodecs.fixedSizeList(epochValidatorKeyCodec, validatorCount)).xmap(
-      { case (entropy, ticketsEntropy, validators) =>
-        EpochMark(entropy, ticketsEntropy, validators)
+      JamCodecs.hashCodec ::
+      JamCodecs.fixedSizeList(epochValidatorKeyCodec, validatorCount)).xmap(
+      {
+        case (entropy, ticketsEntropy, validators) =>
+          EpochMark(entropy, ticketsEntropy, validators)
       },
       em => (em.entropy, em.ticketsEntropy, em.validators)
     )
@@ -170,10 +168,11 @@ object ProtocolCodecs:
    */
   given serviceAccountCodec: Codec[ServiceAccount] =
     (uint32L :: serviceDataCodec).xmap(
-      { case (id, data) =>
-        ServiceAccount(id & 0xFFFFFFFFL, data)
+      {
+        case (id, data) =>
+          ServiceAccount(id & 0xffffffffL, data)
       },
-      sa => (sa.id & 0xFFFFFFFFL, sa.data)
+      sa => (sa.id & 0xffffffffL, sa.data)
     )
 
   // ============================================================================
@@ -189,8 +188,9 @@ object ProtocolCodecs:
    */
   given reportedWorkPackageCodec: Codec[ReportedWorkPackage] =
     (JamCodecs.hashCodec :: JamCodecs.hashCodec).xmap(
-      { case (hash, exportsRoot) =>
-        ReportedWorkPackage(hash, exportsRoot)
+      {
+        case (hash, exportsRoot) =>
+          ReportedWorkPackage(hash, exportsRoot)
       },
       rwp => (rwp.hash, rwp.exportsRoot)
     )
@@ -210,11 +210,12 @@ object ProtocolCodecs:
    */
   given historicalBetaCodec: Codec[HistoricalBeta] =
     (JamCodecs.hashCodec ::
-     JamCodecs.hashCodec ::
-     JamCodecs.hashCodec ::
-     JamCodecs.compactPrefixedList(reportedWorkPackageCodec)).xmap(
-      { case (headerHash, beefyRoot, stateRoot, reported) =>
-        HistoricalBeta(headerHash, beefyRoot, stateRoot, reported)
+      JamCodecs.hashCodec ::
+      JamCodecs.hashCodec ::
+      JamCodecs.compactPrefixedList(reportedWorkPackageCodec)).xmap(
+      {
+        case (headerHash, beefyRoot, stateRoot, reported) =>
+          HistoricalBeta(headerHash, beefyRoot, stateRoot, reported)
       },
       hb => (hb.headerHash, hb.beefyRoot, hb.stateRoot, hb.reported.sortBy(_.hash.toHex))
     )
@@ -248,8 +249,9 @@ object ProtocolCodecs:
    */
   given historicalBetaContainerCodec: Codec[HistoricalBetaContainer] =
     (JamCodecs.compactPrefixedList(historicalBetaCodec) :: historicalMmrCodec).xmap(
-      { case (history, mmr) =>
-        HistoricalBetaContainer(history, mmr)
+      {
+        case (history, mmr) =>
+          HistoricalBetaContainer(history, mmr)
       },
       hbc => (hbc.history, hbc.mmr)
     )
@@ -284,17 +286,46 @@ object ProtocolCodecs:
 
   given coreStatisticsRecordCodec: Codec[CoreStatisticsRecord] =
     (JamCodecs.compactInteger ::
-     JamCodecs.compactInteger ::
-     JamCodecs.compactInteger ::
-     JamCodecs.compactInteger ::
-     JamCodecs.compactInteger ::
-     JamCodecs.compactInteger ::
-     JamCodecs.compactInteger ::
-     JamCodecs.compactInteger).xmap(
-      { case (dataSize, assuranceCount, importsCount, extrinsicsCount, extrinsicsSize, exportsCount, packageSize, gasUsed) =>
-        CoreStatisticsRecord(dataSize, assuranceCount, importsCount, extrinsicsCount, extrinsicsSize, exportsCount, packageSize, gasUsed)
+      JamCodecs.compactInteger ::
+      JamCodecs.compactInteger ::
+      JamCodecs.compactInteger ::
+      JamCodecs.compactInteger ::
+      JamCodecs.compactInteger ::
+      JamCodecs.compactInteger ::
+      JamCodecs.compactInteger).xmap(
+      {
+        case (
+              dataSize,
+              assuranceCount,
+              importsCount,
+              extrinsicsCount,
+              extrinsicsSize,
+              exportsCount,
+              packageSize,
+              gasUsed
+            ) =>
+          CoreStatisticsRecord(
+            dataSize,
+            assuranceCount,
+            importsCount,
+            extrinsicsCount,
+            extrinsicsSize,
+            exportsCount,
+            packageSize,
+            gasUsed
+          )
       },
-      csr => (csr.dataSize, csr.assuranceCount, csr.importsCount, csr.extrinsicsCount, csr.extrinsicsSize, csr.exportsCount, csr.packageSize, csr.gasUsed)
+      csr =>
+        (
+          csr.dataSize,
+          csr.assuranceCount,
+          csr.importsCount,
+          csr.extrinsicsCount,
+          csr.extrinsicsSize,
+          csr.exportsCount,
+          csr.packageSize,
+          csr.gasUsed
+        )
     )
 
   // ============================================================================
@@ -337,24 +368,38 @@ object ProtocolCodecs:
 
   given serviceStatisticsEntryCodec: Codec[ServiceStatisticsEntryData] =
     (uint32L ::
-     JamCodecs.compactInteger ::
-     JamCodecs.compactInteger ::
-     JamCodecs.compactInteger ::
-     JamCodecs.compactInteger ::
-     JamCodecs.compactInteger ::
-     JamCodecs.compactInteger ::
-     JamCodecs.compactInteger ::
-     JamCodecs.compactInteger ::
-     JamCodecs.compactInteger ::
-     JamCodecs.compactInteger ::
-     JamCodecs.compactInteger ::
-     JamCodecs.compactInteger).xmap(
-      { case (serviceId, pc, ps, rc, rg, ic, xc, xs, ec, ac, ag, tc, tg) =>
-        ServiceStatisticsEntryData(serviceId & 0xFFFFFFFFL, pc, ps, rc, rg, ic, xc, xs, ec, ac, ag, tc, tg)
+      JamCodecs.compactInteger ::
+      JamCodecs.compactInteger ::
+      JamCodecs.compactInteger ::
+      JamCodecs.compactInteger ::
+      JamCodecs.compactInteger ::
+      JamCodecs.compactInteger ::
+      JamCodecs.compactInteger ::
+      JamCodecs.compactInteger ::
+      JamCodecs.compactInteger ::
+      JamCodecs.compactInteger ::
+      JamCodecs.compactInteger ::
+      JamCodecs.compactInteger).xmap(
+      {
+        case (serviceId, pc, ps, rc, rg, ic, xc, xs, ec, ac, ag, tc, tg) =>
+          ServiceStatisticsEntryData(serviceId & 0xffffffffL, pc, ps, rc, rg, ic, xc, xs, ec, ac, ag, tc, tg)
       },
-      e => (e.serviceId & 0xFFFFFFFFL, e.preimagesCount, e.preimagesSize, e.refinesCount, e.refinesGas,
-            e.importsCount, e.extrinsicsCount, e.extrinsicsSize, e.exportsCount,
-            e.accumulatesCount, e.accumulatesGas, e.transfersCount, e.transfersGas)
+      e =>
+        (
+          e.serviceId & 0xffffffffL,
+          e.preimagesCount,
+          e.preimagesSize,
+          e.refinesCount,
+          e.refinesGas,
+          e.importsCount,
+          e.extrinsicsCount,
+          e.extrinsicsSize,
+          e.exportsCount,
+          e.accumulatesCount,
+          e.accumulatesGas,
+          e.transfersCount,
+          e.transfersGas
+        )
     )
 
   // ============================================================================

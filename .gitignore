@@ -48,7 +48,6 @@ bin/
 **/*.dylib
 
 .editorconfig
-*.md
 *.yml
 .bsp/
 .bloop/

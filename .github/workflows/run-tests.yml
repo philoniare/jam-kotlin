@@ -26,29 +26,19 @@ jobs:
                     distribution: 'temurin'
                     java-version: '21'
 
-            -   name: Set up Rust
-                uses: dtolnay/rust-toolchain@stable
-
-            -   name: Cache Gradle dependencies
+            -   name: Cache sbt dependencies
                 uses: actions/cache@v4
                 with:
                     path: |
-                        ~/.gradle/caches
-                        ~/.gradle/wrapper
-                    key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+                        ~/.sbt
+                        ~/.ivy2/cache
+                        ~/.cache/coursier
+                    key: ${{ runner.os }}-sbt-${{ hashFiles('**/build.sbt', '**/project/**') }}
                     restore-keys: |
-                        ${{ runner.os }}-gradle-
+                        ${{ runner.os }}-sbt-
 
-            -   name: Cache Cargo dependencies
-                uses: actions/cache@v4
-                with:
-                    path: |
-                        ~/.cargo/registry
-                        ~/.cargo/git
-                        jam-vrfs/bandersnatch-vrfs-wrapper/target
-                    key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-                    restore-keys: |
-                        ${{ runner.os }}-cargo-
+            -   name: Build project
+                run: sbt compile
 
             -   name: Run tests
-                run: ./gradlew test -q
+                run: sbt test

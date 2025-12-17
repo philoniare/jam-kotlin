@@ -78,7 +78,6 @@ object AccumulationOperand:
         case ExecutionResult.BadCode => Array[Byte](5)
         case ExecutionResult.CodeTooLarge => Array[Byte](6)
 
-      // Swift order: packageHash, segroot, authorizer, payloadHash, gasLimit, workResult, authorizerTrace
       val authTraceLen = JamCodecs.encodeCompactInteger(op.authTrace.length.toLong)
       variant ++
         op.packageHash.toArray ++ op.segmentRoot.toArray ++ op.authorizerHash.toArray ++
