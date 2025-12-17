@@ -1,7 +1,7 @@
 package io.forge.jam.protocol.pipeline
 
 import cats.data.StateT
-import io.forge.jam.core.ChainConfig
+import io.forge.jam.core.{ChainConfig, JamBytes}
 import io.forge.jam.core.primitives.Hash
 import io.forge.jam.core.types.block.Block
 import io.forge.jam.core.types.workpackage.WorkReport
@@ -20,7 +20,9 @@ final case class PipelineContext(
   safroleOutput: Option[SafroleOutputData] = None,
   availableReports: List[WorkReport] = List.empty,
   accumulateRoot: Option[Hash] = None,
-  accumulationStats: Map[Long, (Long, Int)] = Map.empty
+  accumulationStats: Map[Long, (Long, Int)] = Map.empty,
+  // Pre-accumulation state for preimages validation (per GP §12.1)
+  preAccumulationRawServiceData: Option[Map[JamBytes, JamBytes]] = None
 )
 
 object PipelineContext:

@@ -14,7 +14,7 @@ final class BasicMemory private (
   private var _pageMap: PageMap,
   private val memoryMap: MemoryMap,
   private var roData: Array[Byte],
-  private val rwData: Array[Byte],
+  private var rwData: Array[Byte],  // var to allow resizing during sbrk
   private val stack: Array[Byte],
   private val aux: Array[Byte],
   private var _heapSize: UInt,
@@ -186,6 +186,14 @@ final class BasicMemory private (
 
     _heapSize = newHeapSize
     val newHeapEnd = memoryMap.heapBase + newHeapSize
+
+    // Ensure rwData buffer is large enough for the new heap size
+    // The heap lives in the rwData buffer starting at heapBase relative to rwDataAddress
+    val requiredBufferSize = newHeapSize.signed
+    if requiredBufferSize > rwData.length then
+      val newBuffer = new Array[Byte](requiredBufferSize)
+      System.arraycopy(rwData, 0, newBuffer, 0, rwData.length)
+      rwData = newBuffer
 
     // Update page map for new heap pages
     val prevPageBoundary = AlignmentOps.alignUp(prevHeapEnd, memoryMap.pageSize)

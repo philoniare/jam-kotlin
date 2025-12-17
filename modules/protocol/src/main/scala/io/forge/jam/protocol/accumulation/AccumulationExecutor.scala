@@ -5,22 +5,17 @@ import io.forge.jam.core.scodec.JamCodecs
 import io.forge.jam.core.primitives.Hash
 import io.forge.jam.core.types.workpackage.WorkReport
 import io.forge.jam.pvm.{InterruptKind, MemoryResult}
-import io.forge.jam.pvm.engine.{InterpretedModule, InterpretedInstance, PvmTraceWriter}
+import io.forge.jam.pvm.engine.{InterpretedModule, InterpretedInstance}
 import io.forge.jam.pvm.program.ProgramBlob
 import io.forge.jam.pvm.types.ProgramCounter
-import org.slf4j.LoggerFactory
 import spire.math.{UInt, UByte}
 
 import scala.collection.mutable
 
 /**
  * Orchestrates PVM execution for accumulation.
- *
- * @param config The chain configuration
  */
 class AccumulationExecutor(val config: ChainConfig):
-  private val logger = LoggerFactory.getLogger(getClass)
-
   private val moduleCache: mutable.Map[JamBytes, InterpretedModule] = mutable.Map.empty
   private val MAX_SERVICE_CODE_SIZE: Int = 4 * 1024 * 1024
   private val JAM_PAGE_SIZE = 4096
@@ -52,7 +47,6 @@ class AccumulationExecutor(val config: ChainConfig):
     if preimage.isEmpty then
       return createEmptyResult(partialState, Some(serviceId), Some(timeslot), operands)
 
-    // Extract code blob from preimage
     val code = extractCodeBlob(preimage.get.toArray)
     if code.isEmpty || code.get.isEmpty || code.get.length > MAX_SERVICE_CODE_SIZE then
       return createEmptyResult(partialState, Some(serviceId), Some(timeslot), operands)
@@ -67,11 +61,12 @@ class AccumulationExecutor(val config: ChainConfig):
     val postTransferState = partialState.deepCopy()
     postTransferState.accounts(serviceId) = updatedAccount
 
-    // Calculate initial nextAccountIndex
+    // Calculate initial nextAccountIndex per Gray Paper:
+    // nextfreeid = check((decode[4]{blake(encode(serviceId, entropyaccumulator', timeslot))} mod (2^32-Cminpublicindex-2^8)) + Cminpublicindex)
     val minPublicServiceIndex = config.minPublicServiceIndex
     val initialIndex = calculateInitialIndex(serviceId, entropy, timeslot)
-    val s = minPublicServiceIndex.toInt & 0xffffffff
-    val modValue = (0xffffffffL - s - 255).toLong
+    val s = minPublicServiceIndex
+    val modValue = 0xffffffffL - s - 255 // 2^32 - Cminpublicindex - 2^8
     val candidateIndex = s + (initialIndex % modValue)
     val nextAccountIndex =
       findAvailableServiceIndex(candidateIndex, minPublicServiceIndex, postTransferState.accounts.toMap)
@@ -109,9 +104,11 @@ class AccumulationExecutor(val config: ChainConfig):
           case _ => context.yieldHash
       case _ => context.yieldHash
 
+    val newDeferred = context.getDeferredTransfers(execResult.exitReason)
+
     AccumulationOneResult(
       postState = finalState,
-      deferredTransfers = context.getDeferredTransfers(execResult.exitReason),
+      deferredTransfers = newDeferred,
       yieldHash = yieldHash,
       gasUsed = execResult.gasUsed,
       provisions = context.getProvisions(execResult.exitReason)
@@ -138,7 +135,6 @@ class AccumulationExecutor(val config: ChainConfig):
 
     val module = moduleOpt.get
 
-    // Create instance with input data placed at InputStartAddress
     val instance = InterpretedInstance.fromModule(module, inputData, forceStepTracing = false)
 
     // Create PvmInstance wrapper for host calls
@@ -203,9 +199,8 @@ class AccumulationExecutor(val config: ChainConfig):
           else
             try
               hostCalls.dispatch(hostId.signed, pvmWrapper)
-              PvmTraceWriter.traceHostCall(hostId.signed, gasBefore, instance.gas, instance.regs)
             catch
-              case _: RuntimeException =>
+              case e: RuntimeException =>
                 exitReason = ExitReason.PANIC
                 continueExecution = false
 
@@ -216,7 +211,7 @@ class AccumulationExecutor(val config: ChainConfig):
         case Right(InterruptKind.Step) =>
           // Continue for step tracing
 
-        case Left(_) =>
+        case Left(err) =>
           exitReason = ExitReason.PANIC
           continueExecution = false
 
@@ -224,9 +219,10 @@ class AccumulationExecutor(val config: ChainConfig):
     val gasUsed = if finalGas >= 0 then initialGas - finalGas else initialGas
 
     // Extract output on halt
+    // Per PVM ABI: A0=r7, A1=r8 (not r10/r11 which are A3/A4)
     val output = if exitReason == ExitReason.HALT then
-      val addr = instance.reg(10).toInt  // A0
-      val len = instance.reg(11).toInt   // A1
+      val addr = instance.reg(7).toInt  // A0
+      val len = instance.reg(8).toInt   // A1
       if len > 0 && len <= 1024 then
         readMemoryBulk(instance, addr, len)
       else if len == 0 then
@@ -380,10 +376,11 @@ class AccumulationExecutor(val config: ChainConfig):
     val data = encodedServiceId ++ entropy.toArray ++ encodedTimeslot
     val hash = Hashing.blake2b256(data)
     val hashBytes = hash.bytes.toArray
-    (hashBytes(0).toLong & 0xff) |
+    val result = (hashBytes(0).toLong & 0xff) |
       ((hashBytes(1).toLong & 0xff) << 8) |
       ((hashBytes(2).toLong & 0xff) << 16) |
       ((hashBytes(3).toLong & 0xff) << 24)
+    result
 
   private def findAvailableServiceIndex(
     candidate: Long,
@@ -557,8 +554,7 @@ def extractOperandTuples(reports: List[WorkReport], serviceId: Long): List[Opera
         JamBytes(result.payloadHash.bytes.toArray),
         result.accumulateGas.toLong,
         report.authOutput,
-        result.result,
-        JamBytes(result.codeHash.bytes.toArray)
+        result.result
       )
     }
   }

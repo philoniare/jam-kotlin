@@ -98,14 +98,14 @@ object workresult:
         serviceId <- cursor.get[Long]("service_id")
         codeHash <- cursor.get[String]("code_hash")
         payloadHash <- cursor.get[String]("payload_hash")
-        accumulateGas <- cursor.get[Long]("accumulate_gas")
+        accumulateGas <- cursor.get[BigInt]("accumulate_gas")  // u64 values can exceed Long.MaxValue
         result <- cursor.get[ExecutionResult]("result")
         refineLoad <- cursor.get[RefineLoad]("refine_load")
       yield WorkResult(
         ServiceId(UInt(serviceId.toInt)),
         Hash(parseHex(codeHash)),
         Hash(parseHex(payloadHash)),
-        Gas(accumulateGas),
+        Gas(spire.math.ULong.fromBigInt(accumulateGas)),  // Convert BigInt -> ULong
         result,
         refineLoad
       )

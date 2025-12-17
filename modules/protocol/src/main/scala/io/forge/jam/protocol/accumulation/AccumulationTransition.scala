@@ -6,28 +6,22 @@ import io.forge.jam.core.types.workpackage.WorkReport
 import io.forge.jam.protocol.state.JamState
 import monocle.syntax.all.*
 import org.bouncycastle.jcajce.provider.digest.Keccak
-import org.slf4j.LoggerFactory
 
 import scala.collection.mutable
 import java.nio.{ByteBuffer, ByteOrder}
 
+import io.forge.jam.core.types.epoch.ValidatorKey
+
 /**
  * Accumulation State Transition Function.
- *
- * - Ready queue management and dependency resolution
- * - Work report partitioning (immediate vs queued)
- * - PVM execution orchestration
- * - Commitment root computation
- * - Statistics tracking
  */
 object AccumulationTransition:
-  private val logger = LoggerFactory.getLogger(getClass)
 
   /**
    * Execute the Accumulation STF using unified JamState.
    *
-   * Reads: tau, entropy.pool[0], accumulation (readyQueue, accumulated, privileges, serviceAccounts)
-   * Writes: accumulation (readyQueue, accumulated, privileges, serviceAccounts)
+   * Reads: tau, entropy.pool[0], accumulation (readyQueue, accumulated, privileges, serviceAccounts), validators.queue, authQueues
+   * Writes: accumulation (readyQueue, accumulated, privileges, serviceAccounts), validators.queue, authQueues
    *
    * @param input The accumulation input containing slot and reports
    * @param state The unified JamState
@@ -39,8 +33,13 @@ object AccumulationTransition:
     state: JamState,
     config: ChainConfig
   ): (JamState, AccumulationOutput) =
-    // Extract entropy as 32-byte JamBytes (eta[0])
     val entropyBytes = state.entropy.firstAsBytes
+
+    // Convert validator queue to JamBytes for PartialState initialization
+    val initStagingSet: List[JamBytes] = state.validators.queue.map(vk => vk.toJamBytes)
+
+    // Convert auth queues to JamBytes for PartialState initialization
+    val initAuthQueues: List[List[JamBytes]] = state.authQueues.map(_.map(h => JamBytes(h.bytes)))
 
     // Convert JamState fields to AccumulationState for existing logic
     val preState = AccumulationState(
@@ -54,10 +53,27 @@ object AccumulationTransition:
       rawServiceDataByStateKey = mutable.Map.from(state.rawServiceDataByStateKey)
     )
 
-    val (postState, output) = stfInternal(input, preState, config)
+    val (postState, postStagingSet, postAuthQueues, output) = stfInternal(input, preState, initStagingSet, initAuthQueues, config)
+
+    val stagingSetChanged = postStagingSet.map(_.toHex) != initStagingSet.map(_.toHex)
+
+    // Convert staging set back to ValidatorKey list only if it changed
+    val newValidatorQueue: List[ValidatorKey] =
+      if stagingSetChanged then postStagingSet.map(ValidatorKey.fromJamBytes)
+      else state.validators.queue
+
+    // Check if auth queues actually changed
+    val authQueuesChanged = postAuthQueues.map(_.map(_.toHex)) != initAuthQueues.map(_.map(_.toHex))
+
+    // Convert auth queues back to Hash list only if changed
+    val newAuthQueues: List[List[Hash]] =
+      if authQueuesChanged then postAuthQueues.map(_.map(jb => Hash(jb.toArray)))
+      else state.authQueues
 
     // Update JamState with results
     val updatedState = state.copy(
+      validators = state.validators.copy(queue = newValidatorQueue),
+      authQueues = newAuthQueues,
       accumulation = state.accumulation.copy(
         readyQueue = postState.readyQueue,
         accumulated = postState.accumulated,
@@ -74,14 +90,18 @@ object AccumulationTransition:
    *
    * @param input The accumulation input containing slot and reports
    * @param preState The pre-transition state
+   * @param initStagingSet Initial staging set (validator queue) as list of 336-byte JamBytes
+   * @param initAuthQueues Initial authorization queues per core as list of lists of 32-byte hashes
    * @param config The accumulation configuration
-   * @return Tuple of (post-transition state, output)
+   * @return Tuple of (post-transition state, post staging set, post auth queues, output)
    */
   def stfInternal(
     input: AccumulationInput,
     preState: AccumulationState,
+    initStagingSet: List[JamBytes],
+    initAuthQueues: List[List[JamBytes]],
     config: ChainConfig
-  ): (AccumulationState, AccumulationOutput) =
+  ): (AccumulationState, List[JamBytes], List[List[JamBytes]], AccumulationOutput) =
     val m = (input.slot % config.epochLength).toInt
     val deltaT = Math.max((input.slot - preState.slot).toInt, 1)
 
@@ -111,9 +131,9 @@ object AccumulationTransition:
 
     // Add new queued reports to the current slot m (BEFORE extraction)
     val newRecords = queuedReports.map { report =>
-      val prereqs = report.context.prerequisites.map(h => JamBytes(h.bytes.toArray))
-      val segmentDeps = report.segmentRootLookup.map(l => JamBytes(l.workPackageHash.bytes.toArray))
-      val allDeps = (prereqs ++ segmentDeps).filter(!historicallyAccumulated.contains(_))
+      val prereqs = report.context.prerequisites
+      val segmentDeps = report.segmentRootLookup.map(_.workPackageHash)
+      val allDeps = (prereqs ++ segmentDeps).filter(h => !historicallyAccumulated.contains(JamBytes(h.bytes)))
       AccumulationReadyRecord(report, allDeps)
     }
     workingReadyQueue(m) = workingReadyQueue(m) ++ newRecords
@@ -162,7 +182,7 @@ object AccumulationTransition:
 
     // 8. Execute PVM for accumulated reports (respecting gas budget)
     val allToAccumulate = immediateReports ++ readyToAccumulate
-    val partialState = preState.toPartialState()
+    val partialState = preState.toPartialState(initStagingSet, initAuthQueues)
 
     // Calculate total gas budget
     val sumPrivilegedGas = partialState.alwaysAccers.values.sum
@@ -244,8 +264,8 @@ object AccumulationTransition:
     val privilegeSnapshots = outerResult.privilegeSnapshots
     val managerSnapshot = privilegeSnapshots.get(origManager)
 
-    // Manager service controls itself - no R needed for manager
-    val finalManager = newPartialState.manager
+    // Manager and alwaysAccers come from manager's post-state (per GP §11.2)
+    val finalManager = managerSnapshot.map(_.manager).getOrElse(origManager)
 
     // Apply R function for delegator
     val managerPostDelegator = managerSnapshot.map(_.delegator).getOrElse(origDelegator)
@@ -268,8 +288,9 @@ object AccumulationTransition:
         privilegeR(origAssigner, managerPostAssigner, assignerPostAssigner)
     }
 
-    // AlwaysAccers comes from manager's post-state
-    val finalAlwaysAccers = newPartialState.alwaysAccers
+    // AlwaysAccers comes from manager's post-state only (per GP §11.2)
+    // Only the manager service can modify alwaysAccers
+    val finalAlwaysAccers = managerSnapshot.map(_.alwaysAccers).getOrElse(preState.privileges.alwaysAcc.map(a => a.id -> a.gas).toMap)
 
     val finalState = AccumulationState(
       slot = input.slot,
@@ -298,7 +319,29 @@ object AccumulationTransition:
     // 15. Get transfer stats from outerResult
     val transferStats = outerResult.transferStatsMap
 
-    (finalState, StfResult.success(AccumulationOutputData(outputHash, accumulationStats, transferStats)))
+    // 16. Convert commitments to list format for state storage (key 0x10)
+    val commitmentsList = commitments.toList.sortBy(c => (c.serviceIndex, c.hash.toHex)).map { c =>
+      (c.serviceIndex, c.hash)
+    }
+
+    // 17. Extract post staging set and auth queues per Gray Paper:
+    // ps_stagingset' = (local_acc(ps_delegator)_ao_poststate)_ps_stagingset
+    // ps_authqueue'[c] = ((local_acc(ps_assigners[c])_ao_poststate)_ps_authqueue)[c]
+    //
+    // Staging set comes from DELEGATOR's post-state (if delegator was accumulated)
+    // Otherwise use initial staging set
+    val delegatorStateSnapshot = privilegeSnapshots.get(origDelegator)
+    val postStagingSet = delegatorStateSnapshot.map(_.stagingSet).getOrElse(initStagingSet)
+
+    // Auth queues: each core's queue comes from that core's assigner's post-state
+    val postAuthQueues = finalAssigners.zipWithIndex.map { case (assigner, coreIdx) =>
+      val assignerStateSnapshot = privilegeSnapshots.get(assigner)
+      assignerStateSnapshot.flatMap(_.authQueues.lift(coreIdx)).getOrElse(
+        initAuthQueues.lift(coreIdx).getOrElse(List.empty)
+      )
+    }
+
+    (finalState, postStagingSet, postAuthQueues, StfResult.success(AccumulationOutputData(outputHash, accumulationStats, transferStats, commitmentsList)))
 
   /**
    * Merging privilege updates.
@@ -321,7 +364,7 @@ object AccumulationTransition:
       .map { record =>
         AccumulationReadyRecord(
           report = record.report,
-          dependencies = record.dependencies.filter(!accumulatedHashes.contains(_))
+          dependencies = record.dependencies.filter(h => !accumulatedHashes.contains(JamBytes(h.bytes)))
         )
       }
 
@@ -340,7 +383,7 @@ object AccumulationTransition:
     while continue do
       val (ready, notReady) = remaining.partition {
         case (_, record) =>
-          record.dependencies.forall(accumulated.contains)
+          record.dependencies.forall(h => accumulated.contains(JamBytes(h.bytes)))
       }
       if ready.isEmpty then
         continue = false
@@ -368,13 +411,16 @@ object AccumulationTransition:
 
   /**
    * Snapshot of privilege state values at a point in time.
+   * Also includes staging set and auth queues for final state computation.
    */
   case class PrivilegeSnapshot(
     manager: Long,
     delegator: Long,
     registrar: Long,
     assigners: List[Long],
-    alwaysAccers: Map[Long, Long]
+    alwaysAccers: Map[Long, Long],
+    stagingSet: List[JamBytes] = List.empty,
+    authQueues: List[List[JamBytes]] = List.empty
   )
 
   /**
@@ -462,9 +508,9 @@ object AccumulationTransition:
       ))
     }.toMap
 
-    // Merge privilege snapshots - first snapshot for each service takes precedence
-    val mergedSnapshots = parallelResult.privilegeSnapshots ++
-      outerResult.privilegeSnapshots.view.filterKeys(!parallelResult.privilegeSnapshots.contains(_)).toMap
+    // Merge privilege snapshots - LAST snapshot for each service takes precedence (per Gray Paper)
+    // The outer result has later snapshots that should override earlier ones
+    val mergedSnapshots = parallelResult.privilegeSnapshots ++ outerResult.privilegeSnapshots
 
     // Merge transfer stats
     val mergedTransferStats =
@@ -520,17 +566,12 @@ object AccumulationTransition:
     // Group work items AND transfers by service (v0.7.1 - unified accumulate entry point)
     val serviceOperands = mutable.Map.empty[Long, mutable.ListBuffer[AccumulationOperand]]
 
-    logger.debug(
-      s"[executeAccumulation] Processing ${reports.size} reports, alwaysAccers=${alwaysAccers.size}, deferredTransfers=${deferredTransfers.size}"
-    )
-
     // Add deferred transfers as operands (v0.7.1 - transfers processed in accumulate)
     for transfer <- deferredTransfers do
       serviceOperands.getOrElseUpdate(transfer.destination, mutable.ListBuffer.empty) +=
         AccumulationOperand.Transfer(transfer)
 
     for report <- reports do
-      logger.debug(s"[executeAccumulation] Report has ${report.results.size} results")
       for result <- report.results do
         val operand = OperandTuple(
           packageHash = JamBytes(report.packageSpec.hash.bytes.toArray),
@@ -539,8 +580,7 @@ object AccumulationTransition:
           payloadHash = JamBytes(result.payloadHash.bytes.toArray),
           gasLimit = result.accumulateGas.toLong,
           authTrace = report.authOutput,
-          result = result.result,
-          codeHash = JamBytes(result.codeHash.bytes.toArray)
+          result = result.result
         )
         serviceOperands.getOrElseUpdate(result.serviceId.value.toLong, mutable.ListBuffer.empty) +=
           AccumulationOperand.WorkItem(operand)
@@ -589,17 +629,16 @@ object AccumulationTransition:
       val prevGas = gasUsedMap.getOrElse(serviceId, 0L)
       val newGas = prevGas + execResult.gasUsed
       gasUsedMap(serviceId) = newGas
-      logger.debug(
-        s"[executeAccumulation] serviceId=$serviceId execResult.gasUsed=${execResult.gasUsed} newGas=$newGas"
-      )
 
-      // Capture privilege snapshot
+      // Capture privilege snapshot including staging set and auth queues
       privilegeSnapshots(serviceId) = PrivilegeSnapshot(
         manager = execResult.postState.manager,
         delegator = execResult.postState.delegator,
         registrar = execResult.postState.registrar,
         assigners = execResult.postState.assigners.toList,
-        alwaysAccers = execResult.postState.alwaysAccers.toMap
+        alwaysAccers = execResult.postState.alwaysAccers.toMap,
+        stagingSet = execResult.postState.stagingSet.toList,
+        authQueues = execResult.postState.authQueue.map(_.toList).toList
       )
 
       // Collect yield/commitment if present
@@ -620,14 +659,6 @@ object AccumulationTransition:
       preimageIntegration(allProvisions.toSet, finalState, timeslot)
     else
       finalState
-
-    logger.debug(
-      s"[executeAccumulation FINAL] rawServiceDataByStateKey.size=${stateAfterPreimages.rawServiceDataByStateKey.size}"
-    )
-    stateAfterPreimages.rawServiceDataByStateKey.foreach {
-      case (k, v) =>
-        logger.debug(s"[executeAccumulation FINAL] key=${k.toHex.take(32)}... valueLen=${v.length}")
-    }
     AccumulationExecResult(
       stateAfterPreimages,
       gasUsedMap.toMap,
@@ -678,6 +709,12 @@ object AccumulationTransition:
     if postState.alwaysAccers.toMap != initialState.alwaysAccers.toMap then
       changes.alwaysAccersChange = Some(postState.alwaysAccers.toMap)
 
+    // Check for staging set and auth queue changes
+    if postState.stagingSet.toList != initialState.stagingSet.toList then
+      changes.stagingSetChange = Some(postState.stagingSet.toList)
+    if postState.authQueue.map(_.toList).toList != initialState.authQueue.map(_.toList).toList then
+      changes.authQueueChange = Some(postState.authQueue.toList)
+
     // Check for rawServiceData changes (added or updated keys)
     for (key, value) <- postState.rawServiceDataByStateKey do
       val initValue = initialState.rawServiceDataByStateKey.get(key)
@@ -726,22 +763,12 @@ object AccumulationTransition:
       }
     state
 
-  /**
-   * Build fresh service statistics for this slot's activity.
-   * Statistics are NOT cumulative - they represent only this slot's accumulation.
-   * Only services that actually accumulated (gasUsed > 0 or workItems > 0) or received transfers are included.
-   */
   private def updateStatistics(
     existing: List[ServiceStatisticsEntry],
     gasUsedPerService: Map[Long, Long],
     workItemsPerService: Map[Long, Int],
     transferStatsPerService: Map[Long, (Long, Long)]
   ): List[ServiceStatisticsEntry] =
-    // Debug output
-    logger.debug(s"[updateStatistics] gasUsedPerService: $gasUsedPerService")
-    logger.debug(s"[updateStatistics] workItemsPerService: $workItemsPerService")
-    logger.debug(s"[updateStatistics] transferStatsPerService: $transferStatsPerService")
-
     // Build fresh statistics from only this slot's activity
     val statsMap = mutable.Map.empty[Long, ServiceStatisticsEntry]
 
@@ -752,8 +779,6 @@ object AccumulationTransition:
       val accGasUsed = gasUsedPerService.getOrElse(serviceId, 0L)
       val workItems = workItemsPerService.getOrElse(serviceId, 0)
       val (transferCount, transferGasUsed) = transferStatsPerService.getOrElse(serviceId, (0L, 0L))
-
-      logger.debug(s"[updateStatistics] serviceId=$serviceId accGasUsed=$accGasUsed workItems=$workItems")
 
       // Only include services that actually did something
       if accGasUsed > 0 || workItems > 0 || transferCount > 0 then
@@ -866,6 +891,9 @@ class AccountChanges:
   // Storage data changes (for WRITE host call updates)
   val rawServiceDataUpdates: mutable.Map[JamBytes, JamBytes] = mutable.Map.empty
   val rawServiceDataRemovals: mutable.Set[JamBytes] = mutable.Set.empty
+  // Staging set and auth queue changes (from designate and assign host calls)
+  var stagingSetChange: Option[List[JamBytes]] = None
+  var authQueueChange: Option[List[mutable.ListBuffer[JamBytes]]] = None
 
   def checkAndMerge(other: AccountChanges): Unit =
     // Merge account updates
@@ -888,6 +916,12 @@ class AccountChanges:
     if other.alwaysAccersChange.isDefined && alwaysAccersChange.isEmpty then
       alwaysAccersChange = other.alwaysAccersChange
 
+    // Merge staging set and auth queue changes (first write wins)
+    if other.stagingSetChange.isDefined && stagingSetChange.isEmpty then
+      stagingSetChange = other.stagingSetChange
+    if other.authQueueChange.isDefined && authQueueChange.isEmpty then
+      authQueueChange = other.authQueueChange
+
     // Merge rawServiceData updates (first write wins for conflicts)
     for (key, value) <- other.rawServiceDataUpdates do
       if !rawServiceDataUpdates.contains(key) then
@@ -895,9 +929,22 @@ class AccountChanges:
     rawServiceDataRemovals ++= other.rawServiceDataRemovals
 
   def applyTo(state: PartialState): Unit =
-    // Apply account removals first (before updates)
     for id <- removedAccounts do
       state.accounts.remove(id)
+
+      val serviceIdBytes = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(id.toInt).array()
+      val keysToRemove = state.rawServiceDataByStateKey.keys.filter { key =>
+        key.length >= 8 &&
+          key.toArray(0) == serviceIdBytes(0) &&
+          key.toArray(2) == serviceIdBytes(1) &&
+          key.toArray(4) == serviceIdBytes(2) &&
+          key.toArray(6) == serviceIdBytes(3)
+      }.toList
+      keysToRemove.foreach(state.rawServiceDataByStateKey.remove)
+
+      // Also remove the service account key from rawServiceAccountsByStateKey
+      val serviceAccountKey = StateKey.computeServiceAccountKey(id)
+      state.rawServiceAccountsByStateKey.remove(serviceAccountKey)
 
     // Apply account updates
     for (id, account) <- accountUpdates do
@@ -914,6 +961,16 @@ class AccountChanges:
     alwaysAccersChange.foreach { alwaysAccers =>
       state.alwaysAccers.clear()
       state.alwaysAccers ++= alwaysAccers
+    }
+
+    // Apply staging set and auth queue changes
+    stagingSetChange.foreach { stagingSet =>
+      state.stagingSet.clear()
+      state.stagingSet ++= stagingSet
+    }
+    authQueueChange.foreach { authQueue =>
+      state.authQueue.clear()
+      state.authQueue ++= authQueue
     }
 
     // Apply rawServiceData changes

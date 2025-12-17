@@ -7,11 +7,12 @@ import io.forge.jam.pvm.{InterruptKind, SegfaultInfo, Abi, Opcode, Instruction, 
 import io.forge.jam.pvm.memory.{BasicMemory, DynamicMemory}
 import io.forge.jam.pvm.program.{Program, InstructionDecoder}
 import java.io.{FileWriter, PrintWriter}
+import com.typesafe.scalalogging.StrictLogging
 
 /**
  * Trace writer for PVM execution - writes standardized trace format.
  */
-object PvmTraceWriter:
+object PvmTraceWriter extends StrictLogging:
   @volatile private var writer: Option[PrintWriter] = None
   @volatile private var enabled: Boolean = false
   @volatile private var targetService: Long = 0
@@ -36,6 +37,8 @@ object PvmTraceWriter:
     currentService = serviceId
 
   def isEnabled: Boolean = enabled && (targetService == 0 || targetService == currentService)
+
+  def debug(msg: => String): Unit = logger.debug(msg)
 
   def trace(ic: Long, pc: Int, gas: Long, opcode: String, regs: Array[Long]): Unit =
     if isEnabled then
@@ -188,6 +191,9 @@ final class InterpretedInstance private (
         compileBlock(pc)
 
   override def jumpIndirect(pc: ProgramCounter, address: UInt): Option[UInt] =
+    // Debug: compare address with VmAddrReturnToHost
+    if PvmTraceWriter.isEnabled then
+      PvmTraceWriter.debug(s"[jumpIndirect] address=$address (signed=${address.signed}, hex=${address.signed.toHexString}) VmAddrReturnToHost=${Abi.VmAddrReturnToHost} (signed=${Abi.VmAddrReturnToHost.signed}) equal=${address == Abi.VmAddrReturnToHost}")
     if address == Abi.VmAddrReturnToHost then
       _programCounter = pc
       _programCounterValid = true
@@ -205,6 +211,8 @@ final class InterpretedInstance private (
       resolveFallthrough(nextPc)
 
   override def panic(pc: ProgramCounter): Option[UInt] =
+    val stackTrace = Thread.currentThread().getStackTrace.take(10).map(_.toString).mkString("\n  ")
+    PvmTraceWriter.debug(s"[PVM PANIC] at pc=${pc.value} STACK:\n  $stackTrace")
     _programCounter = pc
     _programCounterValid = true
     _nextProgramCounter = None
@@ -315,7 +323,10 @@ final class InterpretedInstance private (
     basicMemory.storeU32(address, UInt(getReg(src).toInt)) match
       case MemoryResult.Success(_) => advance()
       case MemoryResult.Segfault(_, pageAddr) => segfault(pc, pageAddr)
-      case MemoryResult.OutOfBounds(_) => panic(pc)
+      case MemoryResult.OutOfBounds(_) =>
+        if PvmTraceWriter.isEnabled then
+          PvmTraceWriter.debug(s"[PANIC] storeU32 OutOfBounds at pc=$pc addr=0x${address.toLong.toHexString} src=$src value=0x${getReg(src).toHexString}")
+        panic(pc)
 
   override def storeU64(pc: ProgramCounter, src: Int, address: UInt): Option[UInt] =
     basicMemory.storeU64(address, ULong(getReg(src))) match

@@ -70,11 +70,15 @@ object BlockPipeline:
       // Step 6: Reports
       _ <- reports(skipAncestryValidation)
 
+      // Capture pre-accumulation rawServiceDataByStateKey for preimages validation (per GP §12.1)
+      _ <- capturePreAccumulationState
+
       // Step 7: Accumulation
       accOut <- accumulation
       accRoot = Hash(accOut.ok.toArray)
       _ <- storeAccumulateRoot(accRoot)
       _ <- storeAccumulationStats(accOut.accumulationStats)
+      _ <- storeLastAccumulationOutputs(accOut.commitments)
 
       // Step 8: History (uses accumulateRoot)
       _ <- history(accRoot)

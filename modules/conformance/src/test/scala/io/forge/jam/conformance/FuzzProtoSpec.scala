@@ -3,6 +3,7 @@ package io.forge.jam.conformance
 import io.forge.jam.core.ChainConfig
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.Ignore
 
 import java.nio.file.{Files, Paths}
 
@@ -11,7 +12,10 @@ import java.nio.file.{Files, Paths}
  *
  * These tests load test vectors from jam-conformance/fuzz-proto/examples/v1/
  * and verify that our implementation produces the expected outputs.
+ *
+ * NOTE: Currently disabled but kept for future reference. Current examples are configured for 0.7.0 spec and are not compatible with 0.7.1 implementation.
  */
+@Ignore
 class FuzzProtoSpec extends AnyFunSpec with Matchers:
 
   // Base directory for test vectors

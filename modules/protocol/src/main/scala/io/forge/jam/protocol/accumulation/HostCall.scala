@@ -76,3 +76,27 @@ object HostCall:
 
   /** log (100): Debug logging (JIP-1), gas cost = 0 */
   val LOG: Int = 100
+
+  /** Get human-readable name for host call ID */
+  def name(id: Int): String = id match
+    case GAS => "GAS"
+    case FETCH => "FETCH"
+    case LOOKUP => "LOOKUP"
+    case READ => "READ"
+    case WRITE => "WRITE"
+    case INFO => "INFO"
+    case BLESS => "BLESS"
+    case ASSIGN => "ASSIGN"
+    case DESIGNATE => "DESIGNATE"
+    case CHECKPOINT => "CHECKPOINT"
+    case NEW => "NEW"
+    case UPGRADE => "UPGRADE"
+    case TRANSFER => "TRANSFER"
+    case EJECT => "EJECT"
+    case QUERY => "QUERY"
+    case SOLICIT => "SOLICIT"
+    case FORGET => "FORGET"
+    case YIELD => "YIELD"
+    case PROVIDE => "PROVIDE"
+    case LOG => "LOG"
+    case _ => s"UNKNOWN($id)"

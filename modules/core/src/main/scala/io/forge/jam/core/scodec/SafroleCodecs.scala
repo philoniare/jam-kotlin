@@ -143,7 +143,7 @@ object SafroleCodecs:
 
   def safroleStateCodec(validatorCount: Int, epochLength: Int): Codec[SafroleStateData] =
     // tau - 4 bytes little-endian
-    val tauCodec: Codec[Long] = JamCodecs.uintCodec.xmap(_.toLong, l => UInt(l.toInt))
+    val tauCodec: Codec[Long] = JamCodecs.uintCodec.xmap(_.toLong, l => UInt((l & 0xFFFFFFFFL).toInt))
 
     // eta - exactly 4 hashes
     val etaCodec: Codec[List[Hash]] = JamCodecs.fixedSizeList(JamCodecs.hashCodec, 4)
@@ -182,7 +182,7 @@ object SafroleCodecs:
     )
 
   val safroleInputCodec: Codec[SafroleInputData] =
-    val slotCodec: Codec[Long] = JamCodecs.uintCodec.xmap(_.toLong, l => UInt(l.toInt))
+    val slotCodec: Codec[Long] = JamCodecs.uintCodec.xmap(_.toLong, l => UInt((l & 0xFFFFFFFFL).toInt))
     val extrinsicCodec: Codec[List[TicketEnvelopeData]] = JamCodecs.compactPrefixedList(ticketEnvelopeCodec)
 
     (slotCodec :: JamCodecs.hashCodec :: extrinsicCodec).xmap(

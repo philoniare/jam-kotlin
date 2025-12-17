@@ -60,8 +60,11 @@ object JamCodecs:
       key => key.toByteVector
     )
 
-  /** Use TicketMark codec from its companion object (tickets.scala) */
-  given ticketMarkCodec: Codec[TicketMark] = summon[Codec[TicketMark]]
+  /** Re-export TicketMark codec from its companion object (tickets.scala) */
+  val ticketMarkCodec: Codec[TicketMark] = {
+    import io.forge.jam.core.types.tickets.TicketMark.given
+    summon[Codec[TicketMark]]
+  }
 
   /** JAM compact integer codec for encoding non-negative Long values (0 to 2^64-1). */
   val compactInteger: Codec[Long] = new Codec[Long]:

@@ -82,12 +82,18 @@ object LiftedStfs:
     extractInput = ctx => InputExtractor.extractAuthInput(ctx.block)
   )
 
-  // 8. Preimages STF (no config)
-  val preimages: StfStepWith[Unit] = liftNoConfig(
-    stf = PreimageTransition.stf,
-    extractInput = ctx => InputExtractor.extractPreimageInput(ctx.block, ctx.block.header.slot.value.toLong),
-    wrapError = (e: PreimageErrorCode) => PipelineError.PreimageErr(e)
-  )
+  // 8. Preimages STF (no config, uses pre-accumulation state for validation per GP §12.1)
+  val preimages: StfStepWith[Unit] = StateT { case (state, ctx) =>
+    val input = InputExtractor.extractPreimageInput(ctx.block, ctx.block.header.slot.value.toLong)
+    // Use pre-accumulation rawServiceDataByStateKey for validation
+    val preAccumState = ctx.preAccumulationRawServiceData.getOrElse(state.rawServiceDataByStateKey)
+    val (newState, output) = PreimageTransition.stfWithPreAccumState(input, state, preAccumState)
+    output match
+      case Left(err) =>
+        Left(PipelineError.PreimageErr(err))
+      case Right(_) =>
+        Right(((newState, ctx), ()))
+  }
 
   // 9. Statistics STF (returns Option, not Either - wrapping specially)
   val statistics: StfStepWith[Option[StatOutput]] = StateT { case (state, ctx) =>

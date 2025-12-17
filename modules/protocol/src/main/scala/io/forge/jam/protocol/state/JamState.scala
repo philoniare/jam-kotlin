@@ -191,6 +191,10 @@ final case class JamState(
   // Used by: Safrole (RW)
   postOffenders: List[Ed25519PublicKey],
 
+  // Last accumulation outputs (service commitments from accumulation)
+  // Used by: Accumulation (W), History (R for state encoding)
+  lastAccumulationOutputs: List[(Long, JamBytes)],
+
   // Raw keyvals for pass-through when unchanged
   otherKeyvals: List[KeyValue],
 
@@ -215,6 +219,7 @@ object JamState:
   val authQueuesLens: Lens[JamState, List[List[Hash]]] = Focus[JamState](_.authQueues)
   val serviceStatisticsLens: Lens[JamState, List[ServiceStatisticsEntry]] = Focus[JamState](_.serviceStatistics)
   val postOffendersLens: Lens[JamState, List[Ed25519PublicKey]] = Focus[JamState](_.postOffenders)
+  val lastAccumulationOutputsLens: Lens[JamState, List[(Long, JamBytes)]] = Focus[JamState](_.lastAccumulationOutputs)
 
   // Nested component lenses
   val validatorsLens: Lens[JamState, ValidatorState] = Focus[JamState](_.validators)
@@ -335,6 +340,7 @@ object JamState:
     beta = HistoricalBetaContainer(),
     serviceStatistics = List.empty,
     postOffenders = List.empty,
+    lastAccumulationOutputs = List.empty,
     otherKeyvals = List.empty,
     originalKeyvals = Map.empty,
     rawServiceDataByStateKey = Map.empty
@@ -390,6 +396,7 @@ object JamState:
       beta = fjs.recentHistory,
       serviceStatistics = fjs.serviceStatistics,
       postOffenders = fjs.postOffenders,
+      lastAccumulationOutputs = fjs.lastAccumulationOutputs,
       otherKeyvals = fjs.otherKeyvals,
       originalKeyvals = fjs.originalKeyvals,
       rawServiceDataByStateKey = fjs.rawServiceDataByStateKey
@@ -605,6 +612,7 @@ object JamState:
       activityStatsCurrent = js.statistics.current,
       activityStatsLast = js.statistics.last,
       postOffenders = js.postOffenders,
+      lastAccumulationOutputs = js.lastAccumulationOutputs,
       otherKeyvals = js.otherKeyvals,
       originalKeyvals = js.originalKeyvals,
       rawServiceDataByStateKey = js.rawServiceDataByStateKey

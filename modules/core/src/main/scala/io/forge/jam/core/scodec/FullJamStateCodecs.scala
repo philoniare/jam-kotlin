@@ -3,7 +3,6 @@ package io.forge.jam.core.scodec
 import scodec.*
 import scodec.bits.*
 import scodec.codecs.*
-import spire.math.UByte
 import io.forge.jam.core.ChainConfig
 import io.forge.jam.core.primitives.*
 import io.forge.jam.core.types.tickets.TicketMark
@@ -24,7 +23,7 @@ object FullJamStateCodecs:
   val StatCountSize: Int = 24
 
   /** Codec for timeslot (tau) - 4 bytes little-endian uint32. */
-  val timeslotCodec: Codec[Long] = uint32L.xmap(_.toLong, _.toInt & 0xFFFFFFFFL)
+  val timeslotCodec: Codec[Long] = uint32L.xmap(_.toLong, _ & 0xFFFFFFFFL)
 
   /** Codec for entropy pool - exactly 4 hashes (128 bytes total). */
   val entropyPoolCodec: Codec[List[Hash]] =
@@ -143,12 +142,12 @@ object FullJamStateCodecs:
         StatCountData(b.toLong, t.toLong, p.toLong, ps.toLong, g.toLong, a.toLong)
       },
       s => (
-        (s.blocks & 0xFFFFFFFFL).toInt,
-        (s.tickets & 0xFFFFFFFFL).toInt,
-        (s.preImages & 0xFFFFFFFFL).toInt,
-        (s.preImagesSize & 0xFFFFFFFFL).toInt,
-        (s.guarantees & 0xFFFFFFFFL).toInt,
-        (s.assurances & 0xFFFFFFFFL).toInt
+        s.blocks & 0xFFFFFFFFL,
+        s.tickets & 0xFFFFFFFFL,
+        s.preImages & 0xFFFFFFFFL,
+        s.preImagesSize & 0xFFFFFFFFL,
+        s.guarantees & 0xFFFFFFFFL,
+        s.assurances & 0xFFFFFFFFL
       )
     )
 
@@ -173,7 +172,7 @@ object FullJamStateCodecs:
       { case (id, pc, ps, rc, rg, ic, xc, xs, ec, ac, ag) =>
         ServiceStatisticsData(id.toLong, pc, ps, rc, rg, ic, xc, xs, ec, ac, ag)
       },
-      s => ((s.serviceId & 0xFFFFFFFFL).toInt,
+      s => (s.serviceId & 0xFFFFFFFFL, // Keep as Long for uint32L codec
             s.preimagesCount, s.preimagesSize, s.refinesCount, s.refinesGas,
             s.importsCount, s.extrinsicsCount, s.extrinsicsSize, s.exportsCount,
             s.accumulatesCount, s.accumulatesGas)
@@ -235,6 +234,25 @@ object FullJamStateCodecs:
 
   def decodeServiceInfo(bytes: Array[Byte]): ServiceInfo =
     serviceInfoCodec.decodeValue(BitVector(bytes)).require
+
+  /** Codec for last accumulation outputs: compact list of (u32LE serviceId, 32-byte hash). */
+  val lastAccumulationOutputsCodec: Codec[List[(Long, ByteVector)]] =
+    val entryCodec: Codec[(Long, ByteVector)] =
+      (uint32L :: fixedSizeBytes(Hash.Size.toLong, bytes)).xmap(
+        { case (id, bv) => (id.toLong & 0xFFFFFFFFL, bv) },
+        { case (id, bv) => (id & 0xFFFFFFFFL, bv) }
+      )
+    JamCodecs.compactPrefixedList(entryCodec)
+
+  def decodeLastAccumulationOutputs(bytes: Array[Byte]): List[(Long, ByteVector)] =
+    lastAccumulationOutputsCodec.decodeValue(BitVector(bytes)) match
+      case Attempt.Successful(outputs) => outputs
+      case Attempt.Failure(_) => List.empty
+
+  def encodeLastAccumulationOutputs(outputs: List[(Long, ByteVector)]): ByteVector =
+    // Sort by service ID before encoding as per Gray Paper
+    val sorted = outputs.sortBy(_._1)
+    lastAccumulationOutputsCodec.encode(sorted).require.bytes
 
   final case class FullJamStateCodecSet(
     timeslot: Codec[Long],

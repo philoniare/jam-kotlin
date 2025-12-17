@@ -38,24 +38,14 @@ class FuzzReportTraceSpec extends AnyFunSpec with Matchers:
 
         val runner = new JsonTraceRunner(ChainConfig.TINY, verbose = true, compareKeyvals = true)
 
-        // Find first trace directory and first JSON file
-        val firstTraceDir = Option(tracesDir.toFile.listFiles())
-          .getOrElse(Array.empty[java.io.File])
-          .filter(_.isDirectory)
-          .sortBy(_.getName)
-          .headOption
+        // Target a specific trace for debugging
+        val targetTraceId = "1763488465"
+        val targetFileName = "00001705.json"
 
-        assume(firstTraceDir.isDefined, "No trace directories found")
+        val targetFile = tracesDir.resolve(targetTraceId).resolve(targetFileName)
+        assume(Files.exists(targetFile), s"Target trace file not found: $targetFile")
 
-        val firstJsonFile = Option(firstTraceDir.get.listFiles())
-          .getOrElse(Array.empty[java.io.File])
-          .filter(f => f.isFile && f.getName.endsWith(".json"))
-          .sortBy(_.getName)
-          .headOption
-
-        assume(firstJsonFile.isDefined, "No JSON files found in first trace directory")
-
-        val result = runner.runSingleTrace(firstJsonFile.get.toPath)
+        val result = runner.runSingleTrace(targetFile)
 
         result match
           case JsonTraceResult.Success(traceId, fileName, slot) =>
@@ -112,7 +102,7 @@ class FuzzReportTraceSpec extends AnyFunSpec with Matchers:
       it("should pass all v0.7.1 fuzz report traces"):
         assume(Files.exists(tracesDir), s"Trace directory not found: $tracesDir")
 
-        val runner = new JsonTraceRunner(ChainConfig.TINY, verbose = false)
+        val runner = new JsonTraceRunner(ChainConfig.TINY, verbose = false, compareKeyvals = true)
         val results = runner.runAllTraces(tracesDir)
 
         val successes = results.collect { case s: JsonTraceResult.Success => s }
@@ -157,7 +147,7 @@ class FuzzReportTraceSpec extends AnyFunSpec with Matchers:
       it("should pass first 5 traces (quick check)"):
         assume(Files.exists(tracesDir), s"Trace directory not found: $tracesDir")
 
-        val runner = new JsonTraceRunner(ChainConfig.TINY, verbose = true)
+        val runner = new JsonTraceRunner(ChainConfig.TINY, verbose = true, compareKeyvals = true)
         val results = runner.runAllTraces(tracesDir, maxTraces = 5)
 
         val successes = results.collect { case s: JsonTraceResult.Success => s }

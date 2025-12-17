@@ -72,9 +72,35 @@ object StateKeys:
 
   /**
    * Checks if a key byte indicates a service data key (interleaved encoding).
+   *
+   * Note: This is a simple check based only on the first byte.
+   * For accurate classification, use `isServiceDataKeyFull`.
    */
   def isServiceDataKey(keyByte: Int): Boolean =
     !KNOWN_PREFIXES.contains(keyByte)
+
+  /**
+   * Checks if a full 31-byte key is a service data key vs a protocol state key.
+   *
+   * Protocol state keys have format: [prefix, 0, 0, ..., 0] (only first byte non-zero)
+   * Service data keys have interleaved format: [s0, h0, s1, h1, s2, h2, s3, h3, h4..h26]
+   *
+   * Returns true if this is a service data key (has non-zero bytes after the first).
+   */
+  def isServiceDataKeyFull(key: JamBytes): Boolean =
+    val bytes = key.toArray
+    if bytes.length != 31 then false
+    else
+      val firstByte = bytes(0).toInt & 0xff
+      // If first byte is 0xff, it's a service account key (not service data)
+      if firstByte == 0xff then false
+      // If first byte is a known protocol prefix and all remaining bytes are zero, it's a protocol key
+      else if KNOWN_PREFIXES.contains(firstByte) then
+        // Check if any byte after the first is non-zero
+        bytes.drop(1).exists(_ != 0)
+      else
+        // Unknown prefix - must be service data
+        true
 
   /**
    * Extracts service index from a key with prefix 255.
@@ -110,6 +136,15 @@ object StateCodec:
   private val RING_COMMITMENT_SIZE: Int = TinyConfig.BANDERSNATCH_RING_COMMITMENT_SIZE
 
   /**
+   * Checks if a key is a simple protocol state key (prefix + 30 zero bytes).
+   */
+  private def isSimpleKey(key: JamBytes, prefix: Byte): Boolean =
+    val keyBytes = key.toArray
+    if keyBytes.length != 31 then false
+    else if keyBytes(0) != prefix then false
+    else keyBytes.drop(1).forall(_ == 0)
+
+  /**
    * Decodes SafroleState from keyvals.
    */
   def decodeSafroleState(keyvals: List[KeyValue], config: ChainConfig = ChainConfig.TINY): SafroleState =
@@ -126,42 +161,36 @@ object StateCodec:
     var postOffenders: List[Ed25519PublicKey] = List.empty
 
     for kv <- keyvals do
-      val keyByte = kv.key.toArray(0).toInt & 0xff
+      val key = kv.key
       val value = kv.value.toArray
 
-      keyByte match
-        case k if k == (StateKeys.TIMESLOT.toInt & 0xff) =>
-          // Timeslot: 4 bytes little-endian
-          val bits = BitVector(value)
-          uint32L.decode(bits) match
-            case Attempt.Successful(DecodeResult(v, _)) => tau = v & 0xFFFFFFFFL
-            case Attempt.Failure(_) => () // Keep default value
-
-        case k if k == (StateKeys.ENTROPY_POOL.toInt & 0xff) =>
-          // Entropy pool: 4 x 32-byte hashes
-          eta = decodeEntropyPool(value)
-
-        case k if k == (StateKeys.CURRENT_VALIDATORS.toInt & 0xff) =>
-          // Current validators (kappa)
-          kappa = decodeValidatorList(value, config.validatorCount)
-
-        case k if k == (StateKeys.PREVIOUS_VALIDATORS.toInt & 0xff) =>
-          // Previous validators (lambda)
-          lambda = decodeValidatorList(value, config.validatorCount)
-
-        case k if k == (StateKeys.VALIDATOR_QUEUE.toInt & 0xff) =>
-          // Pending validators (iota)
-          iota = decodeValidatorList(value, config.validatorCount)
-
-        case k if k == (StateKeys.SAFROLE_STATE.toInt & 0xff) =>
-          // Safrole gamma state (gamma_k, gamma_z, gamma_s, gamma_a)
-          val (decoded, _) = decodeSafroleGammaState(value, config.validatorCount, config.epochLength)
-          gammaK = decoded.gammaK
-          gammaA = decoded.gammaA
-          gammaS = decoded.gammaS
-          gammaZ = decoded.gammaZ
-
-        case _ => () // Ignore other keys
+      // Only process simple protocol state keys (prefix + 30 zero bytes)
+      // This avoids confusing service data keys with protocol keys
+      if isSimpleKey(key, StateKeys.TIMESLOT) then
+        // Timeslot: 4 bytes little-endian
+        val bits = BitVector(value)
+        uint32L.decode(bits) match
+          case Attempt.Successful(DecodeResult(v, _)) => tau = v & 0xFFFFFFFFL
+          case Attempt.Failure(_) => () // Keep default value
+      else if isSimpleKey(key, StateKeys.ENTROPY_POOL) then
+        // Entropy pool: 4 x 32-byte hashes
+        eta = decodeEntropyPool(value)
+      else if isSimpleKey(key, StateKeys.CURRENT_VALIDATORS) then
+        // Current validators (kappa)
+        kappa = decodeValidatorList(value, config.validatorCount)
+      else if isSimpleKey(key, StateKeys.PREVIOUS_VALIDATORS) then
+        // Previous validators (lambda)
+        lambda = decodeValidatorList(value, config.validatorCount)
+      else if isSimpleKey(key, StateKeys.VALIDATOR_QUEUE) then
+        // Pending validators (iota)
+        iota = decodeValidatorList(value, config.validatorCount)
+      else if isSimpleKey(key, StateKeys.SAFROLE_STATE) then
+        // Safrole gamma state (gamma_k, gamma_z, gamma_s, gamma_a)
+        val (decoded, _) = decodeSafroleGammaState(value, config.validatorCount, config.epochLength)
+        gammaK = decoded.gammaK
+        gammaA = decoded.gammaA
+        gammaS = decoded.gammaS
+        gammaZ = decoded.gammaZ
 
     SafroleState(tau, eta, lambda, kappa, gammaK, iota, gammaA, gammaS, gammaZ, postOffenders)
 

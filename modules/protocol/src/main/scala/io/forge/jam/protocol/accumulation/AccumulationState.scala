@@ -260,21 +260,23 @@ object AccumulationServiceItem:
     for
       id <- cursor.get[Long]("id")
       data <- cursor.get[AccumulationServiceData]("data")
-    yield AccumulationServiceItem(id, data)
+    // Ensure service ID is treated as unsigned 32-bit
+    yield AccumulationServiceItem(id & 0xFFFFFFFFL, data)
   }
 
 /**
  * Ready record containing a work report and its dependencies.
  * Used in test vector state serialization.
+ * Dependencies are work-package hashes (32 bytes each).
  */
 final case class AccumulationReadyRecord(
   report: WorkReport,
-  dependencies: List[JamBytes]
+  dependencies: List[Hash]
 )
 
 object AccumulationReadyRecord:
   given Codec[AccumulationReadyRecord] =
-    (summon[Codec[WorkReport]] :: JamCodecs.compactPrefixedList(summon[Codec[JamBytes]])).xmap(
+    (summon[Codec[WorkReport]] :: JamCodecs.compactPrefixedList(JamCodecs.hashCodec)).xmap(
       { case (report, dependencies) => AccumulationReadyRecord(report, dependencies) },
       r => (r.report, r.dependencies)
     )
@@ -284,7 +286,7 @@ object AccumulationReadyRecord:
     for
       report <- cursor.get[WorkReport]("report")
       dependencies <- cursor.get[List[String]]("dependencies")
-    yield AccumulationReadyRecord(report, dependencies.map(h => JamBytes(parseHex(h))))
+    yield AccumulationReadyRecord(report, dependencies.map(h => Hash(parseHex(h))))
   }
 
 /**
@@ -319,7 +321,7 @@ final case class AccumulationState(
       slot = slot,
       entropy = JamBytes(entropy.toArray),
       readyQueue =
-        readyQueue.map(_.map(r => AccumulationReadyRecord(r.report, r.dependencies.map(d => JamBytes(d.toArray))))),
+        readyQueue.map(_.map(r => AccumulationReadyRecord(r.report, r.dependencies.map(d => Hash(d.bytes))))),
       accumulated = accumulated.map(_.map(h => JamBytes(h.toArray))),
       privileges = privileges.copy(),
       statistics = statistics.map(_.copy()),
@@ -330,8 +332,14 @@ final case class AccumulationState(
 
   /**
    * Convert to PartialState for PVM execution.
+   *
+   * @param initStagingSet Initial staging set (validator queue) as list of 336-byte JamBytes
+   * @param initAuthQueues Initial authorization queues per core as list of lists of 32-byte hashes
    */
-  def toPartialState(): PartialState =
+  def toPartialState(
+    initStagingSet: List[JamBytes] = List.empty,
+    initAuthQueues: List[List[JamBytes]] = List.empty
+  ): PartialState =
     PartialState(
       accounts = mutable.Map.from(accounts.map { item =>
         val preimagesMap = mutable.Map.from(item.data.preimages.map(p => p.hash -> p.blob))
@@ -348,8 +356,8 @@ final case class AccumulationState(
           lastAccumulated = item.data.service.lastAccumulationSlot
         )
       }),
-      stagingSet = mutable.ListBuffer.empty,
-      authQueue = mutable.ListBuffer.empty,
+      stagingSet = mutable.ListBuffer.from(initStagingSet),
+      authQueue = mutable.ListBuffer.from(initAuthQueues.map(q => mutable.ListBuffer.from(q))),
       manager = privileges.bless,
       assigners = mutable.ListBuffer.from(privileges.assign),
       delegator = privileges.designate,
@@ -458,11 +466,13 @@ object AccumulationInput:
  * @param ok The accumulation root hash
  * @param accumulationStats Per-service accumulation statistics: serviceId -> (gasUsed, workItemCount)
  * @param transferStats Per-service transfer statistics: serviceId -> (count, gasUsed)
+ * @param commitments Individual service commitments (service_id, hash) - stored in state for key 0x10
  */
 final case class AccumulationOutputData(
   ok: JamBytes,
   accumulationStats: Map[Long, (Long, Int)] = Map.empty,
-  transferStats: Map[Long, (Long, Long)] = Map.empty
+  transferStats: Map[Long, (Long, Long)] = Map.empty,
+  commitments: List[(Long, JamBytes)] = List.empty
 )
 
 object AccumulationOutputData:

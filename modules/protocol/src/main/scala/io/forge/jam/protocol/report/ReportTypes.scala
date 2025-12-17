@@ -78,6 +78,8 @@ object ReportTypes:
    * Service activity record for statistics.
    */
   final case class ServiceActivityRecord(
+    providedCount: Int = 0,
+    providedSize: Long = 0,
     refinementCount: Long = 0,
     refinementGasUsed: Long = 0,
     extrinsicCount: Long = 0,
@@ -92,17 +94,21 @@ object ReportTypes:
     given Codec[ServiceActivityRecord] =
       (JamCodecs.compactInteger :: JamCodecs.compactInteger :: JamCodecs.compactInteger ::
        JamCodecs.compactInteger :: JamCodecs.compactInteger :: JamCodecs.compactInteger ::
+       JamCodecs.compactInteger :: JamCodecs.compactInteger ::
        JamCodecs.compactInteger :: JamCodecs.compactInteger).xmap(
-        { case (refinementCount, refinementGasUsed, extrinsicCount, extrinsicSize, imports, exports, accumulateCount, accumulateGasUsed) =>
-          ServiceActivityRecord(refinementCount, refinementGasUsed, extrinsicCount, extrinsicSize, imports, exports, accumulateCount, accumulateGasUsed)
+        { case (providedCount, providedSize, refinementCount, refinementGasUsed, extrinsicCount, extrinsicSize, imports, exports, accumulateCount, accumulateGasUsed) =>
+          ServiceActivityRecord(providedCount.toInt, providedSize, refinementCount, refinementGasUsed, extrinsicCount, extrinsicSize, imports, exports, accumulateCount, accumulateGasUsed)
         },
-        record => (record.refinementCount, record.refinementGasUsed, record.extrinsicCount, record.extrinsicSize,
-                   record.imports, record.exports, record.accumulateCount, record.accumulateGasUsed)
+        record => (record.providedCount.toLong, record.providedSize, record.refinementCount, record.refinementGasUsed,
+                   record.extrinsicCount, record.extrinsicSize, record.imports, record.exports,
+                   record.accumulateCount, record.accumulateGasUsed)
       )
 
     given Decoder[ServiceActivityRecord] =
       Decoder.instance { cursor =>
         for
+          providedCount <- cursor.getOrElse[Int]("provided_count")(0)
+          providedSize <- cursor.getOrElse[Long]("provided_size")(0)
           refinementCount <- cursor.getOrElse[Long]("refinement_count")(0)
           refinementGasUsed <- cursor.getOrElse[Long]("refinement_gas_used")(0)
           extrinsicCount <- cursor.getOrElse[Long]("extrinsic_count")(0)
@@ -112,6 +118,8 @@ object ReportTypes:
           accumulateCount <- cursor.getOrElse[Long]("accumulate_count")(0)
           accumulateGasUsed <- cursor.getOrElse[Long]("accumulate_gas_used")(0)
         yield ServiceActivityRecord(
+          providedCount,
+          providedSize,
           refinementCount,
           refinementGasUsed,
           extrinsicCount,

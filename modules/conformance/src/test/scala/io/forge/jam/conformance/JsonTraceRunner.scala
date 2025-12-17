@@ -127,7 +127,7 @@ class JsonTraceRunner(
     val traceId = traceDir.getFileName.toString
     val jsonFiles = Option(traceDir.toFile.listFiles())
       .getOrElse(Array.empty[File])
-      .filter(f => f.isFile && f.getName.endsWith(".json"))
+      .filter(f => f.isFile && f.getName.endsWith(".json") && f.getName != "genesis.json")
       .sortBy(_.getName)
       .toList
 
@@ -206,9 +206,16 @@ class JsonTraceRunner(
             )
 
         case ImportResult.Failure(error, message) =>
-          if verbose then
-            println(s"  [$fileName] ERROR - import failed: $error - $message")
-          JsonTraceResult.Error(effectiveTraceId, fileName, s"Import failed: $error - $message")
+          // If post_state == pre_state, the test expects block rejection (no state change)
+          // In this case, a "failure" with unchanged state is actually correct
+          if traceStep.postState.stateRoot == traceStep.preState.stateRoot then
+            if verbose then
+              println(s"  [$fileName] PASS - block rejected as expected ($error)")
+            JsonTraceResult.Success(effectiveTraceId, fileName, slot)
+          else
+            if verbose then
+              println(s"  [$fileName] ERROR - import failed: $error - $message")
+            JsonTraceResult.Error(effectiveTraceId, fileName, s"Import failed: $error - $message")
 
     catch
       case e: Exception =>
@@ -249,7 +256,16 @@ class JsonTraceRunner(
         val actBytes = actualMap(k)
         val firstDiffPos = expBytes.zip(actBytes).indexWhere { case (e, a) => e != a }
         if firstDiffPos >= 0 then
-          sb.append(s" firstDiff@byte${firstDiffPos / 2}")
+          val bytePos = firstDiffPos / 2
+          sb.append(s" firstDiff@byte$bytePos")
+          // Show first 64 bytes of expected and actual
+          sb.append(s"\n      expected[0..64]: ${expBytes.take(128)}")
+          sb.append(s"\n      actual[0..64]:   ${actBytes.take(128)}")
+          // Also show bytes around the diff location
+          val contextStart = Math.max(0, firstDiffPos - 32)
+          val contextEnd = Math.min(expBytes.length, firstDiffPos + 32)
+          sb.append(s"\n      expected[${contextStart/2}..${contextEnd/2}]: ${expBytes.slice(contextStart, contextEnd)}")
+          sb.append(s"\n      actual[${contextStart/2}..${contextEnd/2}]:   ${actBytes.slice(contextStart, contextEnd)}")
       }
 
     if sb.isEmpty then "no differences detected (root mismatch may be encoding issue)"

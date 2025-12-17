@@ -25,15 +25,16 @@ else if (osName.contains("linux")) "so"
 else if (osName.contains("win")) "dll"
 else "dylib"
 
-// Task keys for building native libraries (defined before use)
 lazy val buildNativeLib = taskKey[Unit]("Build native Bandersnatch VRF library")
 lazy val buildEd25519ZebraLib = taskKey[Unit]("Build native Ed25519-Zebra library")
+lazy val benchmark = taskKey[Unit]("Run benchmark tests")
 
 lazy val root = (project in file("."))
   .aggregate(core, crypto, pvm, protocol, conformance)
   .settings(
     name := "jam",
-    publish / skip := true
+    publish / skip := true,
+    benchmark := (protocol / Test / runMain).toTask(" io.forge.jam.protocol.benchmark.TracesBenchmark").value
   )
 
 lazy val core = (project in file("modules/core"))
@@ -75,7 +76,6 @@ lazy val crypto = (project in file("modules/crypto"))
       "-unchecked",
       "-language:implicitConversions"
     ),
-    // Native library build task implementation
     buildNativeLib := {
       val baseDir = (ThisBuild / baseDirectory).value
       val rustProjectDir = baseDir / "modules" / "crypto" / "native" / "bandersnatch-vrfs-wrapper"
@@ -161,7 +161,8 @@ lazy val crypto = (project in file("modules/crypto"))
     Test / baseDirectory := (ThisBuild / baseDirectory).value,
     Test / javaOptions ++= Seq(
       s"-Djava.library.path=${(ThisBuild / baseDirectory).value}/modules/crypto/native/build/$osDirName:${(ThisBuild / baseDirectory).value}/modules/crypto/src/main/resources",
-      s"-Djam.base.dir=${(ThisBuild / baseDirectory).value}"
+      s"-Djam.base.dir=${(ThisBuild / baseDirectory).value}",
+      "--enable-native-access=ALL-UNNAMED"
     )
   )
 
@@ -218,7 +219,8 @@ lazy val protocol = (project in file("modules/protocol"))
     Test / baseDirectory := (ThisBuild / baseDirectory).value,
     Test / javaOptions ++= Seq(
       s"-Djava.library.path=${(ThisBuild / baseDirectory).value}/modules/crypto/native/build/$osDirName:${(ThisBuild / baseDirectory).value}/modules/crypto/src/main/resources",
-      s"-Djam.base.dir=${(ThisBuild / baseDirectory).value}"
+      s"-Djam.base.dir=${(ThisBuild / baseDirectory).value}",
+      "--enable-native-access=ALL-UNNAMED"
     )
   )
 
@@ -249,9 +251,11 @@ lazy val conformance = (project in file("modules/conformance"))
     ),
     Test / fork := true,
     Test / baseDirectory := (ThisBuild / baseDirectory).value,
+    Test / envVars ++= sys.env.get("LOG_LEVEL").map("LOG_LEVEL" -> _).toMap,
     Test / javaOptions ++= Seq(
       s"-Djava.library.path=${(ThisBuild / baseDirectory).value}/modules/crypto/native/build/$osDirName:${(ThisBuild / baseDirectory).value}/modules/crypto/src/main/resources",
-      s"-Djam.base.dir=${(ThisBuild / baseDirectory).value}"
+      s"-Djam.base.dir=${(ThisBuild / baseDirectory).value}",
+      "--enable-native-access=ALL-UNNAMED"
     ),
     // Assembly settings for creating fat JAR
     assembly / mainClass := Some("io.forge.jam.conformance.ConformanceServerApp"),

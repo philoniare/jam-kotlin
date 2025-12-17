@@ -19,7 +19,6 @@ import scala.collection.mutable
  * @param gasLimit Gas limit for accumulation
  * @param authTrace Authorizer trace output (variable length)
  * @param result Refinement result (blob or error)
- * @param codeHash Code hash from work result for preimage lookup (32 bytes)
  */
 final case class OperandTuple(
   packageHash: JamBytes,
@@ -28,8 +27,7 @@ final case class OperandTuple(
   payloadHash: JamBytes,
   gasLimit: Long,
   authTrace: JamBytes,
-  result: ExecutionResult,
-  codeHash: JamBytes
+  result: ExecutionResult
 )
 
 /**
@@ -73,9 +71,14 @@ object AccumulationOperand:
         case ExecutionResult.Ok(output) =>
           val len = JamCodecs.encodeCompactInteger(output.length.toLong)
           Array[Byte](0) ++ len ++ output.toArray // Tag 0 for Success (UInt8)
-        case ExecutionResult.Panic =>
-          Array[Byte](2) // Tag 2 for Panic (UInt8)
+        case ExecutionResult.OOG => Array[Byte](1)
+        case ExecutionResult.Panic => Array[Byte](2)
+        case ExecutionResult.BadExports => Array[Byte](3)
+        case ExecutionResult.Oversize => Array[Byte](4)
+        case ExecutionResult.BadCode => Array[Byte](5)
+        case ExecutionResult.CodeTooLarge => Array[Byte](6)
 
+      // Swift order: packageHash, segroot, authorizer, payloadHash, gasLimit, workResult, authorizerTrace
       val authTraceLen = JamCodecs.encodeCompactInteger(op.authTrace.length.toLong)
       variant ++
         op.packageHash.toArray ++ op.segmentRoot.toArray ++ op.authorizerHash.toArray ++

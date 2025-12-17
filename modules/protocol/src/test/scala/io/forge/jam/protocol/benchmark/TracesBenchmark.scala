@@ -1,6 +1,5 @@
-package io.forge.jam.protocol.traces
+package io.forge.jam.protocol.benchmark
 
-import org.scalatest.funsuite.AnyFunSuite
 import io.forge.jam.core.{ChainConfig, JamBytes}
 import io.forge.jam.core.primitives.Hash
 import io.forge.jam.core.types.block.Block
@@ -9,6 +8,7 @@ import io.forge.jam.protocol.TestFileLoader
 import io.forge.jam.protocol.safrole.SafroleTypes.*
 import io.forge.jam.protocol.safrole.SafroleTransition
 import io.forge.jam.protocol.state.JamState
+import io.forge.jam.protocol.traces.{TraceStep, Genesis, FullJamState, InputExtractor, BlockImporter}
 import io.circe.Decoder
 
 // Import all JSON decoders from core types
@@ -58,7 +58,7 @@ import io.forge.jam.core.types.block.Block.given
 /**
  * Standalone benchmark for JAM trace processing.
  *
- * Run with: sbt "protocol/testOnly io.forge.jam.protocol.traces.TracesBenchmark"
+ * Run with: sbt benchmark
  *
  * Trace types:
  * - fallback: No work reports. No safrole (uses fallback key mode)
@@ -66,14 +66,7 @@ import io.forge.jam.core.types.block.Block.given
  * - storage: At most 5 storage-related work items per report. No Safrole.
  * - storage_light: Like storage but with at most 1 work item per report.
  */
-class TracesBenchmark extends AnyFunSuite:
-  import TracesBenchmarkApp.*
-
-  test("benchmark all traces") {
-    TracesBenchmarkApp.runBenchmark()
-  }
-
-object TracesBenchmarkApp:
+object TracesBenchmark:
   // Suppress all logging before any logger initialization
   System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "OFF")
   System.setProperty("logback.statusListenerClass", "ch.qos.logback.core.status.NopStatusListener")
@@ -100,12 +93,12 @@ object TracesBenchmarkApp:
         logback.setLevel(ch.qos.logback.classic.Level.OFF)
       case _ => // ignore
 
-  def runBenchmark(): Unit =
+  def main(args: Array[String]): Unit =
     suppressLogging()
 
     if !TestFileLoader.canLocateTestVectors then
       println("ERROR: Test vectors not available")
-      return
+      System.exit(1)
 
     val traces = List("fallback", "safrole", "storage", "storage_light")
 

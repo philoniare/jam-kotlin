@@ -334,7 +334,8 @@ object ReportTransition:
 
   private def validateWorkResults(workReport: WorkReport, accounts: List[ServiceAccount]): ValidationResult =
     for result <- workReport.results do
-      accounts.find(_.id == result.serviceId.toInt) match
+      // Use toLong to preserve unsigned 32-bit service ID values
+      accounts.find(_.id == (result.serviceId.toInt.toLong & 0xFFFFFFFFL)) match
         case None => return Left(ReportErrorCode.BadServiceId)
         case Some(account) =>
           if result.codeHash != account.data.service.codeHash then
@@ -490,7 +491,8 @@ object ReportTransition:
       yield result
 
     allResults
-      .groupMapReduce(_.serviceId.toInt.toLong)(computeServiceStats)(mergeServiceStats)
+      // Use & 0xFFFFFFFFL to preserve unsigned 32-bit service ID values
+      .groupMapReduce(r => r.serviceId.toInt.toLong & 0xFFFFFFFFL)(computeServiceStats)(mergeServiceStats)
       .map { case (id, record) => ServiceStatisticsEntry(id, record) }
       .toList
       .sortBy(_.id)

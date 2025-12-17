@@ -6,22 +6,16 @@ import io.forge.jam.core.primitives.Hash
 import io.forge.jam.core.types.service.ServiceInfo
 import spire.math.ULong
 
-import java.nio.{ByteBuffer, ByteOrder}
 import scala.collection.mutable
 
 /**
  * Handles host calls during accumulation PVM execution.
- *
- * @param context The accumulation context managing dual state (x for normal, y for checkpoint)
- * @param operands The list of accumulation operands (work items and transfers)
- * @param config The chain configuration
  */
 class AccumulationHostCalls(
   val context: AccumulationContext,
   val operands: List[AccumulationOperand],
   val config: ChainConfig
 ):
-
   /**
    * Get register value from PVM instance as ULong.
    * Gray Paper register mapping: r7=A0 (first arg/return), r8=A1, r9=A2, r10=A3, r11=A4, r12=A5
@@ -346,7 +340,6 @@ class AccumulationHostCalls(
         acc.storage.remove(key)
         context.x.rawServiceDataByStateKey.remove(stateKey)
     else
-      // Write new value to both in-memory storage and raw service data
       acc.storage(key) = newValue.get
       context.x.rawServiceDataByStateKey(stateKey) = newValue.get
 
@@ -527,7 +520,7 @@ class AccumulationHostCalls(
    * designate (16): Set validator queue (privileged).
    * Panics if memory is not readable.
    * Returns HUH if caller is not the delegator.
-   * Returns OK on success.
+   * Returns OK on success and updates stagingSet with the new validator keys.
    */
   private def handleDesignate(instance: PvmInstance): Unit =
     val startAddr = getReg(instance, 7).toInt
@@ -543,8 +536,19 @@ class AccumulationHostCalls(
       setReg(instance, 7, HostCallResult.HUH)
       return
 
-    // Read validator keys from memory (we don't actually need to parse them for now,
-    // just verify memory is readable and caller has permission)
+    // Read validator keys from memory and update stagingSet
+    val newStagingSet = mutable.ListBuffer[JamBytes]()
+    for i <- 0 until config.validatorCount do
+      val offset = i * validatorKeySize
+      val keyBuffer = new Array[Byte](validatorKeySize)
+      if !readMemory(instance, startAddr + offset, keyBuffer) then
+        throw new RuntimeException(s"Designate PANIC: Failed to read validator key $i from memory")
+      newStagingSet += JamBytes(keyBuffer)
+
+    // Update the staging set in context
+    context.x.stagingSet.clear()
+    context.x.stagingSet ++= newStagingSet
+
     setReg(instance, 7, HostCallResult.OK)
 
   /**
@@ -682,10 +686,14 @@ class AccumulationHostCalls(
     // Update nextAccountIndex for next NEW call (ONLY if not using registrar privilege)
     if context.serviceIndex != context.x.registrar || requestedServiceId >= minPublicServiceIndex then
       val s = minPublicServiceIndex
-      val left = (context.nextAccountIndex - s + 42).toInt & 0xffffffff
-      val right = (0xffffffffL - s.toInt - 255).toInt & 0xffffffff
-      val nextCandidate = s + (left.toLong % right.toLong)
-      context.nextAccountIndex = findAvailableServiceIndex(nextCandidate, s)
+      // Calculate next candidate index per Gray Paper:
+      // i^* = check(Cminpublicindex + (nextfreeid - Cminpublicindex + 42) mod (2^32 - Cminpublicindex - 2^8))
+      // Use Long arithmetic throughout to avoid overflow
+      val left = (context.nextAccountIndex - s + 42) & 0xffffffffL
+      val modValue = 0xffffffffL - s - 255 // 2^32 - Cminpublicindex - 2^8
+      val nextCandidate = s + (left % modValue)
+      val newNextAccountIndex = findAvailableServiceIndex(nextCandidate, s)
+      context.nextAccountIndex = newNextAccountIndex
 
     setReg(instance, 7, ULong(newServiceId))
 
@@ -696,7 +704,6 @@ class AccumulationHostCalls(
     val ejectServiceId = getReg(instance, 7).toLong
     val preimageHashAddr = getReg(instance, 8).toInt
 
-    // 1. Read 32-byte preimage hash from memory - PANIC on failure
     val hashBuffer = new Array[Byte](32)
     if !readMemory(instance, preimageHashAddr, hashBuffer) then
       throw new RuntimeException("Eject PANIC: Failed to read preimage hash from memory")
@@ -706,7 +713,6 @@ class AccumulationHostCalls(
     // 2. Get target service account
     val ejectAccount = context.x.accounts.get(ejectServiceId)
 
-    // 3. Validate: target exists AND target != caller AND codeHash matches caller's ID
     val expectedCodeHash = encodeServiceIdAsCodeHash(context.serviceIndex)
     if ejectServiceId == context.serviceIndex then
       setReg(instance, 7, HostCallResult.WHO)
@@ -721,29 +727,41 @@ class AccumulationHostCalls(
       setReg(instance, 7, HostCallResult.WHO)
       return
 
-    // 4. Validate item count is exactly 2
     if acc.info.items != 2 then
       setReg(instance, 7, HostCallResult.HUH)
       return
 
-    // 5. Find preimage request by hash (ignoring length - the test data doesn't include length in preimageStatus)
-    val preimageEntry = acc.preimageRequests.find {
-      case (key, _) =>
-        JamBytes(key.hash.bytes.toArray) == preimageHash
-    }
-    val preimageRequest = preimageEntry.map(_._2)
-    if preimageRequest.isEmpty then
+    // 5. Find preimage request by hash AND derived length
+    // Per GP: l = max(81, octets) - 81 where octets is the service's totalByteLength
+    // Then look for (hash, l) in requests
+
+    val octets = acc.info.bytesUsed
+    val derivedLength = math.max(81L, octets) - 81L
+    val preimageKey = PreimageKey(Hash(preimageHash.toArray), derivedLength.toInt)
+    val preimageRequest = acc.preimageRequests.get(preimageKey)
+
+    val timeslots: List[Long] = preimageRequest match
+      case Some(req) =>
+        req.requestedAt
+      case None =>
+        val expectedKey = StateKey.computePreimageInfoStateKey(ejectServiceId, derivedLength.toInt, preimageHash)
+        val matchingInfoEntry = context.x.rawServiceDataByStateKey.find { case (key, _) =>
+          java.util.Arrays.equals(key.toArray, expectedKey.toArray)
+        }
+        matchingInfoEntry match
+          case Some((_, infoValue)) =>
+            StateKey.decodePreimageInfoValue(infoValue)
+          case None =>
+            setReg(instance, 7, HostCallResult.HUH)
+            return List.empty
+
+    if timeslots.size != 2 then
       setReg(instance, 7, HostCallResult.HUH)
       return
 
-    if preimageRequest.get.requestedAt.size != 2 then
-      setReg(instance, 7, HostCallResult.HUH)
-      return
-
-    // 6. Validate expunge period: requestedAt[1] < timeslot - expungePeriod
     val expungePeriod = config.preimageExpungePeriod
     val minHoldSlot = math.max(0L, context.timeslot - expungePeriod)
-    if preimageRequest.get.requestedAt(1) >= minHoldSlot then
+    if timeslots(1) >= minHoldSlot then
       setReg(instance, 7, HostCallResult.HUH)
       return
 
@@ -754,6 +772,20 @@ class AccumulationHostCalls(
     )
     context.x.accounts(context.serviceIndex) = callerAccount.copy(info = updatedCallerInfo)
     context.x.accounts.remove(ejectServiceId)
+
+    val serviceIdBytes = java.nio.ByteBuffer.allocate(4).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(ejectServiceId.toInt).array()
+    val keysToRemove = context.x.rawServiceDataByStateKey.keys.filter { key =>
+      key.length >= 8 &&
+        key.toArray(0) == serviceIdBytes(0) &&
+        key.toArray(2) == serviceIdBytes(1) &&
+        key.toArray(4) == serviceIdBytes(2) &&
+        key.toArray(6) == serviceIdBytes(3)
+    }.toList
+    keysToRemove.foreach(context.x.rawServiceDataByStateKey.remove)
+
+    // Also remove the service account key from rawServiceAccountsByStateKey
+    val serviceAccountKey = StateKey.computeServiceAccountKey(ejectServiceId)
+    context.x.rawServiceAccountsByStateKey.remove(serviceAccountKey)
 
     setReg(instance, 7, HostCallResult.OK)
 
@@ -1136,12 +1168,12 @@ class AccumulationHostCalls(
     setReg(instance, 7, HostCallResult.OK)
 
   /**
-   * log (100): Debug logging host call
-   * This is a no-op for production but allows the test service to output debug info.
+   * log (100): Debug logging host call (JIP-1)
+   * Gas cost: 0, Output registers: None (no registers modified)
    */
   private def handleLog(instance: PvmInstance): Unit =
-    // Log is a no-op - just for debugging purposes
-    // No return value set, execution continues
+    // JIP-1: No output registers, no side effects for conformance testing
+    // Just a no-op that doesn't modify any registers
     ()
 
   /**

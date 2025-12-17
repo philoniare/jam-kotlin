@@ -68,19 +68,34 @@ object work:
     }
 
   /**
-   * Execution result - either Ok with output data or Panic.
+   * Execution result - either Ok with output data or an error.
    *
-   * Encoding:
+   * Encoding per Gray Paper:
    * - Ok: 0x00 + compact length prefix + data bytes
+   * - OOG (Out of Gas): 0x01
    * - Panic: 0x02
+   * - BadExports: 0x03
+   * - Oversize: 0x04
+   * - BadCode: 0x05
+   * - CodeTooLarge: 0x06
    */
   enum ExecutionResult:
     case Ok(output: JamBytes)
-    case Panic
+    case OOG           // Out of gas
+    case Panic         // Panic during execution
+    case BadExports    // Wrong number of exports
+    case Oversize      // Output too large
+    case BadCode       // Invalid code (BAD)
+    case CodeTooLarge  // Code too large (BIG)
 
   object ExecutionResult:
     private val OkTag: Byte = 0x00
+    private val OOGTag: Byte = 0x01
     private val PanicTag: Byte = 0x02
+    private val BadExportsTag: Byte = 0x03
+    private val OversizeTag: Byte = 0x04
+    private val BadCodeTag: Byte = 0x05
+    private val CodeTooLargeTag: Byte = 0x06
 
     given Codec[ExecutionResult] = new Codec[ExecutionResult]:
       override def sizeBound: SizeBound = SizeBound.unknown
@@ -92,8 +107,12 @@ object work:
             lengthBits <- compactInteger.encode(output.length.toLong)
             dataBits <- bytes.encode(output.toByteVector)
           yield prefix ++ lengthBits ++ dataBits
-        case ExecutionResult.Panic =>
-          byte.encode(PanicTag)
+        case ExecutionResult.OOG => byte.encode(OOGTag)
+        case ExecutionResult.Panic => byte.encode(PanicTag)
+        case ExecutionResult.BadExports => byte.encode(BadExportsTag)
+        case ExecutionResult.Oversize => byte.encode(OversizeTag)
+        case ExecutionResult.BadCode => byte.encode(BadCodeTag)
+        case ExecutionResult.CodeTooLarge => byte.encode(CodeTooLargeTag)
 
       override def decode(bits: BitVector): Attempt[DecodeResult[ExecutionResult]] =
         byte.decode(bits).flatMap { result =>
@@ -104,11 +123,20 @@ object work:
                   DecodeResult(ExecutionResult.Ok(JamBytes.fromByteVector(dataResult.value)), dataResult.remainder)
                 }
               }
+            case OOGTag =>
+              Attempt.successful(DecodeResult(ExecutionResult.OOG, result.remainder))
             case PanicTag =>
               Attempt.successful(DecodeResult(ExecutionResult.Panic, result.remainder))
-            case _ =>
-              // Unknown tag, treat as Panic for robustness
-              Attempt.successful(DecodeResult(ExecutionResult.Panic, result.remainder))
+            case BadExportsTag =>
+              Attempt.successful(DecodeResult(ExecutionResult.BadExports, result.remainder))
+            case OversizeTag =>
+              Attempt.successful(DecodeResult(ExecutionResult.Oversize, result.remainder))
+            case BadCodeTag =>
+              Attempt.successful(DecodeResult(ExecutionResult.BadCode, result.remainder))
+            case CodeTooLargeTag =>
+              Attempt.successful(DecodeResult(ExecutionResult.CodeTooLarge, result.remainder))
+            case other =>
+              Attempt.failure(Err(s"Unknown ExecutionResult tag: $other"))
         }
 
     given Decoder[ExecutionResult] = Decoder.instance { cursor =>
@@ -117,7 +145,13 @@ object work:
       Right(ok match
         case Some(data) => ExecutionResult.Ok(JamBytes(parseHex(data)))
         case None => err match
-          case Some(_) => ExecutionResult.Panic
+          case Some(1) => ExecutionResult.OOG
+          case Some(2) => ExecutionResult.Panic
+          case Some(3) => ExecutionResult.BadExports
+          case Some(4) => ExecutionResult.Oversize
+          case Some(5) => ExecutionResult.BadCode
+          case Some(6) => ExecutionResult.CodeTooLarge
+          case Some(_) => ExecutionResult.Panic  // Unknown error code, default to Panic
           case None => ExecutionResult.Ok(JamBytes.empty)
       )
     }

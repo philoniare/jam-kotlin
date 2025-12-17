@@ -1,5 +1,7 @@
 package io.forge.jam.protocol.pipeline
 
+import cats.data.StateT
+import io.forge.jam.core.JamBytes
 import io.forge.jam.core.primitives.Hash
 import io.forge.jam.core.types.workpackage.WorkReport
 import io.forge.jam.crypto.{BandersnatchVrf, SigningContext}
@@ -25,55 +27,60 @@ object IntermediateSteps:
 
     val slotIndex = (block.header.slot.value.toInt % config.epochLength)
     val authorIndex = block.header.authorIndex.value.toInt
-    val blockAuthorKey = state.validators.current(authorIndex).bandersnatch
 
-    // Get entropy eta3 for VRF input (use post-state entropy)
-    val entropy = if state.entropy.pool.length > 3
-      then state.entropy.pool(3).bytes
-      else new Array[Byte](32)
+    // Bounds check for author index
+    if authorIndex < 0 || authorIndex >= state.validators.current.length then
+      Left(PipelineError.HeaderVerificationErr(s"InvalidAuthorIndex: $authorIndex >= ${state.validators.current.length}"))
+    else
+      val blockAuthorKey = state.validators.current(authorIndex).bandersnatch
 
-    // Encode header for aux data (unsigned header = full header minus 96-byte seal at the end)
-    val fullHeaderBytes = summon[Codec[io.forge.jam.core.types.header.Header]].encode(block.header).require.bytes.toArray
-    val encodedHeader = fullHeaderBytes.dropRight(96)
+      // Get entropy eta3 for VRF input (use post-state entropy)
+      val entropy = if state.entropy.pool.length > 3
+        then state.entropy.pool(3).bytes
+        else new Array[Byte](32)
 
-    state.gamma.s match
-      case TicketsOrKeys.Keys(keys) =>
-        // Fallback keys mode: verify key matches AND verify seal signature
-        val expectedKey = keys(slotIndex)
-        if !java.util.Arrays.equals(expectedKey.bytes, blockAuthorKey.bytes) then
-          Left(PipelineError.HeaderVerificationErr("UnexpectedAuthor"))
-        else
-          val vrfInput = SigningContext.fallbackSealInputData(entropy)
+      // Encode header for aux data (unsigned header = full header minus 96-byte seal at the end)
+      val fullHeaderBytes = summon[Codec[io.forge.jam.core.types.header.Header]].encode(block.header).require.bytes.toArray
+      val encodedHeader = fullHeaderBytes.dropRight(96)
+
+      state.gamma.s match
+        case TicketsOrKeys.Keys(keys) =>
+          // Fallback keys mode: verify key matches AND verify seal signature
+          val expectedKey = keys(slotIndex)
+          if !java.util.Arrays.equals(expectedKey.bytes, blockAuthorKey.bytes) then
+            Left(PipelineError.HeaderVerificationErr("UnexpectedAuthor"))
+          else
+            val vrfInput = SigningContext.fallbackSealInputData(entropy)
+            val vrfResult = BandersnatchVrf.ietfVrfVerify(
+              blockAuthorKey.bytes,
+              vrfInput,
+              encodedHeader,
+              block.header.seal.toArray
+            )
+            if vrfResult.isEmpty then
+              Left(PipelineError.InvalidBlockSeal)
+            else
+              Right(())
+
+        case TicketsOrKeys.Tickets(tickets) =>
+          // Tickets mode: verify VRF and check ticket.id == vrfOutput
+          val ticket = tickets(slotIndex)
+          val vrfInput = SigningContext.safroleTicketInputData(entropy, ticket.attempt.toByte)
+
           val vrfResult = BandersnatchVrf.ietfVrfVerify(
             blockAuthorKey.bytes,
             vrfInput,
             encodedHeader,
             block.header.seal.toArray
           )
-          if vrfResult.isEmpty then
-            Left(PipelineError.InvalidBlockSeal)
-          else
-            Right(())
 
-      case TicketsOrKeys.Tickets(tickets) =>
-        // Tickets mode: verify VRF and check ticket.id == vrfOutput
-        val ticket = tickets(slotIndex)
-        val vrfInput = SigningContext.safroleTicketInputData(entropy, ticket.attempt.toByte)
-
-        val vrfResult = BandersnatchVrf.ietfVrfVerify(
-          blockAuthorKey.bytes,
-          vrfInput,
-          encodedHeader,
-          block.header.seal.toArray
-        )
-
-        vrfResult match
-          case None => Left(PipelineError.InvalidBlockSeal)
-          case Some(vrfOutput) =>
-            if !java.util.Arrays.equals(ticket.id.toArray, vrfOutput) then
-              Left(PipelineError.HeaderVerificationErr("InvalidAuthorTicket"))
-            else
-              Right(())
+          vrfResult match
+            case None => Left(PipelineError.InvalidBlockSeal)
+            case Some(vrfOutput) =>
+              if !java.util.Arrays.equals(ticket.id.toArray, vrfOutput) then
+                Left(PipelineError.HeaderVerificationErr("InvalidAuthorTicket"))
+              else
+                Right(())
   }
 
   /**
@@ -135,6 +142,22 @@ object IntermediateSteps:
    */
   def storeAccumulationStats(stats: Map[Long, (Long, Int)]): StfStep =
     modifyContext(_.copy(accumulationStats = stats))
+
+  /**
+   * Store last accumulation outputs (commitments) in state.
+   */
+  def storeLastAccumulationOutputs(commitments: List[(Long, JamBytes)]): StfStep =
+    modifyState { (state, _) =>
+      state.focus(_.lastAccumulationOutputs).replace(commitments)
+    }
+
+  /**
+   * Capture pre-accumulation rawServiceDataByStateKey for preimages validation.
+   * Per GP §12.1, preimages validation uses the state before accumulation.
+   */
+  val capturePreAccumulationState: StfStep = StateT { case (state, ctx) =>
+    Right(((state, ctx.copy(preAccumulationRawServiceData = Some(state.rawServiceDataByStateKey))), ()))
+  }
 
   /**
    * Temporarily set tau to pre-transition value for Statistics.

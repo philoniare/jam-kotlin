@@ -117,11 +117,30 @@ object epoch:
     ed25519: Ed25519PublicKey,
     bls: BlsPublicKey,
     metadata: JamBytes
-  )
+  ):
+    /** Serialize to JamBytes (336 bytes) */
+    def toJamBytes: JamBytes =
+      val buffer = new Array[Byte](ValidatorKey.Size)
+      System.arraycopy(bandersnatch.bytes, 0, buffer, 0, BandersnatchPublicKey.Size)
+      System.arraycopy(ed25519.bytes, 0, buffer, 32, Ed25519PublicKey.Size)
+      System.arraycopy(bls.bytes, 0, buffer, 64, BlsPublicKey.Size)
+      System.arraycopy(metadata.toArray, 0, buffer, 208, ValidatorKey.MetadataSize)
+      JamBytes(buffer)
 
   object ValidatorKey:
     val Size: Int = 336 // 32 + 32 + 144 + 128
     val MetadataSize: Int = 128
+
+    /** Deserialize from JamBytes (336 bytes) */
+    def fromJamBytes(jb: JamBytes): ValidatorKey =
+      require(jb.length == Size, s"ValidatorKey requires $Size bytes, got ${jb.length}")
+      val arr = jb.toArray
+      ValidatorKey(
+        bandersnatch = BandersnatchPublicKey(arr.slice(0, 32)),
+        ed25519 = Ed25519PublicKey(arr.slice(32, 64)),
+        bls = BlsPublicKey(arr.slice(64, 208)),
+        metadata = JamBytes(arr.slice(208, 336))
+      )
 
     given Codec[ValidatorKey] =
       (bandersnatchKeyCodec :: ed25519KeyCodec :: blsKeyCodec :: fixedSizeBytes(128L, bytes)).xmap(

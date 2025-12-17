@@ -72,9 +72,11 @@ class AccumulationTest extends AnyFunSuite with Matchers:
         fail(s"Failed to load test case $testCaseName: $error")
       case Right(testCase) =>
         // Test state transition
-        val (postState, output) = AccumulationTransition.stfInternal(
+        val (postState, _, _, output) = AccumulationTransition.stfInternal(
           testCase.input,
           testCase.preState,
+          List.empty, // initStagingSet - not part of accumulation test vectors
+          List.empty, // initAuthQueues - not part of accumulation test vectors
           TinyConfig
         )
 
@@ -104,9 +106,11 @@ class AccumulationTest extends AnyFunSuite with Matchers:
         case Right(testCase) =>
           try
             // Test state transition
-            val (postState, output) = AccumulationTransition.stfInternal(
+            val (postState, _, _, output) = AccumulationTransition.stfInternal(
               testCase.input,
               testCase.preState,
+              List.empty, // initStagingSet - not part of accumulation test vectors
+              List.empty, // initAuthQueues - not part of accumulation test vectors
               TinyConfig
             )
 
@@ -144,9 +148,11 @@ class AccumulationTest extends AnyFunSuite with Matchers:
       case Left(error) =>
         fail(s"Failed to load test case: $error")
       case Right(testCase) =>
-        val (postState, _) = AccumulationTransition.stfInternal(
+        val (postState, _, _, _) = AccumulationTransition.stfInternal(
           testCase.input,
           testCase.preState,
+          List.empty,
+          List.empty,
           TinyConfig
         )
 
@@ -166,9 +172,11 @@ class AccumulationTest extends AnyFunSuite with Matchers:
       case Left(error) =>
         fail(s"Failed to load test case: $error")
       case Right(testCase) =>
-        val (postState, _) = AccumulationTransition.stfInternal(
+        val (postState, _, _, _) = AccumulationTransition.stfInternal(
           testCase.input,
           testCase.preState,
+          List.empty,
+          List.empty,
           TinyConfig
         )
 
@@ -356,8 +364,8 @@ class AccumulationTest extends AnyFunSuite with Matchers:
 
   test("trace single test case for debugging") {
     val folderPath = "stf/accumulate/tiny"
-    // Use first test case that actually has PVM execution
-    val testCaseName = "accumulate_ready_queued_reports-1"
+    // Set the test case name to debug a specific case
+    val testCaseName = "process_one_immediate_report-1"
     val testDataResult = TestFileLoader.loadJsonFromTestVectors[AccumulationCase](folderPath, testCaseName)
 
     testDataResult match
@@ -367,9 +375,11 @@ class AccumulationTest extends AnyFunSuite with Matchers:
         // Enable tracing to file
         PvmTraceWriter.enable("../scala_pvm_trace.txt")
         try
-          val (postState, output) = AccumulationTransition.stfInternal(
+          val (postState, _, _, output) = AccumulationTransition.stfInternal(
             testCase.input,
             testCase.preState,
+            List.empty,
+            List.empty,
             TinyConfig
           )
 
@@ -402,9 +412,11 @@ class AccumulationTest extends AnyFunSuite with Matchers:
           fail(s"Failed to load test case $testCaseName: $error")
         case Right(testCase) =>
           try
-            val (postState, output) = AccumulationTransition.stfInternal(
+            val (postState, _, _, output) = AccumulationTransition.stfInternal(
               testCase.input,
               testCase.preState,
+              List.empty,
+              List.empty,
               FullConfig
             )
 

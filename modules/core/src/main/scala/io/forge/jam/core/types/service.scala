@@ -149,5 +149,6 @@ object service:
         for
           id <- cursor.get[Long]("id")
           data <- cursor.get[ServiceData]("data")
-        yield ServiceAccount(id, data)
+        // Ensure service ID is treated as unsigned 32-bit
+        yield ServiceAccount(id & 0xFFFFFFFFL, data)
       }

@@ -100,10 +100,6 @@ class BlockImporter(
           ImportResult.Failure(mapPipelineError(error), error.message)
 
         case Right(result) =>
-          logger.debug(
-            s"[BlockImporter] availableReports=${result.availableReports.size} guarantees=${block.extrinsic.guarantees.size}"
-          )
-
           // Step 3: Compute final core statistics (combines guarantees, available reports, assurances)
           val finalCoreStats = computeFinalCoreStatistics(
             guarantees = block.extrinsic.guarantees,
@@ -128,15 +124,6 @@ class BlockImporter(
 
           // Step 6: Encode merged state back to keyvals
           val postKeyvals = StateEncoder.encodeFullState(mergedState, config)
-
-          // Debug logging
-          logger.debug(s"[BlockImporter KEYVALS] slot=${block.header.slot.value} total=${postKeyvals.size}")
-          for kv <- postKeyvals.sortBy(_.key.toHex) do
-            val prefix = kv.key.toArray(0).toInt & 0xff
-            val valueHash = Hashing.blake2b256(kv.value.toArray).toHex.take(16)
-            logger.debug(
-              f"[KV] slot=${block.header.slot.value} key=${kv.key.toHex.take(16)}... prefix=0x$prefix%02x len=${kv.value.length}%5d valueHash=$valueHash"
-            )
 
           // Step 7: Compute state root via Merkle trie
           val stateRoot = StateMerklization.stateMerklize(postKeyvals)
@@ -303,8 +290,21 @@ class BlockImporter(
       }
     }
 
+    // Update from preimages (providedCount, providedSize) using foldLeft
+    val afterPreimages = preimages.foldLeft(afterGuarantees) { (stats, preimage) =>
+      val serviceId = preimage.requester.value.toLong
+      val current = stats.getOrElse(serviceId, ReportTypes.ServiceActivityRecord())
+      stats.updated(
+        serviceId,
+        current.copy(
+          providedCount = current.providedCount + 1,
+          providedSize = current.providedSize + preimage.blob.length.toLong
+        )
+      )
+    }
+
     // Update from accumulation stats using foldLeft
-    val afterAccumulation = accumulationStats.foldLeft(afterGuarantees) {
+    val afterAccumulation = accumulationStats.foldLeft(afterPreimages) {
       case (stats, (serviceId, (gasUsed, count))) =>
         val current = stats.getOrElse(serviceId, ReportTypes.ServiceActivityRecord())
         stats.updated(
@@ -358,6 +358,8 @@ object InputExtractor:
    * Extract SafroleInput from block.
    * The entropy source in the header is a VRF signature from which we extract the output.
    */
+  private val extractorLogger = org.slf4j.LoggerFactory.getLogger(getClass)
+
   def extractSafroleInput(block: Block): SafroleInput =
     val header = block.header
     val tickets = block.extrinsic.tickets
@@ -369,12 +371,15 @@ object InputExtractor:
         BandersnatchWrapper.ensureLibraryLoaded()
         val output = BandersnatchWrapper.getIetfVrfOutput(entropyBytes)
         if output != null && output.length == 32 then
+          extractorLogger.debug(s"[extractSafroleInput] VRF output extracted successfully: ${JamBytes(output).toHex.take(32)}...")
           Hash(output)
         else
+          extractorLogger.warn(s"[extractSafroleInput] Native VRF extraction returned invalid output, using fallback (first 32 bytes)")
           // Fallback: use first 32 bytes if native extraction fails
           Hash(entropyBytes.take(32))
       catch
-        case _: Exception =>
+        case e: Exception =>
+          extractorLogger.warn(s"[extractSafroleInput] Exception during VRF extraction: ${e.getMessage}, using fallback (first 32 bytes)")
           // Fallback: use first 32 bytes if native library unavailable
           Hash(entropyBytes.take(32))
 
