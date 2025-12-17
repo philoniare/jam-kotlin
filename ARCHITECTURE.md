@@ -174,21 +174,21 @@ Native libraries are automatically built by sbt during compilation using Cargo.
         ↓
    Safrole STF (block production)
         ↓
-   Assurances STF (availability)
+   Disputes STF (validator disputes)
         ↓
-   Authorizations STF (service auth)
+   Assurances STF (availability)
         ↓
    Reports STF (work reports)
         ↓
-   Disputes STF (validator disputes)
+   Accumulation STF (finalization)
         ↓
    History STF (ancestry)
+        ↓
+   Authorizations STF (service auth)
         ↓
    Preimages STF (data storage)
         ↓
    Statistics STF (metrics)
-        ↓
-   Accumulation STF (finalization)
         ↓
    Final State
    ```

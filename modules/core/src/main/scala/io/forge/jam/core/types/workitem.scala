@@ -2,12 +2,11 @@ package io.forge.jam.core.types
 
 import io.circe.Decoder
 import scodec.*
-import scodec.bits.*
 import scodec.codecs.*
 import spire.math.{UShort, UInt}
 import io.forge.jam.core.{JamBytes, primitives}
 import io.forge.jam.core.primitives.{Hash, ServiceId, Gas}
-import io.forge.jam.core.scodec.JamCodecs.{hashCodec, compactInteger, compactInt}
+import io.forge.jam.core.scodec.JamCodecs.{hashCodec, compactInt}
 
 /**
  * Work item related types.

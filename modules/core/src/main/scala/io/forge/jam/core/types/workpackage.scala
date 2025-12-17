@@ -1,7 +1,6 @@
 package io.forge.jam.core.types
 
 import scodec.*
-import scodec.bits.*
 import scodec.codecs.*
 import io.forge.jam.core.JamBytes
 import io.forge.jam.core.primitives.{Hash, ServiceId, CoreIndex, Gas}
@@ -12,7 +11,6 @@ import io.forge.jam.core.types.workresult.WorkResult
 import io.forge.jam.core.types.work.PackageSpec
 import io.forge.jam.core.json.JsonHelpers.parseHex
 import io.circe.Decoder
-import spire.math.UInt
 
 /**
  * Work package and work report related types

@@ -1,7 +1,6 @@
 package io.forge.jam.pvm
 
-import spire.math.{UByte, UShort, UInt, ULong}
-import spire.implicits.*
+import spire.math.{UInt, ULong}
 import types.*
 
 /**

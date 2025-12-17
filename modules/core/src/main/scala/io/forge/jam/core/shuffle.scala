@@ -1,7 +1,6 @@
 package io.forge.jam.core
 
 import primitives.Hash
-import spire.math.UInt
 
 /**
  * Shuffle algorithm for JAM protocol.

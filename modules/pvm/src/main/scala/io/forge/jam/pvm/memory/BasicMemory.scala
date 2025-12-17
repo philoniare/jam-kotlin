@@ -1,7 +1,7 @@
 package io.forge.jam.pvm.memory
 
 import spire.math.{UByte, UShort, UInt, ULong}
-import io.forge.jam.pvm.{MemoryResult, MemoryMap, Abi, PvmConstants, ByteOps, AlignmentOps}
+import io.forge.jam.pvm.{MemoryResult, MemoryMap, PvmConstants, AlignmentOps}
 import io.forge.jam.pvm.types.*
 
 /**

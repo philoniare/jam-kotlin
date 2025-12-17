@@ -1,9 +1,8 @@
 package io.forge.jam.core
 
 import scala.annotation.targetName
-import spire.math.{UByte, UShort, UInt, ULong}
+import spire.math.{UShort, UInt, ULong}
 import io.circe.Decoder
-import io.forge.jam.core.json.JsonHelpers
 import _root_.scodec.bits.ByteVector
 
 /**

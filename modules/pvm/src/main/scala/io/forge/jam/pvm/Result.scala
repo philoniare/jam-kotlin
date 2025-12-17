@@ -1,6 +1,6 @@
 package io.forge.jam.pvm
 
-import spire.math.{UByte, UShort, UInt, ULong}
+import spire.math.UInt
 
 /**
  * Result type for potentially failing operations.

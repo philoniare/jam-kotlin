@@ -2,8 +2,7 @@ package io.forge.jam.core.types
 
 import io.circe.Decoder
 import scodec.*
-import scodec.bits.*
-import scodec.codecs.*
+import scodec.bits.ByteVector
 import io.forge.jam.core.ChainConfig
 import io.forge.jam.core.scodec.JamCodecs.compactPrefixedList
 import io.forge.jam.core.types.header.Header

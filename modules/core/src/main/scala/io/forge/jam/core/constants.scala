@@ -1,7 +1,5 @@
 package io.forge.jam.core
 
-import spire.math.{UByte, UShort, UInt, ULong}
-
 /**
  * Constants from the JAM Gray Paper.
  */

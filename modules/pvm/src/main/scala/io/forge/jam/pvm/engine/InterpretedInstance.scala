@@ -3,7 +3,7 @@ package io.forge.jam.pvm.engine
 import scala.collection.mutable.ArrayBuffer
 import spire.math.{UInt, UByte, UShort, ULong}
 import io.forge.jam.pvm.types.*
-import io.forge.jam.pvm.{InterruptKind, SegfaultInfo, Abi, Opcode, Instruction, MemoryResult}
+import io.forge.jam.pvm.{InterruptKind, SegfaultInfo, Abi, Instruction, MemoryResult}
 import io.forge.jam.pvm.memory.{BasicMemory, DynamicMemory}
 import io.forge.jam.pvm.program.{Program, InstructionDecoder}
 import java.io.{FileWriter, PrintWriter}

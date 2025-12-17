@@ -1,11 +1,10 @@
 package io.forge.jam.core.types
 
-import io.forge.jam.core.{JamBytes, primitives}
+import io.forge.jam.core.JamBytes
 import io.forge.jam.core.primitives.Hash
 import io.forge.jam.core.json.JsonHelpers.{parseHex, parseHexBytesFixed}
 import io.circe.Decoder
 import _root_.scodec.*
-import _root_.scodec.bits.*
 import _root_.scodec.codecs.*
 import spire.math.UByte
 

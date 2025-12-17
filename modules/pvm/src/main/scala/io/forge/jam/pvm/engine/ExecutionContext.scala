@@ -2,7 +2,6 @@ package io.forge.jam.pvm.engine
 
 import spire.math.UInt
 import io.forge.jam.pvm.types.*
-import io.forge.jam.pvm.InterruptKind
 
 // ============================================================================
 // Focused Traits (Interface Segregation)

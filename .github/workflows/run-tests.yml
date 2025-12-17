@@ -43,5 +43,13 @@ jobs:
             -   name: Build project
                 run: sbt compile
 
-            -   name: Run tests
-                run: sbt test
+            -   name: Run tests with coverage
+                run: sbt clean coverage test coverageAggregate
+
+            -   name: Upload coverage to Codecov
+                uses: codecov/codecov-action@v4
+                with:
+                    files: ./target/scala-3.3.7/scoverage-report/scoverage.xml
+                    flags: unittests
+                    name: codecov-jam
+                    fail_ci_if_error: false

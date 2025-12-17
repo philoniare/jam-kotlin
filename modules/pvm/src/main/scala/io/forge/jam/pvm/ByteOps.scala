@@ -1,7 +1,5 @@
 package io.forge.jam.pvm
 
-import spire.math.{UInt, ULong}
-
 /**
  * Byte encoding/decoding utilities for little-endian memory operations.
  */

@@ -1,7 +1,6 @@
 package io.forge.jam.core.types
 
 import scodec.*
-import scodec.bits.*
 import scodec.codecs.*
 import io.forge.jam.core.primitives.{Hash, ServiceId, Gas}
 import io.forge.jam.core.scodec.JamCodecs.compactInteger

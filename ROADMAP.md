@@ -9,14 +9,6 @@ Build a production-grade JAM implementation in Scala 3 that provides:
 - Full compatibility with official JAM test vectors
 - Integration with the JVM ecosystem
 
-### Performance Requirements
-
-- PVM execution performance tests
-- Trie/DB performance tests
-- Signature verification performance tests
-- Availability (EC/DB) performance tests
-- All tests run on standard hardware
-
 ### Milestones
 
 #### ✅ M1: IMPORTER (Completed)

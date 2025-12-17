@@ -5,6 +5,7 @@
 [![Scala Version](https://img.shields.io/badge/scala-3.3.7-red.svg)](https://www.scala-lang.org/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com)
+[![codecov](https://codecov.io/gh/philoniare/jam-forge/branch/main/graph/badge.svg)](https://codecov.io/gh/philoniare/jam-forge)
 
 ---
 
@@ -85,6 +86,9 @@ sbt "crypto/test"
 # 🎯 Run a single test class
 sbt "core/testOnly io.forge.jam.core.ShuffleTest"
 
+# 📈 Run tests with code coverage
+sbt clean coverage test coverageAggregate
+
 # 🧹 Clean build artifacts
 sbt clean
 
@@ -105,6 +109,20 @@ JAM-Forge uses official test vectors from the `jamtestvectors` submodule to vali
 
 - **tiny** (6 validators): Fast testing configuration
 - **full** (1023 validators): Production-scale configuration
+
+### Code Coverage
+
+JAM-Forge uses [scoverage](https://github.com/scoverage/sbt-scoverage) for code coverage analysis:
+
+```bash
+# Run tests with coverage
+sbt clean coverage test coverageAggregate
+
+# View HTML report
+open target/scala-3.3.7/scoverage-report/index.html
+```
+
+**Coverage targets**: 70% statement coverage | Excludes: benchmark code
 
 ---
 

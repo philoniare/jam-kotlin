@@ -6,8 +6,15 @@ ThisBuild / version := "0.1.0-SNAPSHOT"
 
 // Common compiler options for all modules
 ThisBuild / scalacOptions ++= Seq(
-  "-Wunused:all"  // Warn on unused imports, privates, locals, params, etc.
+  "-Wunused:all" // Warn on unused imports, privates, locals, params, etc.
 )
+
+// Coverage settings
+ThisBuild / coverageEnabled := false
+ThisBuild / coverageMinimumStmtTotal := 70
+ThisBuild / coverageFailOnMinimum := false
+ThisBuild / coverageHighlighting := true
+ThisBuild / coverageExcludedPackages := ".*benchmark.*"
 
 // Common dependency versions
 val catsVersion = "2.10.0"

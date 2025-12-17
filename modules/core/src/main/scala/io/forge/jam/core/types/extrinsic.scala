@@ -5,7 +5,7 @@ import _root_.scodec.bits.*
 import _root_.scodec.codecs.*
 import io.forge.jam.core.JamBytes
 import io.forge.jam.core.primitives.{Hash, ServiceId, ValidatorIndex, Timeslot, Ed25519Signature}
-import io.forge.jam.core.scodec.JamCodecs.{hashCodec, compactInteger, compactInt, compactPrefixedList}
+import io.forge.jam.core.scodec.JamCodecs.{hashCodec, compactInt, compactPrefixedList}
 import io.forge.jam.core.types.work.Vote
 import io.forge.jam.core.types.dispute.{Culprit, Fault, GuaranteeSignature}
 import io.forge.jam.core.types.workpackage.WorkReport

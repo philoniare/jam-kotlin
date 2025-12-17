@@ -48,7 +48,6 @@ bin/
 **/*.dylib
 
 .editorconfig
-*.yml
 .bsp/
 .bloop/
 **/metals**

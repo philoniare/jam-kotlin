@@ -1,7 +1,7 @@
 package io.forge.jam.pvm.engine
 
-import spire.math.{UInt, ULong}
-import io.forge.jam.pvm.{Instruction, InterruptKind, SegfaultInfo}
+import spire.math.UInt
+import io.forge.jam.pvm.Instruction
 import io.forge.jam.pvm.types.*
 
 /**

@@ -1,9 +1,7 @@
 package io.forge.jam.core.scodec
 
 import scodec.*
-import scodec.bits.*
 import scodec.codecs.*
-import spire.math.UByte
 import io.forge.jam.core.primitives.*
 import io.forge.jam.core.types.tickets.{TicketMark, TicketEnvelope}
 import io.forge.jam.core.types.epoch.{ValidatorKey, EpochMark, EpochValidatorKey}
@@ -85,7 +83,7 @@ object ProtocolCodecs:
    * - signature: 784 bytes (Ring VRF signature)
    */
   /** Use TicketEnvelope codec from its companion object (tickets.scala) */
-  given ticketEnvelopeCodec: Codec[TicketEnvelope] = summon[Codec[TicketEnvelope]]
+  val ticketEnvelopeCodec: Codec[TicketEnvelope] = summon[Codec[TicketEnvelope]]
 
   // ============================================================================
   // EpochValidatorKey Codec (64 bytes)
