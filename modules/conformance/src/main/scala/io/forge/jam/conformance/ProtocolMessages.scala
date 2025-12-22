@@ -33,8 +33,8 @@ final case class Version(
 )
 
 object Version:
-  val JAM_VERSION: Version = Version(UByte(0), UByte(7), UByte(1))
-  val APP_VERSION: Version = Version(UByte(0), UByte(1), UByte(1))
+  val JAM_VERSION: Version = Version(UByte(0), UByte(7), UByte(2))
+  val APP_VERSION: Version = Version(UByte(0), UByte(1), UByte(2))
 
   given Codec[Version] =
     (JamCodecs.ubyteCodec :: JamCodecs.ubyteCodec :: JamCodecs.ubyteCodec).xmap(
