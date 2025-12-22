@@ -10,6 +10,7 @@ WORKDIR /build
 COPY modules/crypto/native/ark-vrf ./ark-vrf
 COPY modules/crypto/native/bandersnatch-vrfs-wrapper ./bandersnatch-vrfs-wrapper
 COPY modules/crypto/native/ed25519-zebra-wrapper ./ed25519-zebra-wrapper
+COPY modules/crypto/native/erasure-coding-wrapper ./erasure-coding-wrapper
 
 # Build Bandersnatch VRF library
 WORKDIR /build/bandersnatch-vrfs-wrapper
@@ -17,6 +18,10 @@ RUN cargo build --release
 
 # Build Ed25519-Zebra library
 WORKDIR /build/ed25519-zebra-wrapper
+RUN cargo build --release
+
+# Build Erasure Coding library
+WORKDIR /build/erasure-coding-wrapper
 RUN cargo build --release
 
 # Stage 2: Build Scala application
@@ -28,6 +33,7 @@ WORKDIR /build
 RUN mkdir -p /build/modules/crypto/native/build/linux
 COPY --from=rust-builder /build/bandersnatch-vrfs-wrapper/target/release/libbandersnatch_vrfs_wrapper.so /build/modules/crypto/native/build/linux/
 COPY --from=rust-builder /build/ed25519-zebra-wrapper/target/release/libed25519_zebra_wrapper.so /build/modules/crypto/native/build/linux/
+COPY --from=rust-builder /build/erasure-coding-wrapper/target/release/liberasure_coding_wrapper.so /build/modules/crypto/native/build/linux/
 
 # Copy build files first for better caching
 COPY build.sbt .
@@ -60,6 +66,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy native libraries
 COPY --from=rust-builder /build/bandersnatch-vrfs-wrapper/target/release/libbandersnatch_vrfs_wrapper.so /app/lib/
 COPY --from=rust-builder /build/ed25519-zebra-wrapper/target/release/libed25519_zebra_wrapper.so /app/lib/
+COPY --from=rust-builder /build/erasure-coding-wrapper/target/release/liberasure_coding_wrapper.so /app/lib/
 
 # Copy the assembled JAR and production logback config
 COPY --from=scala-builder /build/modules/conformance/target/scala-3.3.7/jam-conformance.jar /app/
