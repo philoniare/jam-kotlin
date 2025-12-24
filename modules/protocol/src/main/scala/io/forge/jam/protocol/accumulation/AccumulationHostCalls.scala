@@ -1168,12 +1168,10 @@ class AccumulationHostCalls(
 
   /**
    * log (100): Debug logging host call (JIP-1)
-   * Gas cost: 0, Output registers: None (no registers modified)
+   * Gas cost: 10, always returns WHAT
    */
   private def handleLog(instance: PvmInstance): Unit =
-    // JIP-1: No output registers, no side effects for conformance testing
-    // Just a no-op that doesn't modify any registers
-    ()
+    setReg(instance, 7, HostCallResult.WHAT)
 
   /**
    * Encode protocol configuration as expected by the guest.
@@ -1209,7 +1207,7 @@ class AccumulationHostCalls(
     buffer.write(encodeShort(5)) // preimageReplacementPeriod (UInt16) - same for both configs
     buffer.write(encodeShort(config.validatorCount)) // totalNumberOfValidators (UInt16)
     buffer.write(encodeIntLE(if isTiny then 64000 else 64_000_000)) // maxIsAuthorizedCodeSize (UInt32)
-    buffer.write(encodeIntLE(if isTiny then 13_794_305 else 12_000_000)) // maxEncodedWorkPackageSize (UInt32)
+    buffer.write(encodeIntLE(if isTiny then 13_791_360 else 12_000_000)) // maxEncodedWorkPackageSize (UInt32)
     buffer.write(encodeIntLE(if isTiny then 4_000_000 else 5_000_000)) // maxServiceCodeSize (UInt32)
     buffer.write(encodeIntLE(if isTiny then 4 else 12)) // erasureCodedPieceSize (UInt32)
     buffer.write(encodeIntLE(3072)) // maxWorkPackageImports (UInt32)
