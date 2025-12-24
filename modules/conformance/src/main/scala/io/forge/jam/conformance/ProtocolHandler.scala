@@ -58,7 +58,7 @@ class ProtocolHandler(
         IO.pure(None)
       case Some(lengthChunk) =>
         val length = JamCodecs.decodeU32LE(lengthChunk.toArray, 0).signed
-        if length <= 0 || length > 10_000_000 then
+        if length <= 0 then
           IO.raiseError(new IllegalArgumentException(s"Invalid message length: $length"))
         else
           readExactly(socket, length).flatMap { bodyBytes =>
