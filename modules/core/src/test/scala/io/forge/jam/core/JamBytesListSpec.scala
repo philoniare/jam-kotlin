@@ -304,3 +304,107 @@ class JamBytesListSpec extends AnyFlatSpec with Matchers:
     val str = list.toString
     str should include("more")
   }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Bounds validation tests
+  // ══════════════════════════════════════════════════════════════════════════
+
+  "fromBytes" should "reject negative offset" in {
+    val data = Array[Byte](1, 2, 3)
+    val ex = the[IllegalArgumentException] thrownBy {
+      JamBytesList.fromBytes(data, -1, 1)
+    }
+    ex.getMessage should include("non-negative")
+  }
+
+  it should "reject offset exceeding data length" in {
+    val data = Array[Byte](1, 2, 3)
+    val ex = the[IllegalArgumentException] thrownBy {
+      JamBytesList.fromBytes(data, 10, 1)
+    }
+    ex.getMessage should include("exceeds data length")
+  }
+
+  it should "reject negative item size" in {
+    val data = Array[Byte](0) // empty list (length = 0)
+    val ex = the[IllegalArgumentException] thrownBy {
+      JamBytesList.fromBytes(data, 0, -1)
+    }
+    ex.getMessage should include("non-negative")
+  }
+
+  it should "reject insufficient data for declared items" in {
+    // Compact integer 2 followed by only 2 bytes (need 4 for 2 items of size 2)
+    val data = Array[Byte](2, 0xa, 0xb)
+    val ex = the[IllegalArgumentException] thrownBy {
+      JamBytesList.fromBytes(data, 0, 2)
+    }
+    ex.getMessage should include("Insufficient data")
+  }
+
+  it should "handle empty list with zero offset" in {
+    val data = Array[Byte](0) // compact integer 0 = empty list
+    val (list, consumed) = JamBytesList.fromBytes(data, 0, 32)
+    list.size shouldBe 0
+    consumed shouldBe 1
+  }
+
+  it should "handle offset at end of data for empty list" in {
+    val data = Array[Byte](99, 99, 0) // empty list at end
+    val (list, consumed) = JamBytesList.fromBytes(data, 2, 32)
+    list.size shouldBe 0
+    consumed shouldBe 1
+  }
+
+  "fromBytesWithDecoder" should "reject negative offset" in {
+    val data = Array[Byte](1, 2, 3)
+    val ex = the[IllegalArgumentException] thrownBy {
+      JamBytesList.fromBytesWithDecoder(data, -1, (_, _) => (JamBytes(Array.emptyByteArray), 0))
+    }
+    ex.getMessage should include("non-negative")
+  }
+
+  it should "reject offset exceeding data length" in {
+    val data = Array[Byte](1, 2, 3)
+    val ex = the[IllegalArgumentException] thrownBy {
+      JamBytesList.fromBytesWithDecoder(data, 10, (_, _) => (JamBytes(Array.emptyByteArray), 0))
+    }
+    ex.getMessage should include("exceeds data length")
+  }
+
+  it should "reject insufficient data during decoding" in {
+    // Length = 2, with first item consuming all remaining bytes.
+    // After first item, offset = 4 which exceeds data.length (3), triggering validation.
+    val data = Array[Byte](2, 0xa, 0xb) // 3 bytes: length prefix + 2 data bytes
+    val ex = the[IllegalArgumentException] thrownBy {
+      JamBytesList.fromBytesWithDecoder(
+        data,
+        0,
+        (arr, off) =>
+          // Safe decoder that only accesses valid indices
+          val remaining = arr.length - off
+          val bytes = arr.slice(off, off + remaining)
+          (JamBytes(bytes), remaining) // Consume all remaining bytes
+      )
+    }
+    ex.getMessage should include("Insufficient data")
+  }
+
+  it should "reject negative bytes consumed from decoder" in {
+    val data = Array[Byte](1, 0xa) // 1 item
+    val ex = the[IllegalArgumentException] thrownBy {
+      JamBytesList.fromBytesWithDecoder(data, 0, (_, _) => (JamBytes(Array.emptyByteArray), -1))
+    }
+    ex.getMessage should include("negative bytes")
+  }
+
+  it should "handle empty list" in {
+    val data = Array[Byte](0) // empty list
+    val (list, consumed) = JamBytesList.fromBytesWithDecoder(
+      data,
+      0,
+      (_, _) => throw new RuntimeException("Should not be called")
+    )
+    list.size shouldBe 0
+    consumed shouldBe 1
+  }

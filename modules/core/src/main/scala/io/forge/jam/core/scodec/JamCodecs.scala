@@ -75,7 +75,7 @@ object JamCodecs:
       if value < 0 then
         Attempt.failure(Err(s"compactInteger does not support negative values: $value"))
       else
-        Attempt.successful(BitVector(encodeCompactIntegerBytes(value)))
+        Attempt.successful(BitVector(encodeCompactInteger(value)))
 
     override def decode(bits: BitVector): Attempt[DecodeResult[Long]] =
       val bytes = bits.bytes
@@ -227,23 +227,37 @@ object JamCodecs:
             case other =>
               Attempt.failure(Err(s"Invalid StfResult discriminator: $other (expected 0 or 1)"))
 
-  private def encodeCompactIntegerBytes(x: Long): Array[Byte] =
-    // Special case: x = 0
-    if x == 0L then
+  /** Extension method to encode values using scodec Codec */
+  extension [A](value: A)
+    def encode(using codec: Codec[A]): JamBytes =
+      JamBytes.fromByteVector(codec.encode(value).require.bytes)
+
+  /**
+   * Encode a non-negative Long value as a JAM compact integer.
+   *
+   * @param value non-negative Long value (0 to 2^64-1)
+   * @return byte array containing the compact integer encoding
+   * @throws IllegalArgumentException if value is negative
+   */
+  def encodeCompactInteger(value: Long): Array[Byte] =
+    require(value >= 0, s"Compact integer encoding requires non-negative value, got: $value")
+
+    // Special case: value = 0
+    if value == 0L then
       return Array[Byte](0)
 
-    // Find l such that 2^(7l) <= x < 2^(7(l+1)) for l in [0..8]
+    // Find l such that 2^(7l) <= value < 2^(7(l+1)) for l in [0..8]
     var l = 0
     while l <= 8 do
       val lowerBound = 1L << (7 * l)
       val upperBound = 1L << (7 * (l + 1))
-      if x >= lowerBound && x < upperBound then
-        // prefix = 256 - 2^(8-l) + floor(x / 2^(8*l))
-        val prefixVal = (256 - (1 << (8 - l))) + (x >>> (8 * l))
+      if value >= lowerBound && value < upperBound then
+        // prefix = 256 - 2^(8-l) + floor(value / 2^(8*l))
+        val prefixVal = (256 - (1 << (8 - l))) + (value >>> (8 * l))
         val prefixByte = prefixVal.toByte
 
-        // remainder = x mod 2^(8*l)
-        val remainder = x & ((1L << (8 * l)) - 1)
+        // remainder = value mod 2^(8*l)
+        val remainder = value & ((1L << (8 * l)) - 1)
 
         // E_l(remainder) -> little-endian representation in l bytes
         val result = new Array[Byte](1 + l)
@@ -253,24 +267,24 @@ object JamCodecs:
         return result
       l += 1
 
-    // Fallback: [255] ++ E_8(x)
+    // Fallback: [255] ++ E_8(value)
     val result = new Array[Byte](9)
     result(0) = 0xFF.toByte
     for i <- 0 until 8 do
-      result(1 + i) = ((x >> (8 * i)) & 0xFF).toByte
+      result(1 + i) = ((value >> (8 * i)) & 0xFF).toByte
     result
 
-  /** Extension method to encode values using scodec Codec */
-  extension [A](value: A)
-    def encode(using codec: Codec[A]): JamBytes =
-      JamBytes.fromByteVector(codec.encode(value).require.bytes)
-
-  /** Helper to encode compact integer directly to byte array */
-  def encodeCompactInteger(value: Long): Array[Byte] =
-    compactInteger.encode(value).require.toByteArray
-
-  /** Helper to decode compact integer from byte array at offset - returns (value, bytesConsumed) */
+  /**
+   * Helper to decode compact integer from byte array at offset.
+   *
+   * @param data   byte array to decode from
+   * @param offset starting offset in bytes
+   * @return tuple of (decoded value, bytes consumed)
+   * @throws IllegalArgumentException if offset is negative or exceeds data length
+   */
   def decodeCompactInteger(data: Array[Byte], offset: Int): (Long, Int) =
+    require(offset >= 0, s"Offset must be non-negative: $offset")
+    require(offset < data.length, s"Offset $offset >= data length ${data.length}")
     val bits = BitVector(data).drop(offset * 8L)
     val result = compactInteger.decode(bits).require
     val consumed = ((bits.size - result.remainder.size) / 8).toInt
