@@ -111,8 +111,7 @@ object BandersnatchVrf:
       else
         Some(JamBytes(commitment))
     catch
-      case e: Exception =>
-        e.printStackTrace()
+      case _: Exception =>
         None
 
   /**

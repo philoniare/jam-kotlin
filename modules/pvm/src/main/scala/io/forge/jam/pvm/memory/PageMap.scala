@@ -1,6 +1,7 @@
 package io.forge.jam.pvm.memory
 
 import spire.math.UInt
+import io.forge.jam.pvm.PvmConstants
 
 /**
  * Page access permissions.
@@ -27,7 +28,7 @@ enum PageAccess:
  */
 final class PageMap(val pageSize: UInt):
   private val pageSizeShift: Int = java.lang.Integer.numberOfTrailingZeros(pageSize.signed)
-
+  private val maxAllowedPageIndex: Int = PvmConstants.MaxPageCount - 1
   private val BitsPerWord = 64
 
   // Bitset storage: each Long represents 64 pages
@@ -48,8 +49,15 @@ final class PageMap(val pageSize: UInt):
 
   /**
    * Ensures the bitset arrays have capacity for the given page index.
+   *
+   * @throws IllegalArgumentException if page index exceeds maximum allowed
    */
   private def ensureCapacity(pageIndex: UInt): Unit =
+    if pageIndex.signed > maxAllowedPageIndex then
+      throw new IllegalArgumentException(
+        s"Page index ${pageIndex.signed} exceeds maximum allowed $maxAllowedPageIndex"
+      )
+
     if pageIndex.signed >= maxPageIndex.signed then
       maxPageIndex = UInt(pageIndex.signed + 1)
       val wordsNeeded = ((maxPageIndex.signed + 63) / 64)
@@ -266,6 +274,20 @@ final class PageMap(val pageSize: UInt):
    */
   def alignToPageStart(address: UInt): UInt =
     UInt((address.signed >>> pageSizeShift) << pageSizeShift)
+
+  /**
+   * Checks if a page allocation would exceed the maximum page count.
+   *
+   * @param pageIndex The page index to check
+   * @return true if the page index is within bounds, false otherwise
+   */
+  def isWithinPageLimit(pageIndex: UInt): Boolean =
+    pageIndex.signed <= maxAllowedPageIndex
+
+  /**
+   * Returns the maximum allowed page count.
+   */
+  def maxPageCount: Int = PvmConstants.MaxPageCount
 
 object PageMap:
   /**
