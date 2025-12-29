@@ -105,6 +105,15 @@ class AccumulationHostCalls(
     setReg(instance, 7, ULong(instance.gas))
 
   /**
+   * Fetch host call sub-selectors
+   */
+  private object FetchSelector:
+    val CONSTANTS = 0 // Protocol configuration constants
+    val ENTROPY = 1 // Entropy/randomness data
+    val ALL_OPERANDS = 14 // List of all work package operands
+    val SINGLE_OPERAND = 15 // Individual operand at index
+
+  /**
    * fetch (1): Fetch various data based on register r10 selector.
    * For accumulation, supports fetching operands and constants.
    */
@@ -116,10 +125,10 @@ class AccumulationHostCalls(
     val index = getReg(instance, 11).toInt
 
     val data: Option[Array[Byte]] = selector match
-      case 0 => Some(getConstantsBlob())
-      case 1 => Some(context.entropy.toArray)
-      case 14 => Some(encodeOperandsList())
-      case 15 =>
+      case FetchSelector.CONSTANTS => Some(getConstantsBlob())
+      case FetchSelector.ENTROPY => Some(context.entropy.toArray)
+      case FetchSelector.ALL_OPERANDS => Some(encodeOperandsList())
+      case FetchSelector.SINGLE_OPERAND =>
         if index < operands.size then Some(encodeOperand(operands(index)))
         else None
       case _ => None
