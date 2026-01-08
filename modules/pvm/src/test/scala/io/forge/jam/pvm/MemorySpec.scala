@@ -173,6 +173,142 @@ class MemorySpec extends AnyFlatSpec with Matchers:
       case other => fail(s"Aux region behavior unexpected: $other")
   }
 
+  // Test 7: Unmapped regions between mapped regions should be inaccessible
+  "BasicMemory" should "reject access to unmapped regions (gaps between mapped regions)" in {
+    val memoryMap = createTestMemoryMap()
+    val roData = Array.fill[Byte](100)(0x42)
+    val rwData = Array.fill[Byte](100)(0x43)
+    val argData = Array.fill[Byte](50)(0x44)
+
+    val memory = BasicMemory.create(memoryMap, roData, rwData, UInt(0), argData)
+
+    // Access to null page (address 0) should fail
+    memory.loadU8(UInt(0)) match
+      case MemoryResult.Segfault(_, _) => succeed
+      case other => fail(s"Null page should be inaccessible, got $other")
+
+    // Access just before RO data should fail
+    val beforeRoData = memoryMap.roDataAddress - UInt(1)
+    memory.loadU8(beforeRoData) match
+      case MemoryResult.Segfault(_, _) => succeed
+      case other => fail(s"Before RO data should be inaccessible, got $other")
+
+    // Gap between RO and RW data should be inaccessible
+    val roEnd = memoryMap.roDataAddress + UInt(roData.length)
+    val rwStart = memoryMap.rwDataAddress
+    if rwStart.toLong > roEnd.toLong + DefaultPageSize.toLong then
+      val gapAddress = roEnd + DefaultPageSize // Skip past RO page alignment
+      memory.loadU8(gapAddress) match
+        case MemoryResult.Segfault(_, _) => succeed
+        case other => fail(s"Gap between RO and RW should be inaccessible, got $other")
+
+    // Gap between heap end and stack start should be inaccessible
+    val heapEnd = memory.heapEnd
+    val stackLow = memoryMap.stackAddressLow
+    if stackLow.toLong > heapEnd.toLong + DefaultPageSize.toLong then
+      // Pick an address in the middle of the gap
+      val gapMid = UInt(((heapEnd.toLong + stackLow.toLong) / 2).toInt)
+      memory.loadU8(gapMid) match
+        case MemoryResult.Segfault(_, _) => succeed
+        case other => fail(s"Gap between heap and stack should be inaccessible, got $other at 0x${gapMid.signed.toHexString}")
+
+    // Just before stack should be inaccessible
+    val beforeStack = stackLow - UInt(1)
+    memory.loadU8(beforeStack) match
+      case MemoryResult.Segfault(_, _) => succeed
+      case other => fail(s"Before stack should be inaccessible, got $other")
+
+    // Just after stack should be inaccessible
+    val afterStack = memoryMap.stackAddressHigh
+    memory.loadU8(afterStack) match
+      case MemoryResult.Segfault(_, _) => succeed
+      case other => fail(s"After stack should be inaccessible, got $other")
+  }
+
+  // Test 8: Argument data should only be readable for actual data size
+  it should "only map argument data for actual data length, not entire aux region" in {
+    val memoryMap = createTestMemoryMap()
+    val roData = Array.fill[Byte](100)(0x42)
+    val rwData = Array.fill[Byte](100)(0x43)
+    // Small argument data - only 50 bytes
+    val argData = Array.fill[Byte](50)(0x44)
+
+    val memory = BasicMemory.create(memoryMap, roData, rwData, UInt(0), argData)
+
+    // Input start address should be readable
+    val inputStart = PvmConstants.InputStartAddress
+    if inputStart.toLong >= memoryMap.auxDataAddress.toLong &&
+       inputStart.toLong < (memoryMap.auxDataAddress + memoryMap.auxDataSize).toLong then
+      memory.loadU8(inputStart) match
+        case MemoryResult.Success(_) => succeed
+        case other => fail(s"Input start should be readable, got $other")
+
+      // Way beyond the argument data (but within aux region bounds) should be inaccessible
+      // This tests that we don't map the entire aux region
+      val farBeyondArg = inputStart + UInt(DefaultPageSize.signed * 10)
+      if farBeyondArg.toLong < (memoryMap.auxDataAddress + memoryMap.auxDataSize).toLong then
+        memory.loadU8(farBeyondArg) match
+          case MemoryResult.Segfault(_, _) => succeed
+          case other => fail(s"Far beyond arg data should be inaccessible, got $other")
+  }
+
+  // Test 9: Empty PageMap should reject all access
+  "PageMap" should "reject all access when empty" in {
+    val pageMap = PageMap.create(List.empty, DefaultPageSize)
+
+    pageMap.isReadable(UInt(0), 1)._1 shouldBe false
+    pageMap.isReadable(UInt(4096), 1)._1 shouldBe false
+    pageMap.isReadable(UInt(0x10000), 1)._1 shouldBe false
+    pageMap.isWritable(UInt(0), 1)._1 shouldBe false
+  }
+
+  // Test 10: Page boundary edge cases
+  it should "handle page boundary edge cases correctly" in {
+    val pageSize = DefaultPageSize.signed
+    // Page 0 and page 2 readable, page 1 NOT accessible (gap)
+    val mappings = List(
+      (UInt(0), UInt(pageSize), PageAccess.ReadOnly),
+      (UInt(pageSize * 2), UInt(pageSize), PageAccess.ReadOnly)
+    )
+    val pageMap = PageMap.create(mappings, DefaultPageSize)
+
+    // Last byte of page 0 - readable
+    pageMap.isReadable(UInt(pageSize - 1), 1)._1 shouldBe true
+
+    // First byte of page 1 - NOT readable (gap)
+    pageMap.isReadable(UInt(pageSize), 1)._1 shouldBe false
+
+    // Span from last byte of page 0 to first byte of page 1 - should fail (crosses gap)
+    pageMap.isReadable(UInt(pageSize - 1), 2)._1 shouldBe false
+
+    // First byte of page 2 - readable
+    pageMap.isReadable(UInt(pageSize * 2), 1)._1 shouldBe true
+
+    // Span from page 0 to page 2 (crossing gap) - should fail
+    pageMap.isReadable(UInt(0), pageSize * 2 + 1)._1 shouldBe false
+  }
+
+  // Test 11: High address unmapped regions (like 0xFFEB4E53 bug)
+  it should "reject access to unmapped high addresses" in {
+    // This tests the specific bug case where address 0xFFEB4E53 was incorrectly accessible
+    val mappings = List(
+      (UInt(0x10000), UInt(4096), PageAccess.ReadOnly), // Some low region
+      (UInt(0xFEFD0000), UInt(0x10000), PageAccess.ReadWrite) // GP stack region
+    )
+    val pageMap = PageMap.create(mappings, DefaultPageSize)
+
+    // Address in GP stack - should be accessible
+    pageMap.isReadable(UInt(0xFEFD0000), 1)._1 shouldBe true
+    pageMap.isWritable(UInt(0xFEFD0000), 1)._1 shouldBe true
+
+    // Address just after GP stack (0xFEFE0000) - should NOT be accessible
+    pageMap.isReadable(UInt(0xFEFE0000), 1)._1 shouldBe false
+
+    // High unmapped address (like the bug case 0xFFEB4E53) - should NOT be accessible
+    pageMap.isReadable(UInt(0xFFEB4E53), 1)._1 shouldBe false
+    pageMap.isWritable(UInt(0xFFEB4E53), 1)._1 shouldBe false
+  }
+
   // Helper: Create a test MemoryMap
   private def createTestMemoryMap(): MemoryMap =
     MemoryMap.builder(DefaultPageSize)
