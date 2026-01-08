@@ -210,9 +210,11 @@ object PreimageTransition:
     input: PreimageInput,
     preState: PreimageState
   ): (PreimageState, PreimageOutput) =
+    val accountsById = preState.accounts.view.map(a => a.id -> a).toMap
+
     // First check if all preimages are needed (account exists, lookup entry exists with empty value)
     val validationResult = input.preimages.traverse { submission =>
-      preState.accounts.find(_.id == submission.requester.value.toLong)
+      accountsById.get(submission.requester.value.toLong)
         .toRight(PreimageErrorCode.PreimageUnneeded)
         .flatMap { account =>
           val hash = Hashing.blake2b256(submission.blob).bytes
@@ -266,12 +268,12 @@ object PreimageTransition:
         account.copy(data = AccountInfo(currentPreimages, currentLookupMeta))
     }
 
+    val statsById = preState.statistics.view.map(s => s.id -> s).toMap
+
     // Build updated statistics list
     val updatedStatistics = statsUpdates.toList.sortBy(_._1).map {
       case (serviceId, (count, size)) =>
-        // Find existing stat entry or create new one
-        val existingEntry = preState.statistics.find(_.id == serviceId)
-        existingEntry match
+        statsById.get(serviceId) match
           case Some(entry) =>
             entry.copy(
               record = entry.record.copy(

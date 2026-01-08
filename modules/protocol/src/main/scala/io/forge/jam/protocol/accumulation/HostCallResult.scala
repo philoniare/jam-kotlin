@@ -36,3 +36,22 @@ object HostCallResult:
 
   /** Invalid operation / Huh? (2^64 - 9) */
   val HUH: ULong = ULong.MaxValue - ULong(8)
+
+  // ===========================================================================
+  // Inner PVM Invocation Result Codes (for INVOKE host call)
+  // ===========================================================================
+
+  /** Inner PVM halted normally */
+  val HALT: ULong = ULong(0)
+
+  /** Inner PVM panicked */
+  val PANIC: ULong = ULong(1)
+
+  /** Inner PVM page fault */
+  val FAULT: ULong = ULong(2)
+
+  /** Inner PVM host call requested */
+  val HOST: ULong = ULong(3)
+
+  /** Inner PVM ran out of gas */
+  val OOG: ULong = ULong(4)

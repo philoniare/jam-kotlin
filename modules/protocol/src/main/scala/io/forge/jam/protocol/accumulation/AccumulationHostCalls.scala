@@ -1182,12 +1182,23 @@ class AccumulationHostCalls(
   private def handleLog(instance: PvmInstance): Unit =
     setReg(instance, 7, HostCallResult.WHAT)
 
+  private var cachedConstantsBlob: Array[Byte] = null
+
   /**
    * Encode protocol configuration as expected by the guest.
    * Uses actual config values for correct behavior in both tiny and full configs.
+   * Caches the result since it's constant for the lifetime of this handler.
    */
   private def getConstantsBlob(): Array[Byte] =
-    val buffer = new java.io.ByteArrayOutputStream()
+    if cachedConstantsBlob == null then
+      cachedConstantsBlob = buildConstantsBlob()
+    cachedConstantsBlob
+
+  /**
+   * Build the constants blob (called once and cached).
+   */
+  private def buildConstantsBlob(): Array[Byte] =
+    val buffer = new java.io.ByteArrayOutputStream(256)
 
     // Config-dependent values
     val isTiny = config.validatorCount == 6

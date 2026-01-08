@@ -28,6 +28,34 @@ object HostCall:
   val INFO: Int = 5
 
   // ===========================================================================
+  // Refine-Only Host Calls (6-13)
+  // ===========================================================================
+
+  /** historical_lookup (6): Look up historical preimage data */
+  val HISTORICAL_LOOKUP: Int = 6
+
+  /** export (7): Export a segment to the work report output */
+  val EXPORT: Int = 7
+
+  /** machine (8): Create a new inner PVM instance */
+  val MACHINE: Int = 8
+
+  /** peek (9): Read memory from an inner PVM instance */
+  val PEEK: Int = 9
+
+  /** poke (10): Write memory to an inner PVM instance */
+  val POKE: Int = 10
+
+  /** pages (11): Modify page access rights of an inner PVM instance */
+  val PAGES: Int = 11
+
+  /** invoke (12): Execute an inner PVM instance */
+  val INVOKE: Int = 12
+
+  /** expunge (13): Remove an inner PVM instance */
+  val EXPUNGE: Int = 13
+
+  // ===========================================================================
   // Accumulate-Specific Host Calls (14-26)
   // ===========================================================================
 
@@ -85,6 +113,14 @@ object HostCall:
     case READ => "READ"
     case WRITE => "WRITE"
     case INFO => "INFO"
+    case HISTORICAL_LOOKUP => "HISTORICAL_LOOKUP"
+    case EXPORT => "EXPORT"
+    case MACHINE => "MACHINE"
+    case PEEK => "PEEK"
+    case POKE => "POKE"
+    case PAGES => "PAGES"
+    case INVOKE => "INVOKE"
+    case EXPUNGE => "EXPUNGE"
     case BLESS => "BLESS"
     case ASSIGN => "ASSIGN"
     case DESIGNATE => "DESIGNATE"
