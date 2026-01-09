@@ -363,7 +363,10 @@ object FullJamState:
       StateKeys.SERVICE_ACCOUNT.toInt & 0xff
     )
 
-    val otherKvs = keyvals.filterNot(kv => safroleRelatedPrefixes.contains(kv.key.toArray(0).toInt & 0xff))
+    val otherKvs = keyvals.filterNot(kv =>
+      safroleRelatedPrefixes.contains(kv.key.toArray(0).toInt & 0xff) ||
+      StateKeys.isServiceDataKeyFull(kv.key)
+    )
 
     // Decode reports from keyvals (0x0A)
     val reports = decodeReports(keyvals, config.coresCount)
