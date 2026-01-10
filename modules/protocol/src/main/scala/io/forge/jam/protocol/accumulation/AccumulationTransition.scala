@@ -532,9 +532,34 @@ object AccumulationTransition:
       ))
     }.toMap
 
-    // Merge privilege snapshots - LAST snapshot for each service takes precedence (per Gray Paper)
-    // The outer result has later snapshots that should override earlier ones
-    val mergedSnapshots = parallelResult.privilegeSnapshots ++ outerResult.privilegeSnapshots
+    // Merge privilege snapshots:
+    // - For privilege fields (manager, delegator, registrar, assigners, alwaysAccers):
+    //   FIRST batch takes precedence
+    // - For stagingSet and authQueues: LAST update wins
+    val allServiceIds = (parallelResult.privilegeSnapshots.keys ++ outerResult.privilegeSnapshots.keys).toSet
+    val mergedSnapshots = allServiceIds.map { serviceId =>
+      val parallel = parallelResult.privilegeSnapshots.get(serviceId)
+      val outer = outerResult.privilegeSnapshots.get(serviceId)
+
+      (parallel, outer) match
+        case (Some(p), Some(o)) =>
+          // Both batches have this service - merge field by field
+          // For privileges, use first batch (parallel); for stagingSet/authQueues, use last update (outer if non-empty)
+          val mergedStagingSet = if o.stagingSet.nonEmpty then o.stagingSet else p.stagingSet
+          val mergedAuthQueues = if o.authQueues.nonEmpty && o.authQueues.exists(_.nonEmpty) then o.authQueues else p.authQueues
+          serviceId -> PrivilegeSnapshot(
+            manager = p.manager,
+            delegator = p.delegator,
+            registrar = p.registrar,
+            assigners = p.assigners,
+            alwaysAccers = p.alwaysAccers,
+            stagingSet = mergedStagingSet,
+            authQueues = mergedAuthQueues
+          )
+        case (Some(p), None) => serviceId -> p
+        case (None, Some(o)) => serviceId -> o
+        case (None, None) => throw new RuntimeException(s"Unexpected: service $serviceId in allServiceIds but not in any snapshot")
+    }.toMap
 
     // Merge transfer stats
     val mergedTransferStats =

@@ -417,10 +417,8 @@ class ConformanceTestRunner(
       val exportsCount = readCompact()
       val accumulatesCount = readCompact()
       val accumulatesGas = readCompact()
-      val transfersCount = readCompact()
-      val transfersGas = readCompact()
       println(
-        s"    service[$serviceId]: preimages=($preimagesCount,$preimagesSize) refines=($refinesCount,$refinesGas) imports=$importsCount extrinsicCount=$extrinsicCount extrinsicSize=$extrinsicSize exports=$exportsCount accumulates=($accumulatesCount,$accumulatesGas) transfers=($transfersCount,$transfersGas)"
+        s"    service[$serviceId]: preimages=($preimagesCount,$preimagesSize) refines=($refinesCount,$refinesGas) imports=$importsCount extrinsicCount=$extrinsicCount extrinsicSize=$extrinsicSize exports=$exportsCount accumulates=($accumulatesCount,$accumulatesGas)"
       )
 
     println(s"  --- End of statistics (consumed $pos of ${bytes.length} bytes) ---")
