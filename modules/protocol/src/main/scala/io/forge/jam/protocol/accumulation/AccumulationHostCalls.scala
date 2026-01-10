@@ -241,9 +241,6 @@ class AccumulationHostCalls(
       serviceId
 
     val account = context.x.accounts.get(targetServiceId)
-    if account.isEmpty then
-      setReg(instance, 7, HostCallResult.WHO)
-      return
 
     // First check in-memory storage (for values written in this execution)
     var value = account.flatMap(_.storage.get(key))
