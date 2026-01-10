@@ -501,9 +501,19 @@ object AccumulationTransition:
     val remainingReports = workReports.drop(i)
     val newTransfers = parallelResult.deferredTransfers
 
+    // Preserve account changes but reset privileges to original
+    val stateForRecursion = parallelResult.postState
+    stateForRecursion.manager = partialState.manager
+    stateForRecursion.delegator = partialState.delegator
+    stateForRecursion.registrar = partialState.registrar
+    stateForRecursion.assigners.clear()
+    stateForRecursion.assigners ++= partialState.assigners
+    stateForRecursion.alwaysAccers.clear()
+    stateForRecursion.alwaysAccers ++= partialState.alwaysAccers
+
     // Recursive call if there are new transfers or remaining reports
     val outerResult = outerAccumulate(
-      partialState = parallelResult.postState,
+      partialState = stateForRecursion,
       transfers = newTransfers,
       workReports = remainingReports,
       alwaysAccers = Map.empty, // Always-accumulate services only processed in first iteration

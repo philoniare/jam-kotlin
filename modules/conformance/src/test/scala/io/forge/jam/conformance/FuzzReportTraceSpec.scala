@@ -39,8 +39,8 @@ class FuzzReportTraceSpec extends AnyFunSpec with Matchers:
         val runner = new JsonTraceRunner(ChainConfig.TINY, verbose = true, compareKeyvals = true)
 
         // Target a specific trace for debugging
-        val targetTraceId = "1766255635_2557"
-        val targetFileName = "00000153.json"
+        val targetTraceId = "1766255635_3689"
+        val targetFileName = "00000076.json"
 
         val targetFile = tracesDir.resolve(targetTraceId).resolve(targetFileName)
         assume(Files.exists(targetFile), s"Target trace file not found: $targetFile")

@@ -648,7 +648,7 @@ class AccumulationHostCallsTest extends AnyFunSuite with Matchers:
     ULong(instance.reg(7)) shouldBe HostCallResult.NONE
   }
 
-  test("read(3) should return WHO for non-existent service") {
+  test("read(3) should return NONE for non-existent service") {
     val context = createTestContext()
     val hostCalls = new AccumulationHostCalls(context, List.empty, testConfig)
     val instance = createMockInstance()
@@ -658,7 +658,7 @@ class AccumulationHostCallsTest extends AnyFunSuite with Matchers:
     val keyAddr = 0x10000
     instance.writeBytes(keyAddr, key)
 
-    // Read from non-existent service
+    // Read from non-existent service - returns NONE (key not found)
     instance.setReg(7, 999L) // Non-existent service
     instance.setReg(8, keyAddr)
     instance.setReg(9, key.length)
@@ -668,5 +668,5 @@ class AccumulationHostCallsTest extends AnyFunSuite with Matchers:
 
     hostCalls.dispatch(HostCall.READ, instance)
 
-    ULong(instance.reg(7)) shouldBe HostCallResult.WHO
+    ULong(instance.reg(7)) shouldBe HostCallResult.NONE
   }

@@ -31,7 +31,7 @@ class ReadHostCallSpec extends HostCallTestBase:
     ULong(instance.reg(7)) shouldBe HostCallResult.NONE
   }
 
-  test("READ: returns WHO for non-existent service") {
+  test("READ: returns NONE for non-existent service") {
     val context = createTestContext()
     val hostCalls = new AccumulationHostCalls(context, List.empty, testConfig)
     val instance = createMockInstance()
@@ -40,6 +40,7 @@ class ReadHostCallSpec extends HostCallTestBase:
     val keyAddr = 0x10000
     instance.writeBytes(keyAddr, key)
 
+    // Non-existent service returns NONE (key not found)
     instance.setReg(7, 999L) // non-existent service
     instance.setReg(8, keyAddr)
     instance.setReg(9, key.length)
@@ -49,7 +50,7 @@ class ReadHostCallSpec extends HostCallTestBase:
 
     hostCalls.dispatch(HostCall.READ, instance)
 
-    ULong(instance.reg(7)) shouldBe HostCallResult.WHO
+    ULong(instance.reg(7)) shouldBe HostCallResult.NONE
   }
 
   test("READ: partial read with offset/length returns correct slice") {
